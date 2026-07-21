@@ -151,8 +151,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const pendingAutoStartAfterConnectRef = useRef(false);
   const startRecordingRef = useRef<(() => void) | null>(null);
   const transcriptionModelRef = useRef<'gpt-4o-transcribe' | 'gpt-realtime-whisper'>('gpt-4o-transcribe');
-  const lastUserTranscriptRef = useRef('');
-  const lastUserTranscriptAtRef = useRef(0);
+  const processedUserTranscriptItemIdsRef = useRef<Set<string>>(new Set());
   const noiseGuardActiveRef = useRef(false);
   const noiseStrikeCountRef = useRef(0);
   const noiseStrikeWindowStartRef = useRef(0);
@@ -185,9 +184,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   // captured/forgotten in Talk (by design) — forget/capture happens in Chat.
   const helpfulMemoryBlockRef = useRef<string>('');
   const audioActuallyEndedAtRef = useRef(0);
-  const transcriptUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const userTranscriptSettleTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingUserTranscriptRef = useRef('');
 
   const onUserMessageRef = useRef(onUserMessage);
   const onAssistantMessageRef = useRef(onAssistantMessage);
@@ -941,8 +937,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     liveTranscriptRef.current = '';
     aiTranscriptRef.current = '';
     transcriptionModelRef.current = 'gpt-4o-transcribe';
-    lastUserTranscriptRef.current = '';
-    lastUserTranscriptAtRef.current = 0;
+    processedUserTranscriptItemIdsRef.current.clear();
     noiseGuardActiveRef.current = false;
     noiseStrikeCountRef.current = 0;
     noiseStrikeWindowStartRef.current = 0;
@@ -957,15 +952,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
     audioActuallyEndedAtRef.current = 0;
-    if (transcriptUpdateTimerRef.current) {
-      clearTimeout(transcriptUpdateTimerRef.current);
-      transcriptUpdateTimerRef.current = null;
-    }
-    if (userTranscriptSettleTimerRef.current) {
-      clearTimeout(userTranscriptSettleTimerRef.current);
-      userTranscriptSettleTimerRef.current = null;
-    }
-    pendingUserTranscriptRef.current = '';
     outboundEventCounterRef.current = 0;
     outboundEventMetaRef.current.clear();
     setIsConversationActive(false);
@@ -1056,22 +1042,24 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       && !/[\u0600-\u06FF\u4E00-\u9FFF\u3040-\u30FF]/.test(text);
   }, []);
 
-  const isDuplicateUserTranscript = useCallback((text: string) => {
-    const normalized = normalizeAssistantTranscript(text);
-    if (!normalized) {
+  const rememberProcessedUserTranscriptItem = useCallback((itemId: unknown) => {
+    if (typeof itemId !== 'string' || !itemId.trim()) {
       return false;
     }
 
-    const now = Date.now();
-    const duplicate =
-      lastUserTranscriptRef.current === normalized &&
-      now - lastUserTranscriptAtRef.current < 1400;
+    const processed = processedUserTranscriptItemIdsRef.current;
+    if (processed.has(itemId)) {
+      return true;
+    }
 
-    lastUserTranscriptRef.current = normalized;
-    lastUserTranscriptAtRef.current = now;
-
-    return duplicate;
-  }, [normalizeAssistantTranscript]);
+    processed.add(itemId);
+    while (processed.size > 40) {
+      const oldest = processed.values().next().value as string | undefined;
+      if (!oldest) break;
+      processed.delete(oldest);
+    }
+    return false;
+  }, []);
 
   // Continuous mic level animation
   const startMicLevelAnimation = useCallback(() => {
@@ -1137,7 +1125,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           channelCount: { ideal: 1 },
           sampleRate: { ideal: 48000 },
           sampleSize: { ideal: 16 },
-          latency: { ideal: 0.01 },
         },
       });
       if (isStaleInit()) {
@@ -1335,13 +1322,12 @@ ${memoryContext ? memoryContext : ''}`
                   model: transcriptionModelRef.current,
                   language: transcriptionLanguage,
                   prompt: transcriptionPrompt,
+                  delay: 'medium',
                 },
                 noise_reduction: { type: 'near_field' },
                 turn_detection: {
-                  type: 'server_vad',
-                  threshold: 0.72,
-                  prefix_padding_ms: 500,
-                  silence_duration_ms: 1800,
+                  type: 'semantic_vad',
+                  eagerness: 'low',
                   create_response: false,
                   interrupt_response: false,
                 },
@@ -1702,11 +1688,12 @@ ${memoryContext ? memoryContext : ''}`
       case 'input_audio_transcription.completed': {
         // User's speech transcribed
         const transcript = normalizeAssistantTranscript(msg.transcript || msg.delta || '');
+        const transcriptItemId = typeof msg?.item_id === 'string' ? msg.item_id : '';
         
         // Only proceed if user actually said something (not empty/silence)
         if (transcript.length > 0) {
-          if (isDuplicateUserTranscript(transcript)) {
-            console.log('[Talk] Ignoring duplicate transcription event:', msg.type, transcript);
+          if (rememberProcessedUserTranscriptItem(transcriptItemId)) {
+            console.log('[Talk] Ignoring duplicate transcription item:', msg.type, transcriptItemId, transcript);
             return;
           }
 
@@ -1760,34 +1747,23 @@ ${memoryContext ? memoryContext : ''}`
           }
 
           detectedLanguageRef.current = appLang;
-          pendingUserTranscriptRef.current = transcript;
-          if (userTranscriptSettleTimerRef.current) {
-            clearTimeout(userTranscriptSettleTimerRef.current);
-          }
           setAiTranscript('');
-          userTranscriptSettleTimerRef.current = setTimeout(() => {
-            userTranscriptSettleTimerRef.current = null;
-            if (!isConversationActiveRef.current || pendingUserTranscriptRef.current !== transcript) {
-              return;
-            }
-            pendingUserTranscriptRef.current = '';
-            addConversationTurn('user', transcript, true);
+          addConversationTurn('user', transcript, true);
 
-            if (searchModeRef.current) {
-              console.log('[Talk] Search mode active - performing web search for:', transcript);
-              pendingTranscriptRef.current = transcript;
-              const cleanedQuery = cleanSearchQuery(transcript);
-              setSearchMode(false);
-              searchModeRef.current = false;
-              performWebSearch(cleanedQuery, detectedLang).then((searchContext) => {
-                console.log('[Talk] Search complete, sending response with context');
-                sendResponseCreate(searchContext, transcript, detectedLang);
-              });
-            } else {
-              console.log('[Talk] Talk mode - sending stable transcript:', transcript);
-              sendResponseCreate(undefined, transcript, detectedLang);
-            }
-          }, 500);
+          if (searchModeRef.current) {
+            console.log('[Talk] Search mode active - performing web search for:', transcript);
+            pendingTranscriptRef.current = transcript;
+            const cleanedQuery = cleanSearchQuery(transcript);
+            setSearchMode(false);
+            searchModeRef.current = false;
+            performWebSearch(cleanedQuery, detectedLang).then((searchContext) => {
+              console.log('[Talk] Search complete, sending response with context');
+              sendResponseCreate(searchContext, transcript, detectedLang);
+            });
+          } else {
+            console.log('[Talk] Talk mode - sending final transcript:', transcript);
+            sendResponseCreate(undefined, transcript, detectedLang);
+          }
         } else {
           // User didn't say anything - go back to ready without responding
           console.log('[Talk] Empty transcript - user did not speak, skipping response');
@@ -1843,7 +1819,7 @@ ${memoryContext ? memoryContext : ''}`
       case 'response.done':
         if (assistantAwaitingOutputAudioDoneRef.current) {
           console.log('[Talk] Response complete - waiting for output audio to finish');
-          setStatus('ready');
+          setStatus('speaking');
           bumpAssistantPlaybackLock(900);
           scheduleAssistantTurnRecovery(1200);
         } else {
@@ -1895,7 +1871,7 @@ ${memoryContext ? memoryContext : ''}`
       default:
         break;
     }
-  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, disableNoiseGuard, finishAssistantTurn, isAssistantPlaybackLocked, isDuplicateUserTranscript, isLikelyAssistantEcho, isReliableTranscript, language, normalizeAssistantTranscript, rearmListening, registerNoiseStrike, resetNoiseStrikes, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
+  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, disableNoiseGuard, finishAssistantTurn, isAssistantPlaybackLocked, isLikelyAssistantEcho, isReliableTranscript, language, normalizeAssistantTranscript, rearmListening, registerNoiseStrike, rememberProcessedUserTranscriptItem, resetNoiseStrikes, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
 
   // Keep ref in sync so dc.onmessage always dispatches the latest handler
   useEffect(() => {
@@ -2051,11 +2027,7 @@ ${memoryContext ? memoryContext : ''}`
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
-    if (userTranscriptSettleTimerRef.current) {
-      clearTimeout(userTranscriptSettleTimerRef.current);
-      userTranscriptSettleTimerRef.current = null;
-    }
-    pendingUserTranscriptRef.current = '';
+    processedUserTranscriptItemIdsRef.current.clear();
     setDebugHint('');
     setMicTracksEnabled(false);
     if (dcRef.current && dcRef.current.readyState === 'open') {
@@ -2085,11 +2057,7 @@ ${memoryContext ? memoryContext : ''}`
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
-    if (userTranscriptSettleTimerRef.current) {
-      clearTimeout(userTranscriptSettleTimerRef.current);
-      userTranscriptSettleTimerRef.current = null;
-    }
-    pendingUserTranscriptRef.current = '';
+    processedUserTranscriptItemIdsRef.current.clear();
     setDebugHint('');
     setAiTranscript(''); // Clear previous AI response
     rearmListening();
