@@ -209,8 +209,13 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
 
       await withTimeout(
         proxy.send('EXEC', {
-          args: ['-f', 'concat', '-safe', '0', '-i', 'concat.txt',
-                 '-c', 'copy', '-movflags', '+faststart', 'output.mp4'],
+          args: [
+            '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+            '-an',
+            '-movflags', '+faststart',
+            '-y', 'output.mp4',
+          ],
         }),
         EXEC_TIMEOUT_MS,
         'Final film assembly took too long',

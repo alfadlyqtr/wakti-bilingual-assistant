@@ -5401,10 +5401,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           <button
                             onClick={handleStitchClips}
                             disabled={isStitching || autoStitchQueued}
-                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                            className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14',boxShadow:'0 6px 24px rgba(226,199,168,0.35)'}}
                           >
-                            <span>{language === 'ar' ? '🎬 إنشاء الفيلم النهائي' : '🎬 Create Final Film'}</span>
+                            {isStitching ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>{language === 'ar' ? '🎬 جاري التجميع...' : '🎬 Assembling...'}</span>
+                              </>
+                            ) : (
+                              <span>{language === 'ar' ? '🎬 إنشاء الفيلم النهائي' : '🎬 Create Final Film'}</span>
+                            )}
                           </button>
                         ) : (
                           <div
