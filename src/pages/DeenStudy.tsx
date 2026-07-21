@@ -243,7 +243,8 @@ export default function DeenStudy() {
   const [loading, setLoading] = useState(false);
   const [sessionAyah, setSessionAyah] = useState<AyahData | null>(null);
   const [playerMode, setPlayerMode] = useState<"learn" | "review">("learn");
-  const [fetchingAyah, setFetchingAyah] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
+  const [openingReviewItemId, setOpeningReviewItemId] = useState<string | null>(null);
   const [expandedSurah, setExpandedSurah] = useState<number | null>(null);
   const [showAllLearntToday, setShowAllLearntToday] = useState(false);
   const [localHafsByAyah, setLocalHafsByAyah] = useState<Record<string, string>>({});
@@ -296,6 +297,22 @@ export default function DeenStudy() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    const overlayOpen = showReview || viewAllSurahNumber !== null;
+    if (!overlayOpen) return;
+
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, [showReview, viewAllSurahNumber]);
+
   const updateMemorizationStatus = useCallback(async (id: string, status: string) => {
     await (supabase as any).from("deen_memorization").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
     setMemorization((prev) => prev.map((m) => m.id === id ? { ...m, status } : m));
@@ -312,18 +329,18 @@ export default function DeenStudy() {
   }, []);
 
   const openLearnSession = async (surahNum: number, ayahNum: number) => {
-    setFetchingAyah(true);
+    setStartingSession(true);
     const data = await fetchAyah(surahNum, ayahNum);
-    setFetchingAyah(false);
+    setStartingSession(false);
     if (!data) { toast.error(isAr ? "تعذر تحميل الآية" : "Could not load ayah"); return; }
     setSessionAyah(data);
     setPlayerMode("learn");
   };
 
   const openReviewSession = async (item: any) => {
-    setFetchingAyah(true);
+    setOpeningReviewItemId(item.id ?? null);
     const data = await fetchAyah(item.surah_number, item.ayah_number);
-    setFetchingAyah(false);
+    setOpeningReviewItemId(null);
     if (!data) { toast.error(isAr ? "تعذر تحميل الآية" : "Could not load ayah"); return; }
     setSessionAyah(data);
     setPlayerMode("review");
@@ -769,7 +786,7 @@ export default function DeenStudy() {
 
                 <button
                   onClick={() => openLearnSession(plan.currentSurah, plan.currentAyah)}
-                  disabled={fetchingAyah}
+                  disabled={startingSession}
                   className="w-full rounded-2xl p-4 text-left active:scale-[0.99] transition-all disabled:opacity-60"
                   style={{ background: dark ? "hsla(25,95%,60%,0.10)" : "hsla(25,85%,45%,0.14)", border: "1px solid hsla(25,95%,60%,0.28)" }}
                   dir={isAr ? "rtl" : "ltr"}
@@ -778,7 +795,7 @@ export default function DeenStudy() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
                         style={{ background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.18)", border: "1px solid hsla(25,95%,60%,0.30)" }}>
-                        {fetchingAyah
+                        {startingSession
                           ? <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: dark ? "rgba(249,115,22,0.35)" : "rgba(194,65,12,0.35)", borderTopColor: accentText }} />
                           : <Play className="w-5 h-5" style={{ color: accentText }} />}
                       </div>
@@ -826,6 +843,7 @@ export default function DeenStudy() {
                         {visibleLearntTodayItems.map((m, idx) => (
                           <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
                             onUpdate={updateMemorizationStatus}
+                            loading={openingReviewItemId === m.id}
                             onTap={() => {
                               if (hasMoreLearntToday && !showAllLearntToday && idx === LEARNT_TODAY_PREVIEW_COUNT) {
                                 setShowAllLearntToday(true);
@@ -992,6 +1010,7 @@ export default function DeenStudy() {
                             isAr={isAr}
                             dark={dark}
                             onUpdate={updateMemorizationStatus}
+                            loading={openingReviewItemId === m.id}
                             onTap={() => openReviewSession(m)}
                           />
                         ))}
@@ -1061,7 +1080,7 @@ function SurahViewAllOverlay({ surahNumber, rows, ayahMap, isAr, localHafsByAyah
       </div>
       <div
         className="flex-1 overflow-y-auto px-4 pb-4 pt-4 flex flex-col gap-3"
-        style={{ paddingTop: "14px" }}
+        style={{ paddingTop: "14px", overscrollBehavior: "contain" }}
         onScroll={onScrollRows}
       >
         {surahNumber !== 1 && surahNumber !== 9 && (
@@ -1192,10 +1211,11 @@ function Loader() {
   );
 }
 
-function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview = false }: {
+function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, loading = false, emphasizeReview = false }: {
   item: any; isAr: boolean; dark: boolean;
   onUpdate: (id: string, status: string) => Promise<void>;
   onTap?: () => void;
+  loading?: boolean;
   emphasizeReview?: boolean;
 }) {
   const isMemorized = m.status === "memorized";
@@ -1212,7 +1232,7 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
     <div
       className="rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition-all cursor-pointer"
       style={{ background: rowBg, border: `1px solid ${rowBdr}` }}
-      onClick={onTap}
+      onClick={loading ? undefined : onTap}
     >
       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-bold"
         style={{
@@ -1230,7 +1250,11 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
           {isMemorized ? "" : (isAr ? " تتعلمها" : "📖 Learning")}
         </p>
       </div>
-      <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
+      {loading ? (
+        <div className="w-4 h-4 border-2 rounded-full animate-spin flex-shrink-0" style={{ borderColor: dark ? "rgba(96,96,98,0.45)" : "rgba(96,96,98,0.35)", borderTopColor: textSec }} />
+      ) : (
+        <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
+      )}
     </div>
   );
 }
@@ -2016,7 +2040,7 @@ function ReviewOverlay({ ayahs, highlightAyahKey, isAr, localHafsByAyah, reviewO
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style={{ overscrollBehavior: "contain" }}>
         {ayahs.map((ayah) => (
           <div
             key={`${ayah.surah_number}:${ayah.ayah_number}`}
@@ -2037,6 +2061,22 @@ function ReviewOverlay({ ayahs, highlightAyahKey, isAr, localHafsByAyah, reviewO
             </p>
           </div>
         ))}
+
+        {ayahs.length === 1 && (
+          <div
+            className="rounded-2xl px-5 py-5 text-center"
+            style={{
+              background: dark ? "rgba(255,255,255,0.02)" : "rgba(6,5,65,0.02)",
+              border: `1px dashed ${dark ? "rgba(255,255,255,0.16)" : "rgba(6,5,65,0.16)"}`,
+            }}
+          >
+            <p className="text-xs leading-relaxed" style={{ color: textSec }}>
+              {isAr
+                ? "سيظهر تسلسل الآيات المحفوظة هنا عندما تحفظ أكثر من آية واحدة متتالية من السورة"
+                : "Memorize more ayahs in order to see your sequence here"}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Sticky bottom */}
@@ -2053,18 +2093,28 @@ function ReviewOverlay({ ayahs, highlightAyahKey, isAr, localHafsByAyah, reviewO
           {isAr ? "تدرب على التسلسل المحفوظ" : "Practice your memorized sequence"}
         </p>
         {reviewOnly ? (
-          <button
-            onClick={onNext}
-            className="w-full py-4 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
-            style={{
-              background: "hsla(142,76%,55%,0.12)",
-              color: "hsl(142,76%,55%)",
-              border: "1px solid hsla(142,76%,55%,0.28)",
-            }}
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span>{isAr ? "تمت المراجعة" : "Reviewed"}</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onNext}
+              className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              style={{ background: surface, color: textPri, border: `1px solid ${border}` }}
+            >
+              <span>{isAr ? "إغلاق" : "Close"}</span>
+            </button>
+
+            <button
+              onClick={onNext}
+              className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              style={{
+                background: "hsla(142,76%,55%,0.12)",
+                color: "hsl(142,76%,55%)",
+                border: "1px solid hsla(142,76%,55%,0.28)",
+              }}
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>{isAr ? "تمت المراجعة" : "Reviewed"}</span>
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-3">
             <button
@@ -2079,7 +2129,11 @@ function ReviewOverlay({ ayahs, highlightAyahKey, isAr, localHafsByAyah, reviewO
               onClick={onNext}
               disabled={loading}
               className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1 disabled:opacity-50"
-              style={{ background: green, color: "#fff" }}
+              style={{
+                background: "hsla(142,76%,55%,0.12)",
+                color: "hsl(142,76%,55%)",
+                border: "1px solid hsla(142,76%,55%,0.28)",
+              }}
             >
               <span>{loading ? (isAr ? "جاري..." : "Loading...") : (isAr ? "التالي" : "Next")}</span>
               {!loading && <ArrowRight
