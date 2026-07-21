@@ -248,6 +248,7 @@ export default function DeenStudy() {
   const [showAllLearntToday, setShowAllLearntToday] = useState(false);
   const [localHafsByAyah, setLocalHafsByAyah] = useState<Record<string, string>>({});
   const [reviewAyahs, setReviewAyahs] = useState<AyahData[]>([]);
+  const [reviewHighlightAyahKey, setReviewHighlightAyahKey] = useState<string | null>(null);
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
@@ -365,6 +366,23 @@ export default function DeenStudy() {
       if (data) chain.unshift(data);
       prev--;
     }
+
+    if (playerMode === "review") {
+      const surahMeta = SURAH_LIST.find((s) => s.n === sessionAyah.surah_number);
+      const nextAyah = sessionAyah.ayah_number + 1;
+      const canHaveNext = !!surahMeta && nextAyah <= surahMeta.ayahs;
+      if (canHaveNext) {
+        const isNextMemorized = memorization.some(
+          (m) => m.surah_number === sessionAyah.surah_number && m.ayah_number === nextAyah && m.status === "memorized"
+        );
+        if (isNextMemorized) {
+          const nextData = await fetchAyah(sessionAyah.surah_number, nextAyah);
+          if (nextData) chain.push(nextData);
+        }
+      }
+    }
+
+    setReviewHighlightAyahKey(`${sessionAyah.surah_number}:${sessionAyah.ayah_number}`);
     setReviewAyahs(chain);
     setReviewSourceMode(playerMode);
     setShowReview(true);
@@ -566,6 +584,40 @@ export default function DeenStudy() {
       .sort((a, b) => a.surahNumber - b.surahNumber);
   }, [memorizedItems]);
 
+  const { streakDays, thisWeekCount } = useMemo(() => {
+    const uniqueDayTimestamps = new Set<number>();
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const oneWeekAgo = todayMidnight - 7 * 24 * 60 * 60 * 1000;
+    let weekCount = 0;
+
+    for (const item of memorizedItems) {
+      if (!item.updated_at) continue;
+      const d = new Date(item.updated_at);
+      const t = d.getTime();
+      if (Number.isNaN(t)) continue;
+      const dayMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      uniqueDayTimestamps.add(dayMidnight);
+      if (t >= oneWeekAgo) weekCount += 1;
+    }
+
+    const sortedDays = Array.from(uniqueDayTimestamps).sort((a, b) => b - a);
+    const yesterdayMidnight = todayMidnight - 24 * 60 * 60 * 1000;
+    let streak = 0;
+    if (sortedDays.length > 0 && sortedDays[0] >= yesterdayMidnight) {
+      streak = 1;
+      for (let i = 1; i < sortedDays.length; i++) {
+        if (sortedDays[i] === sortedDays[i - 1] - 24 * 60 * 60 * 1000) {
+          streak += 1;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return { streakDays: streak, thisWeekCount: weekCount };
+  }, [memorizedItems]);
+
   useEffect(() => {
     if (expandedSurah !== null && !memorizedBySurah.some((g) => g.surahNumber === expandedSurah)) {
       setExpandedSurah(null);
@@ -614,6 +666,7 @@ export default function DeenStudy() {
       {showReview && (
         <ReviewOverlay
           ayahs={reviewAyahs}
+          highlightAyahKey={reviewHighlightAyahKey}
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
           reviewOnly={reviewSourceMode === "review"}
@@ -698,15 +751,20 @@ export default function DeenStudy() {
                     dark={dark}
                   />
                   <StatCard
-                    value={memorizedCount}
-                    valueSuffix={isAr ? "آية" : "ayah"}
-                    label={isAr ? "بالإجمالي" : "in total"}
-                    color="#4ade80"
-                    bg="hsla(142,76%,55%,0.08)"
+                    value={dailyGoal > 0 ? `${memorizedTodayCount}/${dailyGoal}` : (isAr ? "—" : "—")}
+                    label={isAr ? "الهدف اليومي" : "Daily goal"}
+                    color={accentText}
+                    bg={accentBg}
                     dark={dark}
-                    onClick={() => setActiveTab("review")}
                   />
-                  <StatCard value={`${memorizedPercent}%`} label={isAr ? "% القرآن" : "% Quran"} color={accentText} bg={accentBg} dark={dark} />
+                  <StatCard
+                    value={streakDays}
+                    valueSuffix={isAr ? "يوم" : "days"}
+                    label={isAr ? "الاستمرارية" : "Streak"}
+                    color="#c084fc"
+                    bg="hsla(280,60%,75%,0.08)"
+                    dark={dark}
+                  />
                 </div>
 
                 <button
@@ -831,6 +889,28 @@ export default function DeenStudy() {
         {/* ── REVIEW TAB ── */}
         {activeTab === "review" && (
           <div className="flex flex-col gap-2">
+            <div className="rounded-xl p-3" style={{ background: surface, border: `1px solid ${bdr}` }}>
+              <div className="flex items-center">
+                <div className="flex-1 text-center">
+                  <p className="text-xl font-black leading-none" style={{ color: "#4ade80" }}>
+                    {memorizedCount} <span className="text-[8px] font-semibold leading-none" style={{ color: textSec }}>{isAr ? "آية" : "ayah"}</span>
+                  </p>
+                  <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{isAr ? "بالإجمالي" : "in total"}</p>
+                </div>
+                <div className="w-px h-8" style={{ background: bdr }} />
+                <div className="flex-1 text-center">
+                  <p className="text-xl font-black leading-none" style={{ color: "#22d3ee" }}>
+                    {thisWeekCount} <span className="text-[8px] font-semibold leading-none" style={{ color: textSec }}>{isAr ? "آية" : "ayah"}</span>
+                  </p>
+                  <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{isAr ? "هذا الأسبوع" : "This week"}</p>
+                </div>
+                <div className="w-px h-8" style={{ background: bdr }} />
+                <div className="flex-1 text-center">
+                  <p className="text-xl font-black leading-none" style={{ color: accentText }}>{memorizedPercent}%</p>
+                  <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{isAr ? "% القرآن" : "% Quran"}</p>
+                </div>
+              </div>
+            </div>
             {loading ? <Loader /> : memorizedItems.length === 0 ? (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: surface, border: `1px solid ${bdr}` }}>
@@ -1906,8 +1986,9 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
   );
 }
 
-function ReviewOverlay({ ayahs, isAr, localHafsByAyah, reviewOnly, loading, onReturn, onNext }: {
+function ReviewOverlay({ ayahs, highlightAyahKey, isAr, localHafsByAyah, reviewOnly, loading, onReturn, onNext }: {
   ayahs: AyahData[];
+  highlightAyahKey: string | null;
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
   reviewOnly: boolean;
@@ -1936,11 +2017,11 @@ function ReviewOverlay({ ayahs, isAr, localHafsByAyah, reviewOnly, loading, onRe
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        {ayahs.map((ayah, idx) => (
+        {ayahs.map((ayah) => (
           <div
             key={`${ayah.surah_number}:${ayah.ayah_number}`}
             className="rounded-2xl px-5 py-6 text-center"
-            style={idx === ayahs.length - 1
+            style={`${ayah.surah_number}:${ayah.ayah_number}` === highlightAyahKey
               ? { background: dark ? "hsla(142,76%,55%,0.08)" : "hsla(142,76%,40%,0.06)", border: `2px solid ${dark ? "hsla(142,76%,55%,0.24)" : "hsla(142,76%,32%,0.24)"}` }
               : { background: surface, border: `1px solid ${border}` }}
           >
