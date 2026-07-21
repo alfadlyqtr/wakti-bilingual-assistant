@@ -38,7 +38,12 @@ interface LocalHafsScriptRow {
   aya_text?: string;
 }
 
+type SurahViewAllRow =
+  | { type: "gap"; startAyah: number; endAyah: number }
+  | { type: "ayah"; ayahNumber: number };
+
 const STUDY_PLAN_KEY = "deen_study_plan_v2";
+const VIEW_ALL_BATCH_SIZE = 6;
 
 const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
   { n:1,en:"Al-Fatiha",ar:"الفاتحة",ayahs:7 },{ n:2,en:"Al-Baqara",ar:"البقرة",ayahs:286 },
@@ -246,6 +251,11 @@ export default function DeenStudy() {
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
+  const [viewAllSurahNumber, setViewAllSurahNumber] = useState<number | null>(null);
+  const [viewAllRows, setViewAllRows] = useState<SurahViewAllRow[]>([]);
+  const [viewAllVisibleAyahCount, setViewAllVisibleAyahCount] = useState(0);
+  const [viewAllAyahMap, setViewAllAyahMap] = useState<Record<number, AyahData>>({});
+  const [viewAllLoading, setViewAllLoading] = useState(false);
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -320,7 +330,15 @@ export default function DeenStudy() {
 
   const onPlayerComplete = useCallback(async (result: "memorized") => {
     if (!sessionAyah) return;
-    await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
+    const alreadyMemorized = memorization.some(
+      (m) =>
+        m.surah_number === sessionAyah.surah_number &&
+        m.ayah_number === sessionAyah.ayah_number &&
+        m.status === "memorized"
+    );
+    if (!(playerMode === "review" && alreadyMemorized)) {
+      await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
+    }
     if (plan && playerMode === "learn") {
       const nextCursor = getNextAyahCursor(sessionAyah.surah_number, sessionAyah.ayah_number);
       const updated: StudyPlan = nextCursor
@@ -432,6 +450,56 @@ export default function DeenStudy() {
     toast.success(isAr ? "تم حذف الخطة" : "Plan deleted");
   };
 
+  const loadViewAllBatch = useCallback(async (surahNumber: number, ayahNumbers: number[], startIndex: number) => {
+    const nextIndex = Math.min(startIndex + VIEW_ALL_BATCH_SIZE, ayahNumbers.length);
+    if (nextIndex <= startIndex) return;
+    const batchAyahs = ayahNumbers.slice(startIndex, nextIndex);
+
+    setViewAllLoading(true);
+    try {
+      const fetched = await Promise.all(
+        batchAyahs.map(async (ayahNumber) => ({ ayahNumber, data: await fetchAyah(surahNumber, ayahNumber) }))
+      );
+      setViewAllAyahMap((prev) => {
+        const next = { ...prev };
+        fetched.forEach(({ ayahNumber, data }) => {
+          if (data) next[ayahNumber] = data;
+        });
+        return next;
+      });
+      setViewAllVisibleAyahCount(nextIndex);
+    } finally {
+      setViewAllLoading(false);
+    }
+  }, []);
+
+  const openSurahViewAll = useCallback((group: { surahNumber: number; items: any[] }) => {
+    const ayahNumbers = Array.from(new Set(group.items.map((item) => item.ayah_number as number))).sort((a, b) => a - b);
+    const rows: SurahViewAllRow[] = [];
+    let cursor = 1;
+    ayahNumbers.forEach((ayahNumber) => {
+      if (ayahNumber > cursor) {
+        rows.push({ type: "gap", startAyah: cursor, endAyah: ayahNumber - 1 });
+      }
+      rows.push({ type: "ayah", ayahNumber });
+      cursor = ayahNumber + 1;
+    });
+
+    setViewAllSurahNumber(group.surahNumber);
+    setViewAllRows(rows);
+    setViewAllVisibleAyahCount(0);
+    setViewAllAyahMap({});
+    void loadViewAllBatch(group.surahNumber, ayahNumbers, 0);
+  }, [loadViewAllBatch]);
+
+  const closeSurahViewAll = useCallback(() => {
+    setViewAllSurahNumber(null);
+    setViewAllRows([]);
+    setViewAllVisibleAyahCount(0);
+    setViewAllAyahMap({});
+    setViewAllLoading(false);
+  }, []);
+
   const memorizedItems = memorization.filter((m) => m.status === "memorized");
   const memorizedCount = memorizedItems.length;
   const memorizedPercent = ((memorizedCount / TOTAL_QURAN_AYAHS) * 100).toFixed(1);
@@ -447,6 +515,28 @@ export default function DeenStudy() {
       return updatedAt >= startOfToday && updatedAt < endOfToday;
     });
   }, [memorizedItems]);
+
+  const viewAllMemorizedAyahNumbers = useMemo(
+    () => viewAllRows.filter((row): row is { type: "ayah"; ayahNumber: number } => row.type === "ayah").map((row) => row.ayahNumber),
+    [viewAllRows]
+  );
+
+  const viewAllVisibleRows = useMemo(() => {
+    let seenAyahs = 0;
+    return viewAllRows.filter((row) => {
+      if (row.type === "gap") {
+        return seenAyahs < viewAllVisibleAyahCount;
+      }
+      seenAyahs += 1;
+      return seenAyahs <= viewAllVisibleAyahCount;
+    });
+  }, [viewAllRows, viewAllVisibleAyahCount]);
+
+  const loadMoreViewAll = useCallback(() => {
+    if (viewAllLoading || viewAllSurahNumber === null) return;
+    if (viewAllVisibleAyahCount >= viewAllMemorizedAyahNumbers.length) return;
+    void loadViewAllBatch(viewAllSurahNumber, viewAllMemorizedAyahNumbers, viewAllVisibleAyahCount);
+  }, [viewAllLoading, viewAllSurahNumber, viewAllVisibleAyahCount, viewAllMemorizedAyahNumbers, loadViewAllBatch]);
   const memorizedTodayCount = learntTodayItems.length;
   const dailyGoal = Math.max(plan?.dailyGoal ?? 0, 0);
   const dailyGoalProgress = dailyGoal > 0 ? Math.min(memorizedTodayCount / dailyGoal, 1) : 0;
@@ -504,6 +594,20 @@ export default function DeenStudy() {
           onComplete={onPlayerComplete}
           onNotYet={onPlayerNotYet}
           onClose={() => setSessionAyah(null)}
+        />
+      )}
+
+      {viewAllSurahNumber !== null && (
+        <SurahViewAllOverlay
+          surahNumber={viewAllSurahNumber}
+          rows={viewAllVisibleRows}
+          ayahMap={viewAllAyahMap}
+          isAr={isAr}
+          localHafsByAyah={localHafsByAyah}
+          loading={viewAllLoading}
+          hasMore={viewAllVisibleAyahCount < viewAllMemorizedAyahNumbers.length}
+          onLoadMore={loadMoreViewAll}
+          onClose={closeSurahViewAll}
         />
       )}
 
@@ -780,6 +884,27 @@ export default function DeenStudy() {
 
                     {isExpanded && (
                       <div className="mt-2 flex flex-col gap-2">
+                        <button
+                          onClick={() => openSurahViewAll(group)}
+                          className="rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition-all"
+                          style={{ background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)", border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)"}` }}
+                        >
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: dark ? "hsla(210,100%,65%,0.12)" : "hsla(210,100%,65%,0.10)", border: "1px solid hsla(210,100%,65%,0.25)", color: "#60a5fa" }}
+                          >
+                            <BookOpen className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                            <p className="text-xs font-semibold" style={{ color: textPri }}>
+                              {isAr ? "عرض الكل" : "Review All"}
+                            </p>
+                            <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
+                              {isAr ? "عرض المحفوظ مع الفجوات" : "Show all memorized ayahs from this surah"}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
+                        </button>
                         {group.items.map((m) => (
                           <MemorizationRow
                             key={m.id}
@@ -803,6 +928,161 @@ export default function DeenStudy() {
         {activeTab === "plans" && (
           <PlansSetup isAr={isAr} dark={dark} activePlan={plan} savedPlans={planStore.plans} onActivate={activatePlan} onSetActive={setActivePlan} onDeletePlan={deletePlan} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function SurahViewAllOverlay({ surahNumber, rows, ayahMap, isAr, localHafsByAyah, loading, hasMore, onLoadMore, onClose }: {
+  surahNumber: number;
+  rows: SurahViewAllRow[];
+  ayahMap: Record<number, AyahData>;
+  isAr: boolean;
+  localHafsByAyah: Record<string, string>;
+  loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+  onClose: () => void;
+}) {
+  const { theme } = useTheme();
+  const dark = theme === "dark";
+  const bg = dark ? "#0c0f14" : "#fcfefd";
+  const surface = dark ? "rgba(96,96,98,0.12)" : "rgba(220,220,222,0.18)";
+  const border = dark ? "rgba(96,96,98,0.28)" : "rgba(220,220,222,0.35)";
+  const textPri = dark ? "#f2f2f2" : "#060541";
+  const textSec = dark ? "#858384" : "#606062";
+  const green = "hsl(142,76%,32%)";
+  const amberText = dark ? "#fbbf24" : "#b45309";
+  const surahInfo = SURAH_LIST.find((s) => s.n === surahNumber);
+
+  const onScrollRows = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120 && hasMore && !loading) {
+      onLoadMore();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: bg }}>
+      <div
+        className="flex-shrink-0 px-4 pb-3 text-center"
+        style={{
+          paddingTop: "max(env(safe-area-inset-top, 0px) + 56px, 72px)",
+          borderBottom: `1px solid ${border}`,
+          background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
+          backdropFilter: "blur(20px)",
+        }}
+      >
+        <h1 className="text-sm font-bold" style={{ color: textPri }}>
+          {isAr
+            ? `${surahInfo ? surahInfo.ar : "السورة"} - مراجعة`
+            : `Surah ${surahInfo ? surahInfo.en : ""} - Review`}
+        </h1>
+      </div>
+      <div
+        className="flex-1 overflow-y-auto px-4 pb-4 pt-4 flex flex-col gap-3"
+        style={{ paddingTop: "14px" }}
+        onScroll={onScrollRows}
+      >
+        {surahNumber !== 1 && surahNumber !== 9 && (
+          <p className="text-center text-base leading-loose mb-1" dir="rtl" style={{ color: amberText, fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif" }}>
+            بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+          </p>
+        )}
+
+        {rows.map((row, idx) => {
+          if (row.type === "gap") {
+            return (
+              <div
+                key={`gap:${row.startAyah}:${row.endAyah}:${idx}`}
+                className="rounded-2xl px-5 py-5 my-1 text-center"
+                style={{
+                  background: dark ? "hsla(45,100%,60%,0.12)" : "hsla(45,95%,50%,0.16)",
+                  border: `1px dashed ${dark ? "hsla(45,100%,60%,0.36)" : "hsla(35,95%,40%,0.40)"}`,
+                }}
+              >
+                <p className="text-xs font-semibold" style={{ color: dark ? "#fbbf24" : "#78350f" }}>
+                  {isAr
+                    ? (row.startAyah === row.endAyah ? `الآية ${row.startAyah} غير محفوظة بعد` : `الآيات ${row.startAyah} - ${row.endAyah} غير محفوظة بعد`)
+                    : (row.startAyah === row.endAyah ? `Ayah ${row.startAyah} not memorized yet` : `Ayah ${row.startAyah} - ${row.endAyah} not memorized yet`)}
+                </p>
+              </div>
+            );
+          }
+
+          const ayah = ayahMap[row.ayahNumber];
+          return (
+            <div
+              key={`${surahNumber}:${row.ayahNumber}`}
+              className="rounded-2xl px-5 py-6 text-center"
+              style={{ background: surface, border: `1px solid ${border}` }}
+            >
+              <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>
+                {isAr ? `آية ${row.ayahNumber}` : `Ayah ${row.ayahNumber}`}
+              </p>
+              {ayah ? (
+                <p
+                  className="text-[1.5rem] leading-[2.2]"
+                  style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: textPri }}
+                  dir="rtl"
+                >
+                  {getArabicDisplayText(ayah.surah_number, ayah.ayah_number, ayah.arabic, localHafsByAyah)}
+                </p>
+              ) : (
+                <p className="text-xs" style={{ color: textSec }}>
+                  {isAr ? "تعذر تحميل هذه الآية" : "Could not load this ayah"}
+                </p>
+              )}
+            </div>
+          );
+        })}
+
+        {loading && (
+          <p className="text-center text-xs font-semibold" style={{ color: textSec }}>
+            {isAr ? "جاري تحميل المزيد..." : "Loading more..."}
+          </p>
+        )}
+      </div>
+
+      <div
+        className="px-4 py-3 flex flex-col gap-3"
+        style={{
+          borderTop: `1px solid ${border}`,
+          background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
+          backdropFilter: "blur(20px)",
+          paddingBottom: "max(env(safe-area-inset-bottom, 0px) + 12px, 24px)",
+        }}
+      >
+        <p className="text-center text-xs font-semibold leading-snug" style={{ color: textSec }}>
+          {isAr ? "جميع الآيات المحفوظة في هذه السورة" : "All memorized ayahs in this surah"}
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={onClose}
+            className="w-full py-4 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            style={{
+              background: dark ? "rgba(96,96,98,0.16)" : "rgba(220,220,222,0.26)",
+              color: textPri,
+              border: `1px solid ${border}`,
+            }}
+          >
+            {isAr ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+            <span>{isAr ? "رجوع" : "Back"}</span>
+          </button>
+
+          <button
+            onClick={onClose}
+            className="w-full py-4 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            style={{
+              background: "hsla(142,76%,55%,0.12)",
+              color: "hsl(142,76%,55%)",
+              border: "1px solid hsla(142,76%,55%,0.28)",
+            }}
+          >
+            <CheckCircle className="w-4 h-4" />
+            <span>{isAr ? "تم" : "Done"}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1604,7 +1884,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
                   isAr ? (
                     <span className="text-xs font-bold">وضع كغير محفوظ</span>
                   ) : (
-                    <span className="text-xs font-bold">Remove</span>
+                    <span className="text-xs font-bold">Remove from memorized</span>
                   )
                 ) : (
                   <span className="text-xs font-bold">{isAr ? "غير محفوظ" : "Not Memorized"}</span>
