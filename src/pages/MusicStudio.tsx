@@ -2498,6 +2498,7 @@ function VoicesTab({
   const { language } = useTheme();
   const { user, isGuest } = useAuth();
   const isAr = language === 'ar';
+  const operatorPayloadId = searchParams?.get('waktiOperator') ?? null;
 
   // Inputs (split prompt)
   const [title, setTitle] = useState('');
