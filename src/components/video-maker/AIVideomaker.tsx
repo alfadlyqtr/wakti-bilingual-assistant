@@ -4467,9 +4467,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
                                   {language === 'ar' ? `المشهد ${sceneNum}` : `SCENE ${sceneNum}`}
                                 </span>
-                                {/* Per-scene duration picker: 6s or 10s, live-capped at MAX_VIDEO_DURATION total */}
+                                {/* Per-scene duration picker: 5s/6s/8s/10s, live-capped at MAX_VIDEO_DURATION total */}
                                 <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{background:'rgba(255,255,255,0.06)'}}>
-                                  {[MIN_SCENE_DURATION, MAX_SCENE_DURATION].map((secOption) => {
+                                  {[5, 6, 8, 10].map((secOption) => {
                                     const isSelected = sceneDurations[sceneNum - 1] === secOption;
                                     const otherTotal = sceneDurations.reduce((sum, d, i) => i === sceneNum - 1 ? sum : sum + d, 0);
                                     const wouldExceedCap = otherTotal + secOption > MAX_VIDEO_DURATION;
