@@ -551,6 +551,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
   const [cinemaMode] = useState<'auto' | 'custom'>('auto');
   const [cinemaSceneBuilderOpen, setCinemaSceneBuilderOpen] = useState(false);
+  const [cinemaSceneRefsOpen, setCinemaSceneRefsOpen] = useState(false);
   const handledOperatorExecutionRef = useRef<string | null>(null);
   const operatorAutoGenerateRef = useRef<string | null>(null);
 
@@ -3735,9 +3736,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                       </div>
 
-                      {/* ── 4. SCENE REFERENCES ── */}
+                      {/* ── 4. SCENE REFERENCES (collapsible, starts at Scene 2) ── */}
                       {(() => {
-                        const sceneSlotCount = presetSceneDurations ? presetSceneDurations.length : 3;
+                        const totalScenes = presetSceneDurations ? presetSceneDurations.length : 3;
+                        // Scene 1 = the reference image above; scene refs start at slot index 1
+                        const refSlots = Array.from({ length: Math.max(0, totalScenes - 1) }, (_, i) => i + 1);
+                        const anyUploaded = refSlots.some(idx => cinemaReferenceImages[idx]);
                         const refTagOptions: { key: string; en: string; ar: string }[] = [
                           { key: 'character', en: 'Character', ar: 'شخصية' },
                           { key: 'logo',      en: 'Logo',      ar: 'شعار' },
@@ -3745,67 +3749,68 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           { key: 'product',   en: 'Product',   ar: 'منتج' },
                         ];
                         return (
-                          <div className="rounded-2xl p-4 space-y-2" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${simpleBorder}`}}>
-                            <p className="text-[11px] font-semibold mb-3" style={{color:simpleMuted}}>{language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}</p>
-                            <div className="flex flex-col gap-2">
-                              {Array.from({ length: sceneSlotCount }, (_, idx) => {
-                                const refUrl = cinemaReferenceImages[idx];
-                                const currentTag = cinemaRefTags[idx] || 'character';
-                                return (
-                                  <div key={idx} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{background:simpleIsDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.04)',border:`1px solid ${refUrl ? 'rgba(226,199,168,0.4)' : simpleBorder}`}}>
-                                    {/* Thumbnail or upload button */}
-                                    <label className="relative flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center cursor-pointer transition-all active:scale-95" style={{background:simpleIsDark ? 'rgba(255,255,255,0.07)' : 'rgba(6,5,65,0.07)',border:`2px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : 'rgba(226,199,168,0.25)'}`}}>
-                                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, currentTag); e.target.value = ''; }} />
-                                      {refUrl ? (
-                                        <img src={refUrl} alt={`Scene ${idx + 1}`} className="w-full h-full object-cover" />
-                                      ) : (
-                                        <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />
-                                      )}
-                                    </label>
-                                    {/* Scene label + actions */}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-[11px] font-bold mb-1.5" style={{color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</p>
-                                      <div className="flex items-center gap-2">
-                                        {/* Tag dropdown */}
-                                        <select
-                                          value={currentTag}
-                                          onChange={(e) => setCinemaRefTags(prev => { const n = [...prev]; n[idx] = e.target.value; return n; })}
-                                          className="flex-1 rounded-lg px-2 py-1 text-[10px] font-semibold outline-none cursor-pointer"
-                                          style={{background:simpleIsDark ? 'rgba(12,15,20,0.7)' : 'rgba(255,255,255,0.8)',color:simpleText,border:`1px solid ${simpleBorder}`}}>
-                                          {refTagOptions.map(t => (
-                                            <option key={t.key} value={t.key}>{language === 'ar' ? t.ar : t.en}</option>
-                                          ))}
-                                        </select>
-                                        {/* Choose from saved */}
-                                        <button type="button" onClick={() => setSceneRefSavedSlot(idx)}
-                                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95 flex-shrink-0"
-                                          style={{color:'#E2C7A8',background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.3)'}}>
-                                          <Images className="h-3 w-3" />
-                                          {language === 'ar' ? 'محفوظة' : 'Saved'}
-                                        </button>
-                                        {/* Remove */}
-                                        {refUrl && (
-                                          <button type="button" onClick={() => setCinemaReferenceImages(prev => { const n = [...prev]; n[idx] = null; return n; })}
-                                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                                            style={{background:'rgba(248,113,113,0.15)',color:'#fca5a5',border:'1px solid rgba(248,113,113,0.3)'}}>
-                                            ×
+                          <div className="rounded-2xl overflow-hidden" style={{border:`1px solid ${simpleBorder}`}}>
+                            {/* Collapsible header */}
+                            <button type="button" onClick={() => setCinemaSceneRefsOpen(v => !v)}
+                              className="w-full flex items-center justify-between px-4 py-3 transition-colors"
+                              style={{background:simpleIsDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.04)'}}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[12px] font-semibold" style={{color:simpleText}}>
+                                  {language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}
+                                </span>
+                                {anyUploaded && (
+                                  <span className="w-2 h-2 rounded-full" style={{background:'#E2C7A8'}} />
+                                )}
+                              </div>
+                              <span className="text-xs" style={{color:simpleMuted}}>{cinemaSceneRefsOpen ? '▲' : '▼'}</span>
+                            </button>
+                            {/* Collapsible body */}
+                            {cinemaSceneRefsOpen && (
+                              <div className="px-4 pb-4 pt-2 space-y-2" style={{background:simpleIsDark ? 'rgba(255,255,255,0.02)' : 'rgba(6,5,65,0.02)'}}>
+                                {refSlots.length === 0 ? (
+                                  <p className="text-[11px] text-center py-2" style={{color:simpleMuted}}>{language === 'ar' ? 'اختر عدد مشاهد أكثر من مشهد واحد' : 'Select more than 1 scene to add references'}</p>
+                                ) : refSlots.map(idx => {
+                                  const refUrl = cinemaReferenceImages[idx];
+                                  const currentTag = cinemaRefTags[idx] || 'character';
+                                  return (
+                                    <div key={idx} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{background:simpleIsDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.04)',border:`1px solid ${refUrl ? 'rgba(226,199,168,0.4)' : simpleBorder}`}}>
+                                      {/* Thumbnail / upload */}
+                                      <label className="relative flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center cursor-pointer transition-all active:scale-95" style={{background:simpleIsDark ? 'rgba(255,255,255,0.07)' : 'rgba(6,5,65,0.07)',border:`2px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : 'rgba(226,199,168,0.25)'}`}}>
+                                        <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, currentTag); e.target.value = ''; }} />
+                                        {refUrl ? <img src={refUrl} alt={`Scene ${idx + 1}`} className="w-full h-full object-cover" /> : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
+                                      </label>
+                                      {/* Label + controls */}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] font-bold mb-1.5" style={{color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</p>
+                                        <div className="flex items-center gap-2">
+                                          <select value={currentTag} onChange={(e) => setCinemaRefTags(prev => { const n = [...prev]; n[idx] = e.target.value; return n; })}
+                                            className="flex-1 rounded-lg px-2 py-1 text-[10px] font-semibold outline-none cursor-pointer"
+                                            style={{background:simpleIsDark ? 'rgba(12,15,20,0.7)' : 'rgba(255,255,255,0.8)',color:simpleText,border:`1px solid ${simpleBorder}`}}>
+                                            {refTagOptions.map(t => <option key={t.key} value={t.key}>{language === 'ar' ? t.ar : t.en}</option>)}
+                                          </select>
+                                          <button type="button" onClick={() => setSceneRefSavedSlot(idx)}
+                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95 flex-shrink-0"
+                                            style={{color:'#E2C7A8',background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.3)'}}>
+                                            <Images className="h-3 w-3" />{language === 'ar' ? 'محفوظة' : 'Saved'}
                                           </button>
-                                        )}
+                                          {refUrl && (
+                                            <button type="button" onClick={() => setCinemaReferenceImages(prev => { const n = [...prev]; n[idx] = null; return n; })}
+                                              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                                              style={{background:'rgba(248,113,113,0.15)',color:'#fca5a5',border:'1px solid rgba(248,113,113,0.3)'}}>×</button>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            {/* Per-slot saved image picker */}
-                            {sceneRefSavedSlot !== null && (
-                              <SavedImagesPicker
-                                onSelect={(url) => {
-                                  setCinemaReferenceImages(prev => { const n = [...prev]; n[sceneRefSavedSlot!] = url; return n; });
-                                  setSceneRefSavedSlot(null);
-                                }}
-                                onClose={() => setSceneRefSavedSlot(null)}
-                              />
+                                  );
+                                })}
+                                {/* Per-slot saved picker */}
+                                {sceneRefSavedSlot !== null && (
+                                  <SavedImagesPicker
+                                    onSelect={(url) => { setCinemaReferenceImages(prev => { const n = [...prev]; n[sceneRefSavedSlot!] = url; return n; }); setSceneRefSavedSlot(null); }}
+                                    onClose={() => setSceneRefSavedSlot(null)}
+                                  />
+                                )}
+                              </div>
                             )}
                           </div>
                         );
