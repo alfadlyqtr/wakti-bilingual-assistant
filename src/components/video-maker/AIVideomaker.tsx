@@ -365,11 +365,12 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
 
 // Wakti Cinema — the Director chooses the scene count for each connected video
 const MIN_SCENE_COUNT = 3;
-const MAX_SCENE_COUNT = 8;
+const MAX_SCENE_COUNT = 6;
 const DEFAULT_SCENE_DURATION = 6;
-const MIN_SCENE_DURATION = 4;
+const MIN_SCENE_DURATION = 6;
 const MAX_SCENE_DURATION = 10;
 const MAX_VIDEO_DURATION = 60;
+const SCENE_DURATION_OPTIONS = [6, 10] as const;
 
 const sceneArray = <T,>(sceneCount: number, value: T): T[] => Array.from({ length: sceneCount }, () => value);
 
@@ -3615,82 +3616,100 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               <button
                                 type="button"
                                 onClick={() => setPresetSceneDurations(Array(3).fill(DEFAULT_SCENE_DURATION))}
-                                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95"
-                                style={{background:simpleIsDark ? 'rgba(12,15,20,0.75)' : 'rgba(255,255,255,0.8)',color:simpleText,border:`1px solid ${simpleBorder}`}}
+                                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95"
+                                style={{background:'linear-gradient(135deg,rgba(226,199,168,0.08),rgba(197,164,126,0.04))',color:simpleText,border:'1px solid rgba(226,199,168,0.2)',boxShadow:'0 2px 12px rgba(226,199,168,0.08)'}}
                               >
-                                <span>{language === 'ar' ? '✦ تلقائي — يقرر المخرج' : '✦ Auto — Director decides'}</span>
-                                <span className="text-[9px] opacity-50">{language === 'ar' ? 'اضغط للتخصيص ←' : 'tap to customize →'}</span>
+                                <div className="flex items-center gap-2">
+                                  <span style={{color:'#E2C7A8',fontSize:'16px'}}>✦</span>
+                                  <span style={{color:simpleText}}>{language === 'ar' ? 'تلقائي — يقرر المخرج' : 'Auto — Director decides'}</span>
+                                </div>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(226,199,168,0.1)',color:'rgba(226,199,168,0.6)'}}>{language === 'ar' ? 'خصّص' : 'customize'}</span>
                               </button>
                             ) : (
-                              <div className="flex flex-col gap-2 p-2.5 rounded-xl" style={{background:simpleIsDark ? 'rgba(12,15,20,0.55)' : 'rgba(255,255,255,0.55)',border:`1px solid ${simpleBorder}`}}>
-                                {/* Scene tiles row */}
-                                <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                              <div className="flex flex-col gap-3">
+                                {/* 2-column scene card grid */}
+                                <div className="grid grid-cols-2 gap-2">
                                   {presetSceneDurations.map((dur, idx) => {
-                                    const CYCLE = [5, 6, 8, 10];
                                     const otherTotal = presetSceneDurations.reduce((s, d, i) => i === idx ? s : s + d, 0);
                                     return (
-                                      <div key={idx} className="relative flex-shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const pos = CYCLE.indexOf(dur);
-                                            for (let i = 1; i <= CYCLE.length; i++) {
-                                              const next = CYCLE[(pos + i) % CYCLE.length];
-                                              if (otherTotal + next <= MAX_VIDEO_DURATION) {
-                                                setPresetSceneDurations(prev => { const n = [...prev!]; n[idx] = next; return n; });
-                                                break;
-                                              }
-                                            }
-                                          }}
-                                          className="flex flex-col items-center gap-1 w-12 pt-2 pb-1.5 rounded-xl transition-all active:scale-90"
-                                          style={{background:'linear-gradient(135deg,rgba(226,199,168,0.18),rgba(197,164,126,0.08))',border:'1px solid rgba(226,199,168,0.4)'}}
-                                        >
-                                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>{idx + 1}</span>
-                                          <span className="text-[12px] font-bold leading-none" style={{color:'#E2C7A8'}}>{dur}s</span>
-                                        </button>
+                                      <div key={idx} className="relative rounded-2xl p-3 flex flex-col gap-2.5"
+                                        style={{background:'linear-gradient(135deg,rgba(226,199,168,0.07),rgba(12,15,20,0.5))',border:'1px solid rgba(226,199,168,0.22)',boxShadow:'0 2px 16px rgba(0,0,0,0.25)'}}>
+                                        {/* Remove button */}
                                         {presetSceneDurations.length > MIN_SCENE_COUNT && (
                                           <button
                                             type="button"
                                             onClick={() => setPresetSceneDurations(prev => prev!.filter((_, i) => i !== idx))}
-                                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold leading-none"
-                                            style={{background:'rgba(248,113,113,0.95)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)'}}
+                                            className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold leading-none transition-all active:scale-90"
+                                            style={{background:'rgba(248,113,113,0.85)',color:'#fff'}}
                                           >×</button>
                                         )}
+                                        {/* Scene label */}
+                                        <p className="text-[9px] font-bold uppercase tracking-widest" style={{color:'rgba(226,199,168,0.45)'}}>
+                                          {language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}
+                                        </p>
+                                        {/* 6s / 10s toggle */}
+                                        <div className="flex rounded-xl overflow-hidden" style={{background:'rgba(0,0,0,0.35)',padding:'2px',gap:'2px'}}>
+                                          {SCENE_DURATION_OPTIONS.map(sec => {
+                                            const wouldExceed = otherTotal + sec > MAX_VIDEO_DURATION;
+                                            const isActive = dur === sec;
+                                            return (
+                                              <button
+                                                key={sec}
+                                                type="button"
+                                                disabled={wouldExceed && !isActive}
+                                                onClick={() => setPresetSceneDurations(prev => { const n = [...prev!]; n[idx] = sec; return n; })}
+                                                className="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed"
+                                                style={{
+                                                  background: isActive ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'transparent',
+                                                  color: isActive ? '#0c0f14' : 'rgba(255,255,255,0.35)',
+                                                  boxShadow: isActive ? '0 2px 8px rgba(226,199,168,0.35)' : 'none',
+                                                }}
+                                              >{sec}s</button>
+                                            );
+                                          })}
+                                        </div>
                                       </div>
                                     );
                                   })}
-                                  {/* Add scene */}
+                                  {/* Add scene card */}
                                   {presetSceneDurations.length < MAX_SCENE_COUNT && presetSceneDurations.reduce((s,d)=>s+d,0) + DEFAULT_SCENE_DURATION <= MAX_VIDEO_DURATION && (
                                     <button
                                       type="button"
                                       onClick={() => setPresetSceneDurations(prev => [...prev!, DEFAULT_SCENE_DURATION])}
-                                      className="flex-shrink-0 w-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-90"
-                                      style={{background:'rgba(255,255,255,0.04)',border:'1.5px dashed rgba(226,199,168,0.3)',color:'rgba(226,199,168,0.55)',minHeight:'60px'}}
+                                      className="rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95"
+                                      style={{border:'1.5px dashed rgba(226,199,168,0.22)',background:'transparent',color:'rgba(226,199,168,0.4)',minHeight:'84px'}}
                                     >
-                                      <span className="text-xl leading-none font-light">+</span>
+                                      <span className="text-2xl font-extralight leading-none">+</span>
+                                      <span className="text-[9px] font-semibold uppercase tracking-wider">{language === 'ar' ? 'مشهد' : 'scene'}</span>
                                     </button>
                                   )}
                                 </div>
-                                {/* Total bar */}
+                                {/* Segmented timeline */}
                                 {(() => {
                                   const total = presetSceneDurations.reduce((s, d) => s + d, 0);
-                                  const pct = Math.min(100, (total / MAX_VIDEO_DURATION) * 100);
                                   const over = total >= MAX_VIDEO_DURATION;
+                                  const SEGMENT_COLORS = ['#E2C7A8','#C5A47E','#D4B896','#B8936A','#CEBA8A','#A8824E'];
                                   return (
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex justify-between text-[10px]">
-                                        <span style={{color:simpleMuted}}>{presetSceneDurations.length} {language === 'ar' ? 'مشاهد • اضغط لتغيير المدة' : 'scenes • tap tile to change duration'}</span>
-                                        <span className="font-bold" style={{color: over ? '#f87171' : '#E2C7A8'}}>{total}s / {MAX_VIDEO_DURATION}s</span>
+                                    <div className="flex flex-col gap-1.5">
+                                      <div className="flex justify-between items-center text-[10px]">
+                                        <span style={{color:'rgba(255,255,255,0.35)'}}>{presetSceneDurations.length} {language === 'ar' ? 'مشاهد' : 'scenes'}</span>
+                                        <span className="font-bold" style={{color: over ? '#f87171' : '#E2C7A8'}}>{total}s <span style={{opacity:0.5}}>/ {MAX_VIDEO_DURATION}s</span></span>
                                       </div>
-                                      <div className="w-full h-1.5 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.08)'}}>
-                                        <div className="h-full rounded-full transition-all duration-300" style={{width:`${pct}%`,background: over ? '#f87171' : 'linear-gradient(90deg,#C5A47E,#E2C7A8)'}} />
+                                      {/* Segmented bar */}
+                                      <div className="flex gap-0.5 h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
+                                        {presetSceneDurations.map((dur, idx) => (
+                                          <div key={idx} className="h-full rounded-full transition-all duration-300"
+                                            style={{width:`${(dur / MAX_VIDEO_DURATION) * 100}%`,background: over ? '#f87171' : SEGMENT_COLORS[idx % SEGMENT_COLORS.length],opacity: over ? 0.9 : 0.85}} />
+                                        ))}
                                       </div>
                                     </div>
                                   );
                                 })()}
                                 {/* Back to auto */}
-                                <button type="button" onClick={() => setPresetSceneDurations(null)} className="self-start text-[10px] font-semibold transition-opacity" style={{color:simpleMuted,opacity:0.6}}>
-                                  {language === 'ar' ? '← تلقائي' : '← switch to Auto'}
+                                <button type="button" onClick={() => setPresetSceneDurations(null)}
+                                  className="self-start text-[10px] font-semibold transition-opacity"
+                                  style={{color:'rgba(226,199,168,0.4)'}}>
+                                  {language === 'ar' ? '← تلقائي' : '← Auto'}
                                 </button>
                               </div>
                             )}
@@ -4551,7 +4570,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 </span>
                                 {/* Per-scene duration picker: 5s/6s/8s/10s, live-capped at MAX_VIDEO_DURATION total */}
                                 <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{background:'rgba(255,255,255,0.06)'}}>
-                                  {[5, 6, 8, 10].map((secOption) => {
+                                  {SCENE_DURATION_OPTIONS.map((secOption) => {
                                     const isSelected = sceneDurations[sceneNum - 1] === secOption;
                                     const otherTotal = sceneDurations.reduce((sum, d, i) => i === sceneNum - 1 ? sum : sum + d, 0);
                                     const wouldExceedCap = otherTotal + secOption > MAX_VIDEO_DURATION;
