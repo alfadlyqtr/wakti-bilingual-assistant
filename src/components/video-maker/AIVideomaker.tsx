@@ -3735,21 +3735,56 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       </div>
 
                       {/* ── 4. SCENE REFERENCES ── */}
-                      <div className="rounded-2xl p-3 space-y-2" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${simpleBorder}`}}>
-                        <p className="text-[11px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {Array.from({ length: 3 }, (_, idx) => {
-                            const refUrl = cinemaReferenceImages[idx];
-                            return (
-                              <label key={idx} className="relative aspect-square rounded-xl overflow-hidden flex items-center justify-center cursor-pointer" style={{background:simpleIsDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.05)',border:`1px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : simpleBorder}`}}>
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, `scene${idx + 1}`); e.target.value = ''; }} />
-                                {refUrl ? <img src={refUrl} alt={`Scene ${idx + 1} reference`} className="w-full h-full object-cover" /> : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
-                                <span className="absolute bottom-1 left-1 right-1 rounded-md px-1 py-0.5 text-center text-[8px] font-bold" style={{background:simpleIsDark ? 'rgba(12,15,20,0.78)' : 'rgba(6,5,65,0.75)',color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      {(() => {
+                        const sceneSlotCount = presetSceneDurations ? presetSceneDurations.length : 3;
+                        const refTagOptions: { key: string; en: string; ar: string }[] = [
+                          { key: 'character', en: 'Character', ar: 'شخصية' },
+                          { key: 'logo',      en: 'Logo',      ar: 'شعار' },
+                          { key: 'style',     en: 'Style',     ar: 'نمط' },
+                          { key: 'product',   en: 'Product',   ar: 'منتج' },
+                        ];
+                        return (
+                          <div className="rounded-2xl p-3 space-y-3" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${simpleBorder}`}}>
+                            <p className="text-[11px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {Array.from({ length: sceneSlotCount }, (_, idx) => {
+                                const refUrl = cinemaReferenceImages[idx];
+                                return (
+                                  <div key={idx} className="flex flex-col gap-1.5">
+                                    {/* Upload slot */}
+                                    <label className="relative aspect-square rounded-xl overflow-hidden flex items-center justify-center cursor-pointer" style={{background:simpleIsDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.05)',border:`1px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : simpleBorder}`}}>
+                                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, `scene${idx + 1}`); e.target.value = ''; }} />
+                                      {refUrl ? (
+                                        <>
+                                          <img src={refUrl} alt={`Scene ${idx + 1} reference`} className="w-full h-full object-cover" />
+                                          <button type="button" onClick={(e) => { e.preventDefault(); setCinemaReferenceImages(prev => { const n = [...prev]; n[idx] = null; return n; }); }} className="absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold" style={{background:'rgba(248,113,113,0.9)',color:'#fff'}}>×</button>
+                                        </>
+                                      ) : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
+                                      <span className="absolute bottom-1 left-1 right-1 rounded-md px-1 py-0.5 text-center text-[8px] font-bold" style={{background:simpleIsDark ? 'rgba(12,15,20,0.78)' : 'rgba(6,5,65,0.75)',color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</span>
+                                    </label>
+                                    {/* Tag pills — show only when image uploaded */}
+                                    {refUrl && (
+                                      <div className="flex flex-wrap gap-1">
+                                        {refTagOptions.map(t => {
+                                          const isActive = (cinemaRefTags[idx] || 'character') === t.key;
+                                          return (
+                                            <button key={t.key} type="button"
+                                              onClick={() => setCinemaRefTags(prev => { const n = [...prev]; n[idx] = t.key; return n; })}
+                                              className="px-1.5 py-0.5 rounded-md text-[8px] font-bold transition-all active:scale-95"
+                                              style={{background:isActive ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : (simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)'),color:isActive ? '#0c0f14' : simpleMuted,border:`1px solid ${isActive ? '#C5A47E' : simpleBorder}`}}>
+                                              {language === 'ar' ? t.ar : t.en}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* ── 5. VIDEO SHAPE ── */}
                       <div>
