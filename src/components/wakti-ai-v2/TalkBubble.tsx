@@ -17,6 +17,8 @@ const MAX_RECORD_SECONDS = 10; // 10 second limit
 const NOISE_STRIKE_WINDOW_MS = 12000;
 const NOISE_STRIKES_TO_GUARD = 3;
 const NOISE_GUARD_MAX_MS = 45000;
+const OPENAI_REALTIME_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
+const OPENAI_REALTIME_CONNECT_TIMEOUT_MS = 18000;
 
 type TalkLocation = {
   city?: string;
@@ -104,6 +106,66 @@ function getOpenAIVoiceForGender(gender: 'male' | 'female'): 'cedar' | 'marin' {
   return gender === 'female' ? 'marin' : 'cedar';
 }
 
+function compactSingleLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function summarizeRealtimeConnectFailure(status: number, rawText: string): string {
+  const compact = compactSingleLine(rawText);
+  if (status === 504 || /gateway time-out|gateway timeout/i.test(compact)) {
+    return 'OpenAI voice service timed out';
+  }
+  if (status === 429) {
+    return 'OpenAI voice service is rate limited';
+  }
+  if (status >= 500) {
+    return `OpenAI voice service returned ${status}`;
+  }
+  if (!compact) {
+    return `OpenAI voice request failed (${status})`;
+  }
+  return compact.length > 220 ? `${compact.slice(0, 220)}…` : compact;
+}
+
+function extractErrorDetail(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const data = payload as { details?: unknown; error?: unknown; message?: unknown };
+  if (typeof data.details === 'string' && data.details.trim()) {
+    return data.details.trim();
+  }
+  if (typeof data.error === 'string' && data.error.trim()) {
+    return data.error.trim();
+  }
+  if (typeof data.message === 'string' && data.message.trim()) {
+    return data.message.trim();
+  }
+  return '';
+}
+
+async function readRealtimeErrorDetail(response: Response): Promise<string> {
+  const rawText = await response.text();
+  const trimmed = rawText.trim();
+
+  if (trimmed) {
+    try {
+      const payload = JSON.parse(trimmed);
+      const payloadDetail = extractErrorDetail(payload);
+      if (payloadDetail) {
+        return summarizeRealtimeConnectFailure(response.status, payloadDetail);
+      }
+    } catch {
+      return summarizeRealtimeConnectFailure(response.status, trimmed);
+    }
+
+    return summarizeRealtimeConnectFailure(response.status, trimmed);
+  }
+
+  return summarizeRealtimeConnectFailure(response.status, '');
+}
+
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
   const { language, theme } = useTheme();
   const { profile: _tbCachedProfile } = useUserProfile();
@@ -113,7 +175,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
   const [isConversationActive, setIsConversationActive] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
-  const [status, setStatus] = useState<'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('connecting');
+  const [status, setStatus] = useState<'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('ready');
   const [micLevel, setMicLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isConnectionReady, setIsConnectionReady] = useState(false);
@@ -945,7 +1007,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       pcRef.current = null;
     }
     setLiveTranscript('');
-    setStatus('connecting');
+    setStatus('ready');
     setMicLevel(0);
     setError(null);
     setIsConnectionReady(false);
@@ -1132,9 +1194,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       pcRef.current = null;
     }
 
-    let connectionStage: 'microphone' | 'offer' | 'auth' | 'edge' | 'answer' = 'microphone';
+    let connectionStage: 'microphone' | 'offer' | 'auth' | 'edge' | 'openai' | 'answer' = 'microphone';
     let edgeStage = '';
     let edgeDetails = '';
+    let openaiDetails = '';
 
     try {
       // Get fresh microphone stream
@@ -1485,17 +1548,17 @@ ${memoryContext ? memoryContext : ''}`
       const accessToken = sessionData?.session?.access_token;
       const requestedVoice = getOpenAIVoiceForGender(voiceGenderRef.current);
 
-      console.log('[Talk] Calling Edge Function for SDP exchange...');
+      console.log('[Talk] Calling Edge Function for client secret...');
       connectionStage = 'edge';
       const response = await supabase.functions.invoke('openai-realtime-session', {
-        body: { sdp_offer: offer.sdp, language, voice: requestedVoice },
+        body: { language, voice: requestedVoice },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       if (isStaleInit()) {
         return;
       }
 
-      if (response.error || !response.data?.sdp_answer) {
+      if (response.error || !response.data?.client_secret) {
         const invokeError = response.error as { message?: string; context?: unknown } | null;
         const errorContext = invokeError?.context as { clone?: () => { json?: () => Promise<any>; text?: () => Promise<string> } } | undefined;
 
@@ -1531,11 +1594,16 @@ ${memoryContext ? memoryContext : ''}`
           } else if (typeof response.data?.error === 'string' && response.data.error.trim()) {
             edgeDetails = response.data.error.trim();
           } else {
-            edgeDetails = invokeError?.message || 'Failed to get SDP answer';
+            edgeDetails = invokeError?.message || 'Failed to get voice session token';
           }
         }
 
         throw new Error(edgeDetails);
+      }
+
+      const clientSecret = typeof response.data?.client_secret === 'string' ? response.data.client_secret.trim() : '';
+      if (!clientSecret) {
+        throw new Error('Failed to get voice session token');
       }
 
       const activeModel = typeof response.data?.model === 'string' ? response.data.model : '';
@@ -1547,11 +1615,43 @@ ${memoryContext ? memoryContext : ''}`
       console.log('[Talk] Active engine:', engineLabel || 'unknown');
       console.log('[Talk] Active transcription model:', transcriptionModelRef.current);
 
+      console.log('[Talk] Calling OpenAI directly for SDP answer...');
+      connectionStage = 'openai';
+      const openAiController = new AbortController();
+      const openAiTimeoutId = window.setTimeout(() => openAiController.abort(), OPENAI_REALTIME_CONNECT_TIMEOUT_MS);
+      let openAiResponse: Response;
+      try {
+        openAiResponse = await fetch(OPENAI_REALTIME_CALLS_URL, {
+          method: 'POST',
+          body: offer.sdp,
+          headers: {
+            Authorization: `Bearer ${clientSecret}`,
+            'Content-Type': 'application/sdp',
+          },
+          signal: openAiController.signal,
+        });
+      } catch (fetchError) {
+        const message = fetchError instanceof Error ? fetchError.message : String(fetchError || 'Unknown fetch error');
+        const isTimeout = fetchError instanceof DOMException
+          ? fetchError.name === 'AbortError'
+          : /abort|timeout|timed out/i.test(message);
+        openaiDetails = isTimeout ? 'OpenAI voice service timed out' : 'OpenAI voice service request failed';
+        throw new Error(openaiDetails);
+      } finally {
+        window.clearTimeout(openAiTimeoutId);
+      }
+
+      if (!openAiResponse.ok) {
+        openaiDetails = await readRealtimeErrorDetail(openAiResponse);
+        throw new Error(openaiDetails);
+      }
+
+      const sdpAnswer = await openAiResponse.text();
       console.log('[Talk] Got SDP answer, setting remote description...');
       connectionStage = 'answer';
       await pc.setRemoteDescription({
         type: 'answer',
-        sdp: response.data.sdp_answer,
+        sdp: sdpAnswer,
       });
       if (isStaleInit()) {
         return;
@@ -1575,22 +1675,24 @@ ${memoryContext ? memoryContext : ''}`
         userError = language === 'ar' ? 'يرجى تسجيل الدخول مرة أخرى' : 'Please sign in again';
       } else if (connectionStage === 'edge') {
         userError = language === 'ar' ? 'تعذر بدء جلسة الصوت' : 'Could not start voice session';
+      } else if (connectionStage === 'openai') {
+        userError = language === 'ar' ? 'تعذر إكمال بدء جلسة الصوت' : 'Could not finish starting voice session';
       } else if (connectionStage === 'answer') {
         userError = language === 'ar' ? 'فشلت خطوة الاتصال الأخيرة' : 'Final connection step failed';
       }
 
       const stageCode = edgeStage || connectionStage;
-      const compactDetail = (edgeDetails || detail || '').replace(/\s+/g, ' ').trim();
+      const compactDetail = compactSingleLine(openaiDetails || edgeDetails || detail || '');
       const isTimeoutFailure = /timeout|timed out|gateway time-out|gateway timeout|\b504\b/i.test(compactDetail);
 
-      if (connectionStage === 'edge' && isTimeoutFailure) {
+      if ((connectionStage === 'edge' || connectionStage === 'openai') && isTimeoutFailure) {
         userError = language === 'ar' ? 'خدمة الصوت مشغولة الآن' : 'Voice service is busy right now';
       }
 
       setError(userError);
-      if (connectionStage === 'edge' && isTimeoutFailure) {
+      if ((connectionStage === 'edge' || connectionStage === 'openai') && isTimeoutFailure) {
         setDebugHint(t('Voice service is busy right now. Tap once to try again.', 'خدمة الصوت مشغولة الآن. اضغط مرة للمحاولة من جديد.'));
-      } else if (connectionStage === 'edge') {
+      } else if (connectionStage === 'edge' || connectionStage === 'openai') {
         setDebugHint(t('Could not start the voice session. Tap once to try again.', 'تعذر بدء جلسة الصوت. اضغط مرة للمحاولة من جديد.'));
       } else if (stageCode === 'auth') {
         setDebugHint(t('Please sign in again, then try Talk one more time.', 'يرجى تسجيل الدخول مرة أخرى، ثم جرّب التحدث مرة أخرى.'));
@@ -1642,26 +1744,26 @@ ${memoryContext ? memoryContext : ''}`
     return () => window.removeEventListener('wakti-tts-voice-changed', handleVoiceChanged as EventListener);
   }, [initializeConnection, isConnectionReady, isOpen, language, syncVoiceFromDrawer, t]);
 
-  // Initialize connection when Talk bubble opens
   useEffect(() => {
     if (isOpen) {
-      setStatus('connecting');
+      setStatus('ready');
       setError(null);
+      setDebugHint('');
       setIsConnectionReady(false);
-      pendingAutoStartAfterConnectRef.current = true;
+      pendingAutoStartAfterConnectRef.current = false;
       // Kick off helpful-memory fetch in parallel — it's read-only in Talk and
       // non-blocking: if it resolves before session.update, great; if not, the
       // block is simply empty for the first turn and refreshed on later turns.
       void loadHelpfulMemoryForTalk().catch(() => { /* silent — best-effort */ });
-      void initializeConnection();
     } else {
       pendingAutoStartAfterConnectRef.current = false;
       flushConversationToChat(true);
       helpfulMemoryBlockRef.current = '';
       cleanup();
     }
-    return () => cleanup();
-  }, [isOpen, initializeConnection, cleanup, flushConversationToChat, loadHelpfulMemoryForTalk]);
+  }, [isOpen, cleanup, flushConversationToChat, loadHelpfulMemoryForTalk]);
+
+  useEffect(() => () => cleanup(), [cleanup]);
 
   // Handle realtime events from OpenAI
   const handleRealtimeEvent = useCallback((msg: any) => {

@@ -5,11 +5,11 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ALLOWED_VOICES = new Set(["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "mann", "marin", "cedar"]);
-const ALLOWED_MODELS = new Set(["gpt-realtime-2", "gpt-realtime"]);
-const DEFAULT_MODEL_CANDIDATES = ["gpt-realtime-2", "gpt-realtime"];
+const ALLOWED_MODELS = new Set(["gpt-realtime-2.1", "gpt-realtime-2", "gpt-realtime"]);
+const DEFAULT_MODEL_CANDIDATES = ["gpt-realtime-2.1", "gpt-realtime-2", "gpt-realtime"];
 const ALLOWED_TRANSCRIPTION_MODELS = new Set(["gpt-4o-transcribe", "gpt-realtime-whisper"]);
 const DEFAULT_TRANSCRIPTION_CANDIDATES = ["gpt-4o-transcribe", "gpt-realtime-whisper"];
-const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
+const REALTIME_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets";
 const OPENAI_REALTIME_TIMEOUT_MS = 18000;
 
 const corsHeaders = {
@@ -49,6 +49,38 @@ function summarizeOpenAIFailure(status: number, rawText: string): string {
     return `OpenAI voice request failed (${status})`;
   }
   return compact.length > 220 ? `${compact.slice(0, 220)}…` : compact;
+}
+
+async function toSha256Hex(value: string): Promise<string> {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest)).map((part) => part.toString(16).padStart(2, "0")).join("");
+}
+
+function extractClientSecretValue(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const data = payload as {
+    value?: unknown;
+    client_secret?: { value?: unknown } | unknown;
+  };
+
+  if (typeof data.value === "string" && data.value.trim()) {
+    return data.value.trim();
+  }
+
+  if (
+    data.client_secret
+    && typeof data.client_secret === "object"
+    && typeof (data.client_secret as { value?: unknown }).value === "string"
+    && (data.client_secret as { value: string }).value.trim()
+  ) {
+    return (data.client_secret as { value: string }).value.trim();
+  }
+
+  return "";
 }
 
 serve(async (req: Request) => {
@@ -99,19 +131,12 @@ serve(async (req: Request) => {
       requestedTranscriptionModel,
       ...DEFAULT_TRANSCRIPTION_CANDIDATES,
     ]);
-    const { sdp_offer } = body;
 
-    if (!sdp_offer) {
-      return new Response(JSON.stringify({ error: "Missing sdp_offer", stage: "request_validation" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    console.log("[openai-realtime-session] Creating session using realtime/calls endpoint...");
+    console.log("[openai-realtime-session] Creating client secret using realtime/client_secrets endpoint...");
     console.log("[openai-realtime-session] Model candidates:", modelCandidates.join(", "));
     console.log("[openai-realtime-session] Transcription candidates:", transcriptionCandidates.join(", "));
     console.log("[openai-realtime-session] Voice:", realtimeVoice);
+    const safetyIdentifier = await toSha256Hex(user.id);
     let lastStatus = 500;
     let lastErrorText = "Unknown realtime session error";
     const attempted: string[] = [];
@@ -121,43 +146,43 @@ serve(async (req: Request) => {
         attempted.push(`${model} / ${transcriptionModel}`);
 
         const sessionConfig = JSON.stringify({
-          type: "realtime",
-          model,
-          audio: {
-            input: {
-              transcription: {
-                model: transcriptionModel,
-                language: transcriptionLanguage,
-                prompt: transcriptionPrompt,
-                delay: "medium",
+          session: {
+            type: "realtime",
+            model,
+            audio: {
+              input: {
+                transcription: {
+                  model: transcriptionModel,
+                  language: transcriptionLanguage,
+                  prompt: transcriptionPrompt,
+                  delay: "medium",
+                },
+                noise_reduction: { type: "near_field" },
+                turn_detection: {
+                  type: "semantic_vad",
+                  eagerness: "low",
+                  create_response: false,
+                  interrupt_response: false,
+                },
               },
-              noise_reduction: { type: "near_field" },
-              turn_detection: {
-                type: "semantic_vad",
-                eagerness: "low",
-                create_response: false,
-                interrupt_response: false,
-              },
+              output: { voice: realtimeVoice },
             },
-            output: { voice: realtimeVoice },
           },
         });
-
-        const formData = new FormData();
-        formData.set("sdp", sdp_offer);
-        formData.set("session", sessionConfig);
 
         let openaiResponse: Response;
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), OPENAI_REALTIME_TIMEOUT_MS);
           try {
-            openaiResponse = await fetch(REALTIME_CALLS_URL, {
+            openaiResponse = await fetch(REALTIME_CLIENT_SECRETS_URL, {
               method: "POST",
               headers: {
                 "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                "Content-Type": "application/json",
+                "OpenAI-Safety-Identifier": safetyIdentifier,
               },
-              body: formData,
+              body: sessionConfig,
               signal: controller.signal,
             });
           } finally {
@@ -186,13 +211,27 @@ serve(async (req: Request) => {
         }
 
         if (openaiResponse.ok) {
-          const sdpAnswer = await openaiResponse.text();
-          console.log("[openai-realtime-session] Session created with:", `${model} / ${transcriptionModel}`);
-          console.log("[openai-realtime-session] Got SDP answer, length:", sdpAnswer.length);
+          const payload = await openaiResponse.json();
+          const clientSecret = extractClientSecretValue(payload);
+          if (!clientSecret) {
+            lastStatus = 502;
+            lastErrorText = "OpenAI client secret was missing from the response";
+            console.warn(
+              "[openai-realtime-session] Client secret missing:",
+              `${model} / ${transcriptionModel}`,
+            );
+            continue;
+          }
+
+          const expiresAt = payload && typeof payload === "object" && "expires_at" in payload
+            ? (payload as { expires_at?: unknown }).expires_at
+            : undefined;
+          console.log("[openai-realtime-session] Client secret created with:", `${model} / ${transcriptionModel}`);
 
           return new Response(JSON.stringify({
             success: true,
-            sdp_answer: sdpAnswer,
+            client_secret: clientSecret,
+            expires_at: typeof expiresAt === "number" || typeof expiresAt === "string" ? expiresAt : null,
             model,
             transcription_model: transcriptionModel,
           }), {
@@ -225,8 +264,8 @@ serve(async (req: Request) => {
 
     console.error("[openai-realtime-session] All candidates failed:", attempted.join(" | "));
     return new Response(JSON.stringify({
-      error: "Failed to create realtime session",
-      stage: lastStatus === 504 ? "openai_timeout" : "openai_sdp_exchange",
+      error: "Failed to create realtime client secret",
+      stage: lastStatus === 504 ? "openai_timeout" : "openai_client_secret",
       details: lastErrorText,
       attempted,
     }), {

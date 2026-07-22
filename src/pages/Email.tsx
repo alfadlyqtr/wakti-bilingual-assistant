@@ -48,6 +48,7 @@ export default function Email() {
   const [signatureUpdatedAt, setSignatureUpdatedAt] = useState(storedSignatureSettings.updatedAt);
   const [generatingSignature, setGeneratingSignature] = useState(false);
   const [processingSignatureImage, setProcessingSignatureImage] = useState(false);
+  const [expandedConnectionIds, setExpandedConnectionIds] = useState<Record<string, boolean>>({});
   const [pendingAppleMailboxOpen, setPendingAppleMailboxOpen] = useState(false);
   const [preferredMailConnectionId, setPreferredMailConnectionId] = useState<string | null>(null);
   const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(12,15,20,0.98),rgba(18,22,31,0.96))] dark:shadow-[0_20px_48px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/5';
@@ -212,16 +213,33 @@ export default function Email() {
     provider: language === 'ar' ? 'المزود' : 'Provider',
     username: language === 'ar' ? 'اسم المستخدم' : 'Username',
     customConnectedCount: language === 'ar' ? 'عدد الحسابات المخصصة' : 'Custom accounts',
+    liveVerifiedCount: language === 'ar' ? 'تم التحقق المباشر' : 'Live checked',
     addAnotherEmail: language === 'ar' ? 'ربط بريد آخر' : 'Connect Another Email',
     addCustomMail: language === 'ar' ? 'إضافة بريد مخصص' : 'Add Custom Mail',
     comingSoon: language === 'ar' ? 'قريبًا' : 'Coming soon',
     connectApple: language === 'ar' ? 'ربط Apple' : 'Connect Apple',
     customAccount: language === 'ar' ? 'حساب مخصص' : 'Custom account',
     customMailAccounts: language === 'ar' ? 'حسابات البريد المخصص' : 'Custom Mail Accounts',
+    savedStatus: language === 'ar' ? 'محفوظ' : 'Saved',
     checking: language === 'ar' ? 'جارٍ التحقق' : 'Checking',
     needsAttention: language === 'ar' ? 'تحتاج مراجعة' : 'Needs attention',
-    verifiedMailbox: language === 'ar' ? 'تم التحقق من الصندوق' : 'Mailbox verified',
+    verifiedMailbox: language === 'ar' ? 'آخر فحص ناجح' : 'Last check OK',
+    openApple: language === 'ar' ? 'افتح Apple' : 'Open Apple',
+    appleSavedHint: language === 'ar' ? 'تم حفظ إعدادات iCloud. افتح Apple لمراجعتها أو فحصها.' : 'iCloud settings are saved. Open Apple to review or re-check them.',
+    appleConnectedHint: language === 'ar' ? 'بريد iCloud جاهز داخل تبويب Apple.' : 'Your iCloud mailbox is ready in the Apple tab.',
     inboxProof: language === 'ar' ? 'صندوق الوارد' : 'Inbox',
+    notCheckedYet: language === 'ar' ? 'الإعدادات محفوظة لكن لم يتم فحصها مباشرة بعد.' : 'Settings are saved, but have not been live-checked yet.',
+    lastChecked: language === 'ar' ? 'آخر فحص' : 'Last checked',
+    viewDetails: language === 'ar' ? 'عرض التفاصيل' : 'View details',
+    hideDetails: language === 'ar' ? 'إخفاء التفاصيل' : 'Hide details',
+    loginDetails: language === 'ar' ? 'بيانات تسجيل الدخول' : 'Login details',
+    incomingServer: language === 'ar' ? 'الخادم الوارد (IMAP)' : 'Incoming server (IMAP)',
+    outgoingServer: language === 'ar' ? 'الخادم الصادر (SMTP)' : 'Outgoing server (SMTP)',
+    serverAddress: language === 'ar' ? 'عنوان الخادم' : 'Server address',
+    port: language === 'ar' ? 'المنفذ' : 'Port',
+    security: language === 'ar' ? 'الحماية' : 'Security',
+    secureOn: language === 'ar' ? 'مفعّل' : 'On',
+    secureOff: language === 'ar' ? 'غير مفعّل' : 'Off',
     searchPlaceholder: language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject',
     appleSearchHint: language === 'ar' ? 'سيعمل البحث هنا عندما يصبح Apple Mail متاحًا.' : 'Search will work here once Apple Mail is available.',
     signatureTitle: language === 'ar' ? 'توقيع البريد' : 'Email Signature',
@@ -258,7 +276,7 @@ export default function Email() {
 
   const getHealthBadge = (health?: ImapConnectionHealth) => {
     if (!health || health.status === 'unknown') {
-      return <Badge variant="outline" className="border-[#060541]/12 bg-white text-[#060541]/70 dark:border-border/60 dark:bg-transparent dark:text-muted-foreground">{t.notConnected}</Badge>;
+      return <Badge variant="outline" className="border-[#060541]/20 bg-white text-[#060541]/80 dark:border-border/60 dark:bg-transparent dark:text-muted-foreground">{t.savedStatus}</Badge>;
     }
     if (health.status === 'checking') {
       return <Badge variant="outline" className="border-yellow-400/40 bg-yellow-50 text-yellow-600 dark:bg-transparent dark:text-yellow-400">{t.checking}</Badge>;
@@ -267,6 +285,26 @@ export default function Email() {
       return <Badge className="bg-green-600 text-white hover:bg-green-600">{t.verifiedMailbox}</Badge>;
     }
     return <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.needsAttention}</Badge>;
+  };
+
+  const formatCheckedAt = (checkedAt?: string) => {
+    if (!checkedAt) return null;
+    const value = new Date(checkedAt);
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toLocaleString(language === 'ar' ? 'ar-QA' : undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const toggleConnectionDetails = (connectionId: string) => {
+    setExpandedConnectionIds(prev => ({
+      ...prev,
+      [connectionId]: !prev[connectionId],
+    }));
   };
 
   const tabs: Array<{
@@ -306,7 +344,7 @@ export default function Email() {
     try {
       await Promise.all([
         emailConn.gmail.checkConnection(),
-        emailConn.imap.refresh(),
+        emailConn.imap.refresh({ revalidate: true }),
       ]);
     } finally {
       setRefreshing(false);
@@ -451,13 +489,39 @@ export default function Email() {
                   <AppleLogo size={16} className="text-current" />
                   <span className="font-medium">Apple / iCloud</span>
                 </div>
-                <div className="mt-1 text-sm text-muted-foreground">{t.comingSoon}</div>
+                <div className="mt-1 text-sm text-muted-foreground break-all">
+                  {primaryIcloudConnection?.email_address
+                    ? primaryIcloudConnection.email_address
+                    : icloudConnections.length > 0
+                    ? t.appleSavedHint
+                    : t.appleUnavailableHint}
+                </div>
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
-                <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 shrink-0 dark:bg-transparent dark:text-red-400">{t.comingSoon}</Badge>
-                <Button variant="outline" size="sm" disabled className={outlineButtonClass}>
+                {verifiedIcloudCount > 0 ? (
+                  <Badge className="bg-green-600 text-white hover:bg-green-600 shrink-0">{t.connected}</Badge>
+                ) : icloudConnections.length > 0 ? (
+                  <Badge variant="outline" className="border-[#060541]/20 bg-white text-[#060541]/80 shrink-0 dark:border-border/60 dark:bg-transparent dark:text-muted-foreground">{t.savedStatus}</Badge>
+                ) : (
+                  <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 shrink-0 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (preferredAppleConnectionId) {
+                      setPreferredMailConnectionId(preferredAppleConnectionId);
+                    }
+                    setActiveTab('apple');
+                    if (!preferredAppleConnectionId) {
+                      setConnectionModalPreset('icloud');
+                      setShowConnectionModal(true);
+                    }
+                  }}
+                  className={outlineButtonClass}
+                >
                   <AppleLogo size={14} className="text-current" />
-                  {t.connectApple}
+                  {icloudConnections.length > 0 ? t.openApple : t.connectApple}
                 </Button>
               </div>
             </div>
@@ -468,14 +532,13 @@ export default function Email() {
                   <Plug className="h-4 w-4 text-[#E9CEB0]" />
                   <span className="font-medium">{t.customMailAccounts}</span>
                   {customConnections.length > 0 ? (
-                    verifiedCustomCount > 0 ? (
-                      <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedCustomCount} {t.customConnectedCount}</Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">0 {t.customConnectedCount}</Badge>
-                    )
+                    <Badge variant="outline" className="border-[#060541]/20 bg-white text-[#060541]/80 dark:border-border/60 dark:bg-transparent dark:text-muted-foreground">{customConnections.length} {t.customConnectedCount}</Badge>
                   ) : (
                     <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
                   )}
+                  {verifiedCustomCount > 0 ? (
+                    <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedCustomCount} {t.liveVerifiedCount}</Badge>
+                  ) : null}
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setShowConnectionModal(true)} className={outlineButtonClass}>
                   <Mail className="h-4 w-4" />
@@ -491,6 +554,12 @@ export default function Email() {
                 customConnections.map((connection) => (
                   <div key={connection.id} className={panelClass}>
                     <div className="p-4">
+                    {(() => {
+                      const health = emailConn.imap.health[connection.id];
+                      const isExpanded = Boolean(expandedConnectionIds[connection.id]);
+                      const formattedCheckedAt = formatCheckedAt(health?.checkedAt);
+                      return (
+                    <>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -503,18 +572,31 @@ export default function Email() {
                           {getHealthBadge(emailConn.imap.health[connection.id])}
                         </div>
                         <div className="text-sm text-muted-foreground break-all">{connection.email_address || connection.username}</div>
-                        {emailConn.imap.health[connection.id]?.status === 'verified' && emailConn.imap.health[connection.id]?.proof && (
+                        {health?.status === 'verified' && health?.proof && (
                           <div className="text-xs text-muted-foreground">
-                            {emailConn.imap.health[connection.id]?.proof?.login} · {t.inboxProof.toLowerCase()} {emailConn.imap.health[connection.id]?.proof?.inboxCount}
+                            {health.proof.login} · {t.inboxProof.toLowerCase()} {health.proof.inboxCount}
                           </div>
                         )}
-                        {emailConn.imap.health[connection.id]?.status === 'failed' && emailConn.imap.health[connection.id]?.error && (
+                        {health?.status === 'unknown' && (
+                          <div className="text-xs text-muted-foreground">
+                            {t.notCheckedYet}
+                          </div>
+                        )}
+                        {formattedCheckedAt && (
+                          <div className="text-xs text-muted-foreground">
+                            {t.lastChecked}: {formattedCheckedAt}
+                          </div>
+                        )}
+                        {health?.status === 'failed' && health?.error && (
                           <div className="text-xs text-red-400">
-                            {emailConn.imap.health[connection.id]?.error}
+                            {health.error}
                           </div>
                         )}
                       </div>
                       <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" onClick={() => toggleConnectionDetails(connection.id)} className={outlineButtonClass}>
+                          {isExpanded ? t.hideDetails : t.viewDetails}
+                        </Button>
                         {!connection.is_primary && (
                           <Button variant="outline" size="sm" onClick={() => emailConn.imap.setPrimary(connection.id)} className={outlineButtonClass}>
                             <Star className="h-4 w-4" />
@@ -527,6 +609,36 @@ export default function Email() {
                         </Button>
                       </div>
                     </div>
+                      {isExpanded ? (
+                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <div className="rounded-xl border border-[#060541]/12 bg-white/75 p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.loginDetails}</div>
+                            <div className="mt-2 space-y-1.5">
+                              <div><span className="text-muted-foreground">{t.provider}:</span> {connection.provider}</div>
+                              <div className="break-all"><span className="text-muted-foreground">{t.username}:</span> {connection.username}</div>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-[#060541]/12 bg-white/75 p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.incomingServer}</div>
+                            <div className="mt-2 space-y-1.5">
+                              <div className="break-all"><span className="text-muted-foreground">{t.serverAddress}:</span> {connection.imap_host || '—'}</div>
+                              <div><span className="text-muted-foreground">{t.port}:</span> {connection.imap_port ?? '—'}</div>
+                              <div><span className="text-muted-foreground">{t.security}:</span> {connection.imap_secure ? t.secureOn : t.secureOff}</div>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-[#060541]/12 bg-white/75 p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.outgoingServer}</div>
+                            <div className="mt-2 space-y-1.5">
+                              <div className="break-all"><span className="text-muted-foreground">{t.serverAddress}:</span> {connection.smtp_host}</div>
+                              <div><span className="text-muted-foreground">{t.port}:</span> {connection.smtp_port}</div>
+                              <div><span className="text-muted-foreground">{t.security}:</span> {connection.smtp_secure ? t.secureOn : t.secureOff}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                      );
+                    })()}
                     </div>
                   </div>
                 ))

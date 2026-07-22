@@ -28,6 +28,9 @@ export type ImapConnection = {
   smtp_host: string;
   smtp_port: number;
   smtp_secure: boolean;
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_secure: boolean | null;
   username: string;
   is_primary: boolean;
   is_active: boolean;
@@ -45,6 +48,7 @@ export type EmailConnectionState = {
 };
 
 const IMAP_HEALTH_STORAGE_KEY = 'wakti-imap-health-v1';
+const IMAP_HEALTH_FRESH_MS = 1000 * 60 * 15;
 
 function readStoredImapHealth(): Record<string, ImapConnectionHealth> {
   if (typeof window === 'undefined') return {};
@@ -65,6 +69,13 @@ function writeStoredImapHealth(value: Record<string, ImapConnectionHealth>) {
   } catch {}
 }
 
+function isFreshImapHealth(health?: ImapConnectionHealth) {
+  if (!health?.checkedAt) return false;
+  const checkedAt = new Date(health.checkedAt).getTime();
+  if (!Number.isFinite(checkedAt)) return false;
+  return Date.now() - checkedAt <= IMAP_HEALTH_FRESH_MS;
+}
+
 let cachedImapHealth: Record<string, ImapConnectionHealth> = readStoredImapHealth();
 
 export function useEmailConnections() {
@@ -74,8 +85,8 @@ export function useEmailConnections() {
   const [imapLoading, setImapLoading] = useState(true);
   const [imapHealth, setImapHealth] = useState<Record<string, ImapConnectionHealth>>(() => cachedImapHealth);
 
-  const shouldValidateConnection = useCallback((health?: ImapConnectionHealth, revalidate?: boolean) => {
-    return Boolean(revalidate && health);
+  const shouldValidateConnection = useCallback((revalidate?: boolean) => {
+    return Boolean(revalidate);
   }, []);
 
   const callImapApi = useCallback(async (action: string, params: Record<string, unknown>) => {
@@ -169,7 +180,7 @@ export function useEmailConnections() {
       }
       const { data, error } = await supabaseAny
         .from('email_connections')
-        .select('id, provider, display_name, email_address, smtp_host, smtp_port, smtp_secure, username, is_primary, is_active, created_at')
+        .select('id, provider, display_name, email_address, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, is_primary, is_active, created_at')
         .eq('user_id', session.user.id)
         .eq('is_active', true)
         .order('is_primary', { ascending: false });
@@ -181,12 +192,26 @@ export function useEmailConnections() {
       setImapHealth(prev => {
         const next: Record<string, ImapConnectionHealth> = {};
         for (const row of rows) {
-          next[row.id] = prev[row.id] || cachedImapHealth[row.id] || { status: 'verified' };
+          const existingHealth = prev[row.id];
+          const cachedHealth = cachedImapHealth[row.id];
+          if (options?.revalidate) {
+            next[row.id] = existingHealth || cachedHealth || { status: 'unknown' };
+            continue;
+          }
+          if (isFreshImapHealth(existingHealth)) {
+            next[row.id] = existingHealth;
+            continue;
+          }
+          if (isFreshImapHealth(cachedHealth)) {
+            next[row.id] = cachedHealth;
+            continue;
+          }
+          next[row.id] = { status: 'unknown' };
         }
         nextHealth = next;
         return next;
       });
-      const rowsToValidate = rows.filter((row) => shouldValidateConnection(nextHealth[row.id], options?.revalidate));
+      const rowsToValidate = rows.filter(() => shouldValidateConnection(options?.revalidate));
       if (rowsToValidate.length > 0) {
         await Promise.all(rowsToValidate.map((row) => validateSavedConnection(row.id)));
       }
