@@ -550,6 +550,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'tiktok' | 'instagram' | 'snapchat' | null>(null);
   const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
   const [cinemaMode] = useState<'auto' | 'custom'>('auto');
+  const [cinemaSceneBuilderOpen, setCinemaSceneBuilderOpen] = useState(false);
   const handledOperatorExecutionRef = useRef<string | null>(null);
   const operatorAutoGenerateRef = useRef<string | null>(null);
 
@@ -3508,110 +3509,52 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   const simpleBorder = simpleIsDark ? 'rgba(226,199,168,0.25)' : 'rgba(6,5,65,0.14)';
                   const hasIdea = cinemaSubject.trim().length > 2;
                   return (
-                    <div className="flex flex-col gap-5 max-w-xl mx-auto w-full py-3">
-                      <div className="text-center space-y-2">
-                        <div className="mx-auto w-16 h-16 rounded-3xl flex items-center justify-center"
-                          style={{background:'linear-gradient(135deg,rgba(210,180,140,0.3),rgba(110,80,180,0.35))',boxShadow:'0 0 40px rgba(170,130,220,0.28)'}}>
-                          <Film className="h-8 w-8" style={{color:'#E2C7A8'}} />
+                    <div className="flex flex-col gap-3 max-w-xl mx-auto w-full py-3">
+
+                      {/* ── 1. PROMPT ── */}
+                      <div className="rounded-2xl overflow-hidden" style={{border:`1px solid ${hasIdea ? 'rgba(226,199,168,0.55)' : simpleBorder}`,boxShadow: hasIdea ? '0 0 0 3px rgba(226,199,168,0.08)' : 'none',transition:'box-shadow 0.2s,border-color 0.2s'}}>
+                        <textarea
+                          value={cinemaSubject}
+                          onChange={(e) => setCinemaSubject(e.target.value.slice(0, 500))}
+                          disabled={isDirecting}
+                          autoFocus
+                          rows={4}
+                          maxLength={500}
+                          placeholder={language === 'ar' ? 'مثال: شخصية صغيرة تكتشف مدينة مضيئة تحت البحر...' : 'Example: a small character discovers a glowing city under the ocean...'}
+                          className="w-full resize-none px-4 pt-4 pb-2 text-base leading-7 outline-none"
+                          style={{background:simpleIsDark ? 'rgba(12,15,20,0.85)' : '#fff',color:simpleText}}
+                        />
+                        <div className="flex justify-between px-4 pb-3">
+                          <span className="text-[10px]" style={{color:simpleMuted}}>{language === 'ar' ? 'قصة، إعلان، منتج — لا تحتاج إلى كتابة مشاهد.' : 'Story, ad, product — no scene prompts needed.'}</span>
+                          <span className="text-[10px] font-semibold" style={{color:simpleMuted}}>{cinemaSubject.length}/500</span>
                         </div>
-                        <h3 className="text-2xl font-bold" style={{color:simpleText}}>
-                          {language === 'ar' ? 'حوّل فكرتك إلى فيديو مذهل' : 'Turn your idea into something amazing'}
-                        </h3>
-                        <p className="text-sm leading-relaxed" style={{color:simpleMuted}}>
-                          {language === 'ar' ? 'قصة، إعلان، منتج، شخصية — اكتب القليل ودع وكتي يصنع الباقي.' : 'Story, ad, product, character — write a little and let Wakti create the rest.'}
-                        </p>
                       </div>
 
-                      <div className="rounded-3xl p-4 sm:p-5 space-y-4" style={{background:simplePanel,border:`1px solid ${simpleBorder}`,boxShadow:'0 12px 40px rgba(0,0,0,0.18)'}}>
-                        <div>
-                          <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{color:'#C5A47E'}}>
-                            {language === 'ar' ? 'ما الذي تريد صنعه؟' : 'What do you want to create?'}
-                          </label>
-                          <textarea
-                            value={cinemaSubject}
-                            onChange={(e) => setCinemaSubject(e.target.value.slice(0, 500))}
-                            disabled={isDirecting}
-                            autoFocus
-                            rows={4}
-                            maxLength={500}
-                            placeholder={language === 'ar' ? 'مثال: شخصية صغيرة تكتشف مدينة مضيئة تحت البحر...' : 'Example: a small character discovers a glowing city under the ocean...'}
-                            className="w-full resize-none rounded-2xl px-4 py-3 text-base leading-7 outline-none"
-                            style={{background:simpleIsDark ? 'rgba(12,15,20,0.75)' : 'rgba(255,255,255,0.82)',color:simpleText,border:`1px solid ${hasIdea ? 'rgba(226,199,168,0.65)' : simpleBorder}`}}
-                          />
-                          <div className="flex justify-between mt-1 px-1">
-                            <span className="text-[10px]" style={{color:simpleMuted}}>{language === 'ar' ? 'لا تحتاج إلى كتابة مشاهد أو إعدادات.' : 'No scene prompts or production settings needed.'}</span>
-                            <span className="text-[10px]" style={{color:simpleMuted}}>{cinemaSubject.length}/500</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 mt-3">
-                            <span className="text-[10px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'AMP اختياري — يحسّن فكرتك دون حذف طلبك' : 'Optional AMP — improves your idea without removing your request'}</span>
-                            <button type="button" onClick={handleCinemaAmp} disabled={!hasIdea || isCinemaAmping || isDirecting} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold disabled:opacity-40" style={{background:'linear-gradient(135deg,rgba(139,92,246,0.35),rgba(217,70,239,0.3))',border:'1px solid rgba(196,181,253,0.5)',color:'#e9d5ff'}}>
-                              <Wand2 className={`h-3.5 w-3.5 ${isCinemaAmping ? 'animate-spin' : ''}`} />
-                              {isCinemaAmping ? (language === 'ar' ? 'جاري التحسين...' : 'Amping...') : '✦ AMP'}
-                            </button>
-                          </div>
-                          {cinemaAmpEnhanced && (
-                            <div className="mt-3 rounded-2xl p-3 space-y-2" style={{background:'rgba(139,92,246,0.08)',border:'1px solid rgba(196,181,253,0.35)'}}>
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wider" style={{color:'#ddd6fe'}}>{language === 'ar' ? 'النسخة المحسّنة — راجعها قبل الاستخدام' : 'Enhanced version — review before using'}</p>
-                                <button type="button" onClick={() => setCinemaAmpEnhanced('')} className="text-[10px] text-white/40">✕</button>
-                              </div>
-                              <textarea value={cinemaAmpEnhanced} onChange={(e) => setCinemaAmpEnhanced(e.target.value.slice(0, 1200))} rows={4} className="w-full resize-none rounded-xl px-3 py-2 text-xs leading-5 outline-none" style={{background:'rgba(12,15,20,0.55)',color:simpleText,border:'1px solid rgba(196,181,253,0.25)'}} />
-                              <div className="grid grid-cols-2 gap-2">
-                                <button type="button" onClick={() => { setCinemaSubject(cinemaAmpOriginal || cinemaSubject); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-semibold" style={{background:'rgba(255,255,255,0.06)',color:simpleMuted}}>{language === 'ar' ? 'الإبقاء على فكرتي' : 'Keep my idea'}</button>
-                                <button type="button" onClick={() => { setCinemaSubject(cinemaAmpEnhanced); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-bold" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>{language === 'ar' ? 'استخدام المحسّنة' : 'Use enhanced'}</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rounded-2xl p-3" style={{background:simpleIsDark ? 'rgba(12,15,20,0.45)' : 'rgba(255,255,255,0.5)',border:`1px solid ${simpleBorder}`}}>
-                          <div className="flex items-center justify-between gap-3 mb-3">
-                            <div>
-                              <p className="text-xs font-bold" style={{color:simpleText}}>{language === 'ar' ? 'صورة مرجعية (اختياري)' : 'Reference image (optional)'}</p>
-                              <p className="text-[10px] mt-0.5" style={{color:simpleMuted}}>{language === 'ar' ? 'شعار، منتج، شخصية، أو نمط بصري' : 'Logo, product, character, or visual style'}</p>
-                            </div>
-                            {brandAnchor && <button type="button" onClick={() => setBrandAnchor(null)} className="text-xs px-2 py-1 rounded-lg" style={{color:'#fca5a5',background:'rgba(248,113,113,0.1)'}}>{language === 'ar' ? 'إزالة' : 'Remove'}</button>}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {brandAnchor ? (
-                              <img src={brandAnchor} alt="Reference" className="w-20 h-20 rounded-2xl object-cover" style={{border:'1px solid rgba(226,199,168,0.55)'}} />
-                            ) : (
-                              <label className="w-20 h-20 rounded-2xl flex items-center justify-center cursor-pointer" style={{background:simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)',border:'2px dashed rgba(226,199,168,0.45)'}}>
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleSimpleBrandUpload(file); e.target.value = ''; }} />
-                                {isUploadingBrand ? <Loader2 className="h-5 w-5 animate-spin" style={{color:'#E2C7A8'}} /> : <Upload className="h-5 w-5" style={{color:'#C5A47E'}} />}
-                              </label>
+                      {/* ── 2. SCENE BUILDER (collapsible) ── */}
+                      <div className="rounded-2xl overflow-hidden" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${cinemaSceneBuilderOpen ? (simpleIsDark ? 'rgba(226,199,168,0.3)' : 'rgba(226,199,168,0.55)') : simpleBorder}`}}>
+                        <button
+                          type="button"
+                          onClick={() => setCinemaSceneBuilderOpen(o => !o)}
+                          className="w-full flex items-center justify-between px-4 py-3 transition-all"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Film className="h-4 w-4 flex-shrink-0" style={{color:'#C5A47E'}} />
+                            <span className="text-sm font-semibold" style={{color:simpleText}}>
+                              {presetSceneDurations === null
+                                ? (language === 'ar' ? 'مشاهد الفيلم — تلقائي' : 'Film scenes — Auto')
+                                : `${presetSceneDurations.length} ${language === 'ar' ? 'مشاهد' : 'scenes'} · ${presetSceneDurations.reduce((s,d)=>s+d,0)}s`
+                              }
+                            </span>
+                            {presetSceneDurations !== null && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{background:'rgba(226,199,168,0.15)',color:'#C5A47E'}}>custom</span>
                             )}
-                            <div className="flex flex-col gap-2 flex-1">
-                              <button type="button" onClick={() => setShowBrandSavedPicker(true)} className="self-start px-3 py-2 rounded-xl text-xs font-semibold" style={{color:'#E2C7A8',background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.3)'}}>
-                                <Images className="inline h-3.5 w-3.5 mr-1.5" />{language === 'ar' ? 'اختيار من المحفوظة' : 'Choose from saved'}
-                              </button>
-                              {brandAnchor && <p className="text-[10px]" style={{color:simpleMuted}}>{language === 'ar' ? 'اختر نوع الصورة:' : 'Tell Wakti what this image is:'}</p>}
-                            </div>
                           </div>
-                          {brandAnchor && (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-                              {([
-                                {value:'logo' as const, en:'Logo', ar:'شعار'},
-                                {value:'product' as const, en:'Product', ar:'منتج'},
-                                {value:'character' as const, en:'Character', ar:'شخصية'},
-                                {value:'style' as const, en:'Style', ar:'نمط'},
-                              ]).map((role) => (
-                                <button key={role.value} type="button" onClick={() => setAnchorTag(role.value)} className="py-2 rounded-xl text-xs font-semibold transition-all active:scale-95" style={{background:anchorTag === role.value ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.05)',color:anchorTag === role.value ? '#0c0f14' : simpleMuted,border:`1px solid ${anchorTag === role.value ? '#E2C7A8' : simpleBorder}`}}>{language === 'ar' ? role.ar : role.en}</button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rounded-2xl p-3 space-y-3" style={{background:simpleIsDark ? 'rgba(12,15,20,0.35)' : 'rgba(255,255,255,0.45)',border:`1px solid ${simpleBorder}`}}>
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-xs font-bold" style={{color:simpleText}}>{language === 'ar' ? 'التحكم المتقدم (اختياري)' : 'Advanced controls (optional)'}</p>
-                              <p className="text-[10px] mt-0.5" style={{color:simpleMuted}}>{language === 'ar' ? 'اتركها تلقائية أو اختر ما تريده.' : 'Leave automatic or choose what you want.'}</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            {/* ── Scene Builder ── */}
-                            <p className="text-[10px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'بناء المشاهد' : 'Scene builder'}</p>
+                          <span className="text-xs" style={{color:simpleMuted,transform:cinemaSceneBuilderOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform 0.2s'}}>▼</span>
+                        </button>
+                        {cinemaSceneBuilderOpen && (
+                          <div className="px-4 pb-4 flex flex-col gap-3" style={{borderTop:`1px solid ${simpleBorder}`}}>
+                            <div className="pt-3 flex flex-col gap-2">
+                            {/* ── Scene Builder content ── */}
                             {presetSceneDurations === null ? (
                               <button
                                 type="button"
@@ -3720,33 +3663,103 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             </label>
                           </div>
                         </div>
+                      </div>
 
-                        <div className="rounded-2xl p-3 space-y-3" style={{background:simpleIsDark ? 'rgba(12,15,20,0.35)' : 'rgba(255,255,255,0.45)',border:`1px solid ${simpleBorder}`}}>
-                          <div>
-                            <p className="text-xs font-bold" style={{color:simpleText}}>{language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}</p>
-                            <p className="text-[10px] mt-0.5" style={{color:simpleMuted}}>{language === 'ar' ? 'المرجع الرئيسي يثبت الشخصية، ويمكن إضافة مراجع لمشاهد محددة.' : 'The main reference locks the character; add references for specific scenes if needed.'}</p>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {Array.from({ length: 3 }, (_, idx) => {
-                              const refUrl = cinemaReferenceImages[idx];
-                              return (
-                                <label key={idx} className="relative aspect-square rounded-xl overflow-hidden flex items-center justify-center cursor-pointer" style={{background:simpleIsDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.05)',border:`1px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : simpleBorder}`}}>
-                                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, `scene${idx + 1}`); e.target.value = ''; }} />
-                                  {refUrl ? <img src={refUrl} alt={`Scene ${idx + 1} reference`} className="w-full h-full object-cover" /> : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
-                                  <span className="absolute bottom-1 left-1 right-1 rounded-md px-1 py-0.5 text-center text-[8px] font-bold" style={{background:'rgba(12,15,20,0.78)',color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
+                      {/* ── 3. AMP + REFERENCE IMAGE ── */}
+                      <div className="rounded-2xl p-3 space-y-3" style={{background:simpleIsDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.04)',border:`1px solid ${simpleBorder}`}}>
+                        {/* AMP row */}
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[11px]" style={{color:simpleMuted}}>
+                            {language === 'ar' ? 'AMP — يحسّن فكرتك دون حذف طلبك' : 'AMP — improves your idea without removing your request'}
+                          </span>
+                          <button type="button" onClick={handleCinemaAmp} disabled={!hasIdea || isCinemaAmping || isDirecting}
+                            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold disabled:opacity-40 transition-all active:scale-95"
+                            style={{background:'linear-gradient(135deg,rgba(139,92,246,0.35),rgba(217,70,239,0.3))',border:'1px solid rgba(196,181,253,0.5)',color:'#e9d5ff'}}>
+                            <Wand2 className={`h-3.5 w-3.5 ${isCinemaAmping ? 'animate-spin' : ''}`} />
+                            {isCinemaAmping ? (language === 'ar' ? 'جاري...' : 'Amping...') : '✦ AMP'}
+                          </button>
                         </div>
-
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'شكل الفيديو (اختياري)' : 'Video shape (optional)'}</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            {(['16:9','9:16','4:5'] as const).map((format) => (
-                              <button key={format} type="button" onClick={() => setCinemaFormat(format)} className="py-2 rounded-xl text-xs font-bold transition-all active:scale-95" style={{background:cinemaFormat === format ? 'rgba(226,199,168,0.2)' : 'rgba(255,255,255,0.04)',color:cinemaFormat === format ? '#E2C7A8' : simpleMuted,border:`1px solid ${cinemaFormat === format ? '#C5A47E' : simpleBorder}`}}>{format}</button>
-                            ))}
+                        {cinemaAmpEnhanced && (
+                          <div className="rounded-2xl p-3 space-y-2" style={{background:'rgba(139,92,246,0.08)',border:'1px solid rgba(196,181,253,0.35)'}}>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{color:'#ddd6fe'}}>{language === 'ar' ? 'النسخة المحسّنة' : 'Enhanced version'}</p>
+                              <button type="button" onClick={() => setCinemaAmpEnhanced('')} className="text-[10px] text-white/40">✕</button>
+                            </div>
+                            <textarea value={cinemaAmpEnhanced} onChange={(e) => setCinemaAmpEnhanced(e.target.value.slice(0, 1200))} rows={4} className="w-full resize-none rounded-xl px-3 py-2 text-xs leading-5 outline-none" style={{background:'rgba(12,15,20,0.55)',color:simpleText,border:'1px solid rgba(196,181,253,0.25)'}} />
+                            <div className="grid grid-cols-2 gap-2">
+                              <button type="button" onClick={() => { setCinemaSubject(cinemaAmpOriginal || cinemaSubject); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-semibold" style={{background:simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)',color:simpleMuted}}>{language === 'ar' ? 'إبقاء فكرتي' : 'Keep my idea'}</button>
+                              <button type="button" onClick={() => { setCinemaSubject(cinemaAmpEnhanced); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-bold" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>{language === 'ar' ? 'استخدام المحسّنة' : 'Use enhanced'}</button>
+                            </div>
                           </div>
+                        )}
+                        {/* Divider */}
+                        <div style={{height:'1px',background:simpleBorder}} />
+                        {/* Reference image */}
+                        <div>
+                          <p className="text-[11px] font-semibold mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'صورة مرجعية (اختياري) — شعار، منتج، شخصية' : 'Reference image (optional) — logo, product, character'}</p>
+                          <div className="flex items-center gap-3">
+                            {brandAnchor ? (
+                              <div className="relative flex-shrink-0">
+                                <img src={brandAnchor} alt="Reference" className="w-16 h-16 rounded-xl object-cover" style={{border:'1px solid rgba(226,199,168,0.55)'}} />
+                                <button type="button" onClick={() => setBrandAnchor(null)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(248,113,113,0.9)',color:'#fff'}}>×</button>
+                              </div>
+                            ) : (
+                              <label className="flex-shrink-0 w-16 h-16 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95" style={{background:simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)',border:'2px dashed rgba(226,199,168,0.4)'}}>
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleSimpleBrandUpload(file); e.target.value = ''; }} />
+                                {isUploadingBrand ? <Loader2 className="h-4 w-4 animate-spin" style={{color:'#E2C7A8'}} /> : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
+                              </label>
+                            )}
+                            <button type="button" onClick={() => setShowBrandSavedPicker(true)}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
+                              style={{color:'#E2C7A8',background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.3)'}}>
+                              <Images className="h-3.5 w-3.5 flex-shrink-0" />
+                              {language === 'ar' ? 'من المحفوظة' : 'Choose from saved'}
+                            </button>
+                          </div>
+                          {brandAnchor && (
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                              {(['logo','product','character','style'] as const).map((role) => {
+                                const labels: Record<string,{en:string;ar:string}> = {logo:{en:'Logo',ar:'شعار'},product:{en:'Product',ar:'منتج'},character:{en:'Character',ar:'شخصية'},style:{en:'Style',ar:'نمط'}};
+                                return (
+                                  <button key={role} type="button" onClick={() => setAnchorTag(role)}
+                                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
+                                    style={{background:anchorTag===role ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : (simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)'),color:anchorTag===role ? '#0c0f14' : simpleMuted,border:`1px solid ${anchorTag===role ? '#C5A47E' : simpleBorder}`}}>
+                                    {language==='ar' ? labels[role].ar : labels[role].en}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ── 4. SCENE REFERENCES ── */}
+                      <div className="rounded-2xl p-3 space-y-2" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${simpleBorder}`}}>
+                        <p className="text-[11px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: 3 }, (_, idx) => {
+                            const refUrl = cinemaReferenceImages[idx];
+                            return (
+                              <label key={idx} className="relative aspect-square rounded-xl overflow-hidden flex items-center justify-center cursor-pointer" style={{background:simpleIsDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.05)',border:`1px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : simpleBorder}`}}>
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, `scene${idx + 1}`); e.target.value = ''; }} />
+                                {refUrl ? <img src={refUrl} alt={`Scene ${idx + 1} reference`} className="w-full h-full object-cover" /> : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
+                                <span className="absolute bottom-1 left-1 right-1 rounded-md px-1 py-0.5 text-center text-[8px] font-bold" style={{background:simpleIsDark ? 'rgba(12,15,20,0.78)' : 'rgba(6,5,65,0.75)',color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* ── 5. VIDEO SHAPE ── */}
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'شكل الفيديو (اختياري)' : 'VIDEO SHAPE (OPTIONAL)'}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['16:9','9:16','4:5'] as const).map((format) => (
+                            <button key={format} type="button" onClick={() => setCinemaFormat(format)} className="py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+                              style={{background:cinemaFormat === format ? 'rgba(226,199,168,0.18)' : (simpleIsDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.05)'),color:cinemaFormat === format ? '#E2C7A8' : simpleMuted,border:`1px solid ${cinemaFormat === format ? '#C5A47E' : simpleBorder}`}}>
+                              {format}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
