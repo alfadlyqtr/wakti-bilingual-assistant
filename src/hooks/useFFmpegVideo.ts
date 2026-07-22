@@ -204,13 +204,28 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
       setStatus('Assembling your final film...'); setProgress(45);
       onProgress?.(45, 'Assembling your final film...');
 
-      // Build filter_complex concat — more reliable than concat demuxer in FFmpeg.wasm
-      // (concat demuxer opens files via text path which fails with Emscripten CWD mismatch)
+      // Build filter_complex concat.
+      // IMPORTANT: AI-generated clips may or may not have an audio stream.
+      // Referencing [i:a] when the stream is absent causes FFmpeg to silently
+      // drop audio from the whole output. Instead, we synthesise a silent audio
+      // track for each clip (aevalsrc=0, duration=clip_duration) and merge it
+      // with any real audio the clip may have via amix, then concat everything.
+      // This guarantees the output always carries audio.
       const n = inputFiles.length;
       const inputArgs = inputFiles.flatMap(f => ['-i', f]);
-      const resetPts  = Array.from({ length: n }, (_, i) => `[${i}:v]setpts=PTS-STARTPTS[v${i}]`).join(';');
-      const concatIn  = Array.from({ length: n }, (_, i) => `[v${i}]`).join('');
-      const filterStr = `${resetPts};${concatIn}concat=n=${n}:v=1:a=0[outv]`;
+
+      // Per-clip: reset video pts + mix real clip audio with a silent fallback track.
+      // amix with dropout_transition=0 means: if the clip has real audio it is used,
+      // if not the silent aevalsrc fills the gap — so audio is ALWAYS present in output.
+      const perClip = Array.from({ length: n }, (_, i) =>
+        `[${i}:v]setpts=PTS-STARTPTS[v${i}];` +
+        `aevalsrc=0:c=stereo:s=44100:d=10[sil${i}];` +
+        `[${i}:a][sil${i}]amix=inputs=2:duration=first:dropout_transition=0[a${i}]`
+      ).join(';');
+
+      const concatV = Array.from({ length: n }, (_, i) => `[v${i}]`).join('');
+      const concatA = Array.from({ length: n }, (_, i) => `[a${i}]`).join('');
+      const filterStr = `${perClip};${concatV}${concatA}concat=n=${n}:v=1:a=1[outv][outa]`;
 
       await withTimeout(
         proxy.send('EXEC', {
@@ -218,8 +233,9 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
             ...inputArgs,
             '-filter_complex', filterStr,
             '-map', '[outv]',
+            '-map', '[outa]',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-            '-an',
+            '-c:a', 'aac', '-b:a', '128k',
             '-movflags', '+faststart',
             '-y', 'output.mp4',
           ],
