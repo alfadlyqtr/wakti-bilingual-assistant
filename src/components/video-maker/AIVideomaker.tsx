@@ -3663,6 +3663,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             </label>
                           </div>
                         </div>
+                        )}
                       </div>
 
                       {/* ── 3. AMP + REFERENCE IMAGE ── */}
