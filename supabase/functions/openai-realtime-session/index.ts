@@ -120,9 +120,6 @@ serve(async (req: Request) => {
       ? requestedTranscriptionRaw
       : "";
     const transcriptionLanguage = body?.language === "ar" ? "ar" : "en";
-    const transcriptionPrompt = transcriptionLanguage === "ar"
-      ? "Transcribe the speaker in Arabic only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing a different language."
-      : "Transcribe the speaker in English only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing Chinese, Dutch, Irish, or another language.";
     const modelCandidates = uniqueNonEmpty([
       requestedModel,
       ...DEFAULT_MODEL_CANDIDATES,
@@ -145,18 +142,21 @@ serve(async (req: Request) => {
       for (const transcriptionModel of transcriptionCandidates) {
         attempted.push(`${model} / ${transcriptionModel}`);
 
+        const transcriptionConfig: Record<string, string> = {
+          model: transcriptionModel,
+          language: transcriptionLanguage,
+        };
+        if (transcriptionModel === "gpt-realtime-whisper") {
+          transcriptionConfig.delay = "medium";
+        }
+
         const sessionConfig = JSON.stringify({
           session: {
             type: "realtime",
             model,
             audio: {
               input: {
-                transcription: {
-                  model: transcriptionModel,
-                  language: transcriptionLanguage,
-                  prompt: transcriptionPrompt,
-                  delay: "medium",
-                },
+                transcription: transcriptionConfig,
                 noise_reduction: { type: "near_field" },
                 turn_detection: {
                   type: "semantic_vad",

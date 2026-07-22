@@ -1348,9 +1348,13 @@ What to do instead:
         const personalTouchSection = buildPersonalTouchSection();
         const helpfulMemoryBlock = buildHelpfulMemoryBlock();
         const transcriptionLanguage = language === 'ar' ? 'ar' : 'en';
-        const transcriptionPrompt = transcriptionLanguage === 'ar'
-          ? 'Transcribe the speaker in Arabic only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing a different language.'
-          : 'Transcribe the speaker in English only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing Chinese, Dutch, Irish, or another language.';
+        const transcriptionConfig: { model: 'gpt-4o-transcribe' | 'gpt-realtime-whisper'; language: 'ar' | 'en'; delay?: 'medium' } = {
+          model: transcriptionModelRef.current,
+          language: transcriptionLanguage,
+        };
+        if (transcriptionModelRef.current === 'gpt-realtime-whisper') {
+          transcriptionConfig.delay = 'medium';
+        }
 
         const instructions = t(
           `You are WAKTI — a warm, natural voice assistant. You're having a real conversation, not reading from a manual. ${personalTouch}
@@ -1407,12 +1411,7 @@ ${memoryContext ? memoryContext : ''}`
             instructions,
             audio: {
               input: {
-                transcription: {
-                  model: transcriptionModelRef.current,
-                  language: transcriptionLanguage,
-                  prompt: transcriptionPrompt,
-                  delay: 'medium',
-                },
+                transcription: transcriptionConfig,
                 noise_reduction: { type: 'near_field' },
                 turn_detection: {
                   type: 'semantic_vad',
