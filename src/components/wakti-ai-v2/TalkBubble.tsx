@@ -19,6 +19,9 @@ const NOISE_STRIKES_TO_GUARD = 3;
 const NOISE_GUARD_MAX_MS = 45000;
 const OPENAI_REALTIME_CALLS_URL = 'https://api.openai.com/v1/realtime/calls';
 const OPENAI_REALTIME_CONNECT_TIMEOUT_MS = 18000;
+const TALK_READY_FALLBACK_MS = 700;
+const TALK_TURN_DETECTION_EAGERNESS = 'medium';
+const TALK_DEFAULT_TRANSCRIPTION_MODEL: 'gpt-4o-transcribe' | 'gpt-realtime-whisper' = 'gpt-realtime-whisper';
 
 type TalkLocation = {
   city?: string;
@@ -212,7 +215,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const turnCounterRef = useRef(0);
   const pendingAutoStartAfterConnectRef = useRef(false);
   const startRecordingRef = useRef<(() => void) | null>(null);
-  const transcriptionModelRef = useRef<'gpt-4o-transcribe' | 'gpt-realtime-whisper'>('gpt-4o-transcribe');
+  const transcriptionModelRef = useRef<'gpt-4o-transcribe' | 'gpt-realtime-whisper'>(TALK_DEFAULT_TRANSCRIPTION_MODEL);
   const processedUserTranscriptItemIdsRef = useRef<Set<string>>(new Set());
   const noiseGuardActiveRef = useRef(false);
   const noiseStrikeCountRef = useRef(0);
@@ -1024,7 +1027,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     pendingTranscriptRef.current = '';
     liveTranscriptRef.current = '';
     aiTranscriptRef.current = '';
-    transcriptionModelRef.current = 'gpt-4o-transcribe';
+    transcriptionModelRef.current = TALK_DEFAULT_TRANSCRIPTION_MODEL;
     processedUserTranscriptItemIdsRef.current.clear();
     noiseGuardActiveRef.current = false;
     noiseStrikeCountRef.current = 0;
@@ -1415,7 +1418,7 @@ ${memoryContext ? memoryContext : ''}`
                 noise_reduction: { type: 'near_field' },
                 turn_detection: {
                   type: 'semantic_vad',
-                  eagerness: 'low',
+                  eagerness: TALK_TURN_DETECTION_EAGERNESS,
                   create_response: false,
                   interrupt_response: false,
                 },
@@ -1445,7 +1448,7 @@ ${memoryContext ? memoryContext : ''}`
               startRecordingRef.current?.();
             }, 80);
           }
-        }, 2500);
+        }, TALK_READY_FALLBACK_MS);
       };
 
       dc.onmessage = (event) => {
@@ -1550,7 +1553,7 @@ ${memoryContext ? memoryContext : ''}`
       console.log('[Talk] Calling Edge Function for client secret...');
       connectionStage = 'edge';
       const response = await supabase.functions.invoke('openai-realtime-session', {
-        body: { language, voice: requestedVoice },
+        body: { language, voice: requestedVoice, transcription_model: transcriptionModelRef.current },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       if (isStaleInit()) {
@@ -1607,9 +1610,11 @@ ${memoryContext ? memoryContext : ''}`
 
       const activeModel = typeof response.data?.model === 'string' ? response.data.model : '';
       const activeTranscriptionModel = typeof response.data?.transcription_model === 'string' ? response.data.transcription_model : '';
-      transcriptionModelRef.current = activeTranscriptionModel === 'gpt-realtime-whisper'
-        ? 'gpt-realtime-whisper'
-        : 'gpt-4o-transcribe';
+      transcriptionModelRef.current = activeTranscriptionModel === 'gpt-4o-transcribe'
+        ? 'gpt-4o-transcribe'
+        : activeTranscriptionModel === 'gpt-realtime-whisper'
+          ? 'gpt-realtime-whisper'
+          : TALK_DEFAULT_TRANSCRIPTION_MODEL;
       const engineLabel = [activeModel, activeTranscriptionModel].filter(Boolean).join(' / ');
       console.log('[Talk] Active engine:', engineLabel || 'unknown');
       console.log('[Talk] Active transcription model:', transcriptionModelRef.current);
@@ -1655,6 +1660,24 @@ ${memoryContext ? memoryContext : ''}`
       if (isStaleInit()) {
         return;
       }
+
+      // Watchdog: if dc.onopen never fires within 12 s, fail gracefully instead of hanging forever.
+      // dc.onopen will clear this timer and replace it with the shorter session-ready fallback.
+      // dc.onclose also clears this timer, so no double-error if the channel opens then immediately closes.
+      if (sessionReadyFallbackTimeoutRef.current) {
+        clearTimeout(sessionReadyFallbackTimeoutRef.current);
+      }
+      sessionReadyFallbackTimeoutRef.current = setTimeout(() => {
+        sessionReadyFallbackTimeoutRef.current = null;
+        if (isStaleInit() || dcRef.current !== dc || initialSessionConfiguredRef.current) {
+          return;
+        }
+        console.warn('[Talk] Data channel watchdog fired — dc.onopen never fired; failing gracefully');
+        setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
+        setDebugHint(t('Connection failed. Tap once to try again.', 'فشل الاتصال. اضغط مرة للمحاولة من جديد.'));
+        setStatus('ready');
+        setIsConnectionReady(false);
+      }, 12000);
 
       // Connection will be ready when dc.onopen fires
 

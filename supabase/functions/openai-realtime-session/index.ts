@@ -8,7 +8,7 @@ const ALLOWED_VOICES = new Set(["alloy", "ash", "ballad", "coral", "echo", "sage
 const ALLOWED_MODELS = new Set(["gpt-realtime-2.1", "gpt-realtime-2", "gpt-realtime"]);
 const DEFAULT_MODEL_CANDIDATES = ["gpt-realtime-2.1", "gpt-realtime-2", "gpt-realtime"];
 const ALLOWED_TRANSCRIPTION_MODELS = new Set(["gpt-4o-transcribe", "gpt-realtime-whisper"]);
-const DEFAULT_TRANSCRIPTION_CANDIDATES = ["gpt-4o-transcribe", "gpt-realtime-whisper"];
+const DEFAULT_TRANSCRIPTION_CANDIDATES = ["gpt-realtime-whisper", "gpt-4o-transcribe"];
 const REALTIME_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets";
 const OPENAI_REALTIME_TIMEOUT_MS = 18000;
 
@@ -160,7 +160,7 @@ serve(async (req: Request) => {
                 noise_reduction: { type: "near_field" },
                 turn_detection: {
                   type: "semantic_vad",
-                  eagerness: "low",
+                  eagerness: "medium",
                   create_response: false,
                   interrupt_response: false,
                 },
