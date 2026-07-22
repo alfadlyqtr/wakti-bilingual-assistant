@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Brain, Bookmark, CheckCircle, RotateCcw, Undo2, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowLeftRight, Brain, Bookmark, CheckCircle, RotateCcw, Undo2, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ type SurahViewAllRow =
   | { type: "ayah"; ayahNumber: number };
 
 const STUDY_PLAN_KEY = "deen_study_plan_v2";
+const STUDY_DAILY_PROGRESS_KEY = "deen_study_daily_progress_v1";
 const VIEW_ALL_BATCH_SIZE = 6;
 
 const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
@@ -163,6 +164,15 @@ function plainSurahName(n: number, isAr: boolean): string {
   return s ? (isAr ? s.ar : s.en) : String(n);
 }
 
+function planDisplayName(plan: StudyPlan, isAr: boolean): string {
+  if (plan.type === "juzamma") return isAr ? "جزء عمّ" : "Juz Amma";
+  if (plan.type === "beginner") return isAr ? "مبتدئ" : "Beginner";
+  if (plan.customName?.trim()) return plan.customName.trim();
+  return isAr
+    ? `من ${plainSurahName(plan.startSurah ?? plan.currentSurah, true)}، آية ${plan.startAyah ?? plan.currentAyah}`
+    : `From ${plainSurahName(plan.startSurah ?? plan.currentSurah, false)}, Ayah ${plan.startAyah ?? plan.currentAyah}`;
+}
+
 function readPlanStore(): StudyPlanStore {
   try {
     const raw = localStorage.getItem(STUDY_PLAN_KEY);
@@ -184,6 +194,32 @@ function readPlanStore(): StudyPlanStore {
     };
     return { activePlanId: migrated.id, plans: [migrated] };
   } catch { return { activePlanId: null, plans: [] }; }
+}
+
+function todayKey(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function readDailyPlanProgress(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(STUDY_DAILY_PROGRESS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { date?: string; byPlanId?: Record<string, number> };
+    if (!parsed || parsed.date !== todayKey() || !parsed.byPlanId || typeof parsed.byPlanId !== "object") return {};
+    return parsed.byPlanId;
+  } catch {
+    return {};
+  }
+}
+
+function saveDailyPlanProgress(byPlanId: Record<string, number>) {
+  try {
+    localStorage.setItem(STUDY_DAILY_PROGRESS_KEY, JSON.stringify({ date: todayKey(), byPlanId }));
+  } catch {}
 }
 
 function savePlanStore(store: StudyPlanStore) {
@@ -253,11 +289,15 @@ export default function DeenStudy() {
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
+  const [dailyPlanProgressByPlan, setDailyPlanProgressByPlan] = useState<Record<string, number>>(() => readDailyPlanProgress());
   const [viewAllSurahNumber, setViewAllSurahNumber] = useState<number | null>(null);
   const [viewAllRows, setViewAllRows] = useState<SurahViewAllRow[]>([]);
   const [viewAllVisibleAyahCount, setViewAllVisibleAyahCount] = useState(0);
   const [viewAllAyahMap, setViewAllAyahMap] = useState<Record<number, AyahData>>({});
   const [viewAllLoading, setViewAllLoading] = useState(false);
+  const [showPlanPicker, setShowPlanPicker] = useState(false);
+  const startCardLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startCardLongPressTriggeredRef = useRef(false);
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -272,6 +312,11 @@ export default function DeenStudy() {
   useEffect(() => {
     if (activeTab === "today" || activeTab === "review") reloadMemorization();
   }, [activeTab, reloadMemorization]);
+
+  useEffect(() => {
+    if (activeTab !== "today") return;
+    setDailyPlanProgressByPlan(readDailyPlanProgress());
+  }, [activeTab, planStore.activePlanId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,6 +340,14 @@ export default function DeenStudy() {
     };
     load();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (startCardLongPressTimerRef.current !== null) {
+        clearTimeout(startCardLongPressTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -358,6 +411,13 @@ export default function DeenStudy() {
       await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     }
     if (plan && playerMode === "learn") {
+      if (!alreadyMemorized) {
+        setDailyPlanProgressByPlan((prev) => {
+          const next = { ...prev, [plan.id]: (prev[plan.id] ?? 0) + 1 };
+          saveDailyPlanProgress(next);
+          return next;
+        });
+      }
       const nextCursor = getNextAyahCursor(sessionAyah.surah_number, sessionAyah.ayah_number);
       const updated: StudyPlan = nextCursor
         ? { ...plan, currentSurah: nextCursor.surah, currentAyah: nextCursor.ayah }
@@ -472,6 +532,47 @@ export default function DeenStudy() {
     });
   };
 
+  const clearStartCardLongPressTimer = useCallback(() => {
+    if (startCardLongPressTimerRef.current !== null) {
+      clearTimeout(startCardLongPressTimerRef.current);
+      startCardLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleStartCardPressStart = useCallback(() => {
+    if (!plan || startingSession) return;
+    startCardLongPressTriggeredRef.current = false;
+    clearStartCardLongPressTimer();
+    startCardLongPressTimerRef.current = setTimeout(() => {
+      startCardLongPressTriggeredRef.current = true;
+      setShowPlanPicker(true);
+    }, 700);
+  }, [plan, startingSession, clearStartCardLongPressTimer]);
+
+  const handleStartCardPressEnd = useCallback(() => {
+    clearStartCardLongPressTimer();
+  }, [clearStartCardLongPressTimer]);
+
+  const handleStartCardTap = useCallback(() => {
+    if (!plan || startingSession) return;
+    if (startCardLongPressTriggeredRef.current) {
+      startCardLongPressTriggeredRef.current = false;
+      return;
+    }
+    void openLearnSession(plan.currentSurah, plan.currentAyah);
+  }, [plan, startingSession, openLearnSession]);
+
+  const closePlanPicker = useCallback(() => {
+    setShowPlanPicker(false);
+    startCardLongPressTriggeredRef.current = false;
+  }, []);
+
+  const pickPlanFromSessionCard = useCallback((planId: string) => {
+    setActivePlan(planId);
+    setShowPlanPicker(false);
+    startCardLongPressTriggeredRef.current = false;
+  }, []);
+
   const deletePlan = (planId: string) => {
     setPlanStore((prev) => {
       const remaining = prev.plans.filter((p) => p.id !== planId);
@@ -480,6 +581,13 @@ export default function DeenStudy() {
         plans: remaining,
       };
       savePlanStore(next);
+      return next;
+    });
+    setDailyPlanProgressByPlan((prev) => {
+      if (!(planId in prev)) return prev;
+      const next = { ...prev };
+      delete next[planId];
+      saveDailyPlanProgress(next);
       return next;
     });
     toast.success(isAr ? "تم حذف الخطة" : "Plan deleted");
@@ -572,7 +680,7 @@ export default function DeenStudy() {
     if (viewAllVisibleAyahCount >= viewAllMemorizedAyahNumbers.length) return;
     void loadViewAllBatch(viewAllSurahNumber, viewAllMemorizedAyahNumbers, viewAllVisibleAyahCount);
   }, [viewAllLoading, viewAllSurahNumber, viewAllVisibleAyahCount, viewAllMemorizedAyahNumbers, loadViewAllBatch]);
-  const memorizedTodayCount = learntTodayItems.length;
+  const memorizedTodayCount = plan ? (dailyPlanProgressByPlan[plan.id] ?? 0) : 0;
   const dailyGoal = Math.max(plan?.dailyGoal ?? 0, 0);
   const dailyGoalProgress = dailyGoal > 0 ? Math.min(memorizedTodayCount / dailyGoal, 1) : 0;
   const dailyAyahsLeft = Math.max(dailyGoal - memorizedTodayCount, 0);
@@ -666,6 +774,52 @@ export default function DeenStudy() {
         />
       )}
 
+      {showPlanPicker && (
+        <div className="fixed inset-0 z-40 flex items-end" onClick={closePlanPicker}>
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.45)" }} />
+          <div
+            className="relative w-full rounded-t-2xl p-4"
+            style={{ background: bg, borderTop: `1px solid ${bdr}`, paddingBottom: "max(env(safe-area-inset-bottom, 0px) + 16px, 24px)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 rounded-full mx-auto mb-3" style={{ background: bdr }} />
+            <p className="text-sm font-bold" style={{ color: textPri, textAlign: isAr ? "right" : "left" }}>
+              {isAr ? "اختر الخطة" : "Choose plan"}
+            </p>
+            <div className="mt-3 flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
+              {planStore.plans.map((savedPlan) => {
+                const isActivePlan = savedPlan.id === plan?.id;
+                return (
+                  <button
+                    key={savedPlan.id}
+                    onClick={() => pickPlanFromSessionCard(savedPlan.id)}
+                    className="w-full rounded-xl p-3 text-left active:scale-[0.99] transition-all"
+                    style={{
+                      background: isActivePlan ? accentBg : surface,
+                      border: `1px solid ${isActivePlan ? accentBorder : bdr}`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold truncate" style={{ color: textPri, textAlign: isAr ? "right" : "left" }}>
+                        {planDisplayName(savedPlan, isAr)}
+                      </p>
+                      {isActivePlan && (
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" style={{ color: accentText }} />
+                      )}
+                    </div>
+                    <p className="text-[10px] mt-1" style={{ color: textSec, textAlign: isAr ? "right" : "left" }}>
+                      {isAr
+                        ? `${plainSurahName(savedPlan.startSurah ?? savedPlan.currentSurah, true)} • آية ${savedPlan.startAyah ?? savedPlan.currentAyah} • هدف ${savedPlan.dailyGoal}`
+                        : `${plainSurahName(savedPlan.startSurah ?? savedPlan.currentSurah, false)} • Ayah ${savedPlan.startAyah ?? savedPlan.currentAyah} • Goal ${savedPlan.dailyGoal}`}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {viewAllSurahNumber !== null && (
         <SurahViewAllOverlay
           surahNumber={viewAllSurahNumber}
@@ -731,9 +885,17 @@ export default function DeenStudy() {
           </button>
           <h1 className="text-base font-bold" style={{ color: textPri }}>{isAr ? "الدراسة" : "Study"}</h1>
           {plan && (
-            <div className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
-              style={{ background: accentBg, color: accentText, border: `1px solid ${accentBorder}` }}>
-              {plan.type === "juzamma" ? (isAr ? "جزء عمّ" : "Juz Amma") : plan.type === "beginner" ? (isAr ? "مبتدئ" : "Beginner") : (isAr ? "مخصص" : "Custom")}
+            <div
+              className="ml-auto h-7 max-w-[150px] px-2.5 rounded-full text-[10px] font-semibold flex items-center gap-1.5 flex-shrink-0"
+              style={{
+                background: "transparent",
+                color: accentText,
+                border: `1px solid ${accentBorder}`,
+                boxShadow: "none",
+              }}
+            >
+              <Target className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate flex-1 min-w-0">{planDisplayName(plan, isAr)}</span>
             </div>
           )}
         </div>
@@ -768,7 +930,7 @@ export default function DeenStudy() {
                     dark={dark}
                   />
                   <StatCard
-                    value={dailyGoal > 0 ? `${memorizedTodayCount}/${dailyGoal}` : (isAr ? "—" : "—")}
+                    value={dailyGoal > 0 ? `${Math.min(memorizedTodayCount, dailyGoal)}/${dailyGoal}` : (isAr ? "—" : "—")}
                     label={isAr ? "الهدف اليومي" : "Daily goal"}
                     color={accentText}
                     bg={accentBg}
@@ -785,10 +947,14 @@ export default function DeenStudy() {
                 </div>
 
                 <button
-                  onClick={() => openLearnSession(plan.currentSurah, plan.currentAyah)}
+                  onClick={handleStartCardTap}
+                  onPointerDown={handleStartCardPressStart}
+                  onPointerUp={handleStartCardPressEnd}
+                  onPointerCancel={handleStartCardPressEnd}
+                  onPointerLeave={handleStartCardPressEnd}
                   disabled={startingSession}
                   className="w-full rounded-2xl p-4 text-left active:scale-[0.99] transition-all disabled:opacity-60"
-                  style={{ background: dark ? "hsla(25,95%,60%,0.10)" : "hsla(25,85%,45%,0.14)", border: "1px solid hsla(25,95%,60%,0.28)" }}
+                  style={{ background: dark ? "hsla(25,95%,60%,0.07)" : "hsla(25,85%,45%,0.10)", border: "1px solid hsla(25,95%,60%,0.20)" }}
                   dir={isAr ? "rtl" : "ltr"}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -811,16 +977,22 @@ export default function DeenStudy() {
                   <div className="mt-2.5">
                     <div
                       className="h-1 rounded-full overflow-hidden"
-                      style={{ background: dark ? "hsla(25,95%,60%,0.18)" : "hsla(25,85%,45%,0.20)" }}
+                      style={{ background: dark ? "hsla(25,95%,60%,0.12)" : "hsla(25,85%,45%,0.14)" }}
                     >
                       <div
                         className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${dailyGoalProgress * 100}%`, background: accentText }}
+                        style={{ width: `${dailyGoalProgress * 100}%`, background: dark ? "hsla(25,95%,60%,0.75)" : "hsla(25,85%,45%,0.78)" }}
                       />
                     </div>
-                    <p className="text-[10px] font-medium mt-1" style={{ color: textSec, textAlign: isAr ? "right" : "left" }}>
-                      {dailyGoalSummary}
-                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-medium min-w-0 truncate" style={{ color: textSec, textAlign: isAr ? "right" : "left" }}>
+                        {dailyGoalSummary}
+                      </p>
+                      <p className="text-[10px] font-semibold whitespace-nowrap inline-flex items-center gap-1" style={{ color: accentText }}>
+                        <ArrowLeftRight className="w-2.5 h-2.5 flex-shrink-0" />
+                        <span>{isAr ? "اضغط مطولاً لتغيير الخطة" : "Hold to switch plan"}</span>
+                      </p>
+                    </div>
                   </div>
                 </button>
 
@@ -924,8 +1096,11 @@ export default function DeenStudy() {
                 </div>
                 <div className="w-px h-8" style={{ background: bdr }} />
                 <div className="flex-1 text-center">
-                  <p className="text-xl font-black leading-none" style={{ color: accentText }}>{memorizedPercent}%</p>
-                  <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{isAr ? "% القرآن" : "% Quran"}</p>
+                  <p className="text-xl font-black leading-none inline-flex items-end gap-1 justify-center" style={{ color: accentText }}>
+                    <span>{memorizedPercent}%</span>
+                    <span className="text-[8px] font-semibold leading-none" style={{ color: textSec }}>{isAr ? "قرآن" : "Quran"}</span>
+                  </p>
+                  <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{isAr ? "بالإجمالي" : "in total"}</p>
                 </div>
               </div>
             </div>
