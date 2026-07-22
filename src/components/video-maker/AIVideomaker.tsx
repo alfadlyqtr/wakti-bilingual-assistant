@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
@@ -134,36 +134,36 @@ const getVideoWaitHint = (
 ) => {
   if (generationMode === 'image_to_video' && resolution === '480p') {
     return language === 'ar'
-      ? 'عادةً 1-2 دقائق. دقة 480p هي الأسرع.'
+      ? 'Ø¹Ø§Ø¯Ø©Ù‹ 1-2 Ø¯Ù‚Ø§Ø¦Ù‚. Ø¯Ù‚Ø© 480p Ù‡ÙŠ Ø§Ù„Ø£Ø³Ø±Ø¹.'
       : 'Usually 1-2 minutes. 480p is the fastest option.';
   }
 
   if (generationMode === 'text_to_video' && resolution === '1080p') {
     return language === 'ar'
-      ? 'عادةً 3-6 دقائق. دقة 1080p أبطأ لكنها أوضح.'
+      ? 'Ø¹Ø§Ø¯Ø©Ù‹ 3-6 Ø¯Ù‚Ø§Ø¦Ù‚. Ø¯Ù‚Ø© 1080p Ø£Ø¨Ø·Ø£ Ù„ÙƒÙ†Ù‡Ø§ Ø£ÙˆØ¶Ø­.'
       : 'Usually 3-6 minutes. 1080p is slower, but sharper.';
   }
 
   if ((generationMode === 'text_to_video' || generationMode === '2images_to_video') && resolution === '720p') {
     return language === 'ar'
-      ? 'عادةً 2-4 دقائق. دقة 720p أسرع.'
+      ? 'Ø¹Ø§Ø¯Ø©Ù‹ 2-4 Ø¯Ù‚Ø§Ø¦Ù‚. Ø¯Ù‚Ø© 720p Ø£Ø³Ø±Ø¹.'
       : 'Usually 2-4 minutes. 720p is the faster option.';
   }
 
   if (generationMode === '2images_to_video' && resolution === '1080p') {
     return language === 'ar'
-      ? 'عادةً 3-5 دقائق. دقة 1080p قد تستغرق وقتاً أطول.'
+      ? 'Ø¹Ø§Ø¯Ø©Ù‹ 3-5 Ø¯Ù‚Ø§Ø¦Ù‚. Ø¯Ù‚Ø© 1080p Ù‚Ø¯ ØªØ³ØªØºØ±Ù‚ ÙˆÙ‚ØªØ§Ù‹ Ø£Ø·ÙˆÙ„.'
       : 'Usually 3-5 minutes. 1080p can take longer.';
   }
 
   if (generationMode === 'image_to_video' && resolution === '720p') {
     return language === 'ar'
-      ? 'عادةً 1-3 دقائق. دقة 720p أسرع.'
+      ? 'Ø¹Ø§Ø¯Ø©Ù‹ 1-3 Ø¯Ù‚Ø§Ø¦Ù‚. Ø¯Ù‚Ø© 720p Ø£Ø³Ø±Ø¹.'
       : 'Usually 1-3 minutes. 720p is the faster option.';
   }
 
   return language === 'ar'
-    ? 'قد يستغرق الأمر 1-3 دقائق حسب الضغط والجودة.'
+    ? 'Ù‚Ø¯ ÙŠØ³ØªØºØ±Ù‚ Ø§Ù„Ø£Ù…Ø± 1-3 Ø¯Ù‚Ø§Ø¦Ù‚ Ø­Ø³Ø¨ Ø§Ù„Ø¶ØºØ· ÙˆØ§Ù„Ø¬ÙˆØ¯Ø©.'
     : 'This usually takes 1-3 minutes, depending on load and quality.';
 };
 
@@ -174,20 +174,20 @@ const getResolutionSpeedHint = (
 ) => {
   if (generationMode === 'text_to_video' || generationMode === '2images_to_video') {
     return language === 'ar'
-      ? '720p أسرع • 1080p أبطأ لكنه أوضح'
-      : '720p is faster • 1080p is slower but sharper';
+      ? '720p Ø£Ø³Ø±Ø¹ â€¢ 1080p Ø£Ø¨Ø·Ø£ Ù„ÙƒÙ†Ù‡ Ø£ÙˆØ¶Ø­'
+      : '720p is faster â€¢ 1080p is slower but sharper';
   }
 
   if (generationMode === 'image_to_video') {
     if (isKidsContentMode) {
       return language === 'ar'
-        ? '480p متاح دائمًا • 720p متاح فقط لمدة 4ث و6ث'
-        : '480p is always available • 720p is only for 4s and 6s';
+        ? '480p Ù…ØªØ§Ø­ Ø¯Ø§Ø¦Ù…Ù‹Ø§ â€¢ 720p Ù…ØªØ§Ø­ ÙÙ‚Ø· Ù„Ù…Ø¯Ø© 4Ø« Ùˆ6Ø«'
+        : '480p is always available â€¢ 720p is only for 4s and 6s';
     }
 
     return language === 'ar'
-      ? '720p أسرع • 1080p أبطأ لكنه أوضح'
-      : '720p is faster • 1080p is slower but sharper';
+      ? '720p Ø£Ø³Ø±Ø¹ â€¢ 1080p Ø£Ø¨Ø·Ø£ Ù„ÙƒÙ†Ù‡ Ø£ÙˆØ¶Ø­'
+      : '720p is faster â€¢ 1080p is slower but sharper';
   }
 
   return '';
@@ -294,7 +294,7 @@ const shouldHighlightChildSafetyToggle = (payload: VideoInvokeErrorPayload | nul
 
 const getGenericVideoErrorMessage = (language: string): string => (
   language === 'ar'
-    ? 'تعذر إنشاء الفيديو الآن. حاول بصورة أو وصف مختلف.'
+    ? 'ØªØ¹Ø°Ø± Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ø§Ù„Ø¢Ù†. Ø­Ø§ÙˆÙ„ Ø¨ØµÙˆØ±Ø© Ø£Ùˆ ÙˆØµÙ Ù…Ø®ØªÙ„Ù.'
     : 'We could not generate this video right now. Please try a different image or prompt.'
 );
 
@@ -338,32 +338,32 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
 
   if (shouldHighlightChildSafetyToggle(payload)) {
     return language === 'ar'
-      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل حماية الأطفال ثم حاول مرة أخرى.'
+      ? 'ØªÙ… Ø­Ø¸Ø± Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨ ÙˆÙÙ‚ Ù‚ÙˆØ§Ø¹Ø¯ Ø§Ù„Ø£Ù…Ø§Ù† ÙÙŠ ÙˆÙƒØªÙŠ. ÙØ¹Ù‘Ù„ Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„ Ø«Ù… Ø­Ø§ÙˆÙ„ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰.'
       : 'Wakti safety rules blocked this request. Turn on Child protection and try again.';
   }
 
   if (rawCode === 'video_temporary_unavailable') {
     return language === 'ar'
-      ? 'إنشاء الفيديو غير متاح مؤقتًا الآن. حاول مرة أخرى بعد قليل.'
+      ? 'Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ ØºÙŠØ± Ù…ØªØ§Ø­ Ù…Ø¤Ù‚ØªÙ‹Ø§ Ø§Ù„Ø¢Ù†. Ø­Ø§ÙˆÙ„ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰ Ø¨Ø¹Ø¯ Ù‚Ù„ÙŠÙ„.'
       : 'Video generation is temporarily unavailable right now. Please try again in a moment.';
   }
 
   if (payload.code === 'MONTHLY_VIDEO_LIMIT_REACHED' || payload.error === 'MONTHLY_VIDEO_LIMIT_REACHED') {
     return language === 'ar'
-      ? 'لقد وصلت إلى الحد الشهري للفيديوهات بالذكاء الاصطناعي.'
+      ? 'Ù„Ù‚Ø¯ ÙˆØµÙ„Øª Ø¥Ù„Ù‰ Ø§Ù„Ø­Ø¯ Ø§Ù„Ø´Ù‡Ø±ÙŠ Ù„Ù„ÙÙŠØ¯ÙŠÙˆÙ‡Ø§Øª Ø¨Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ.'
       : 'You reached your monthly AI video limit.';
   }
 
   if (rawCode === 'video_safety_restricted' || rawError === 'video_safety_restricted') {
     return language === 'ar'
-      ? 'تعذر معالجة هذا الطلب وفق قواعد الأمان في وكتي. حاول بصورة أو وصف مختلف.'
+      ? 'ØªØ¹Ø°Ø± Ù…Ø¹Ø§Ù„Ø¬Ø© Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨ ÙˆÙÙ‚ Ù‚ÙˆØ§Ø¹Ø¯ Ø§Ù„Ø£Ù…Ø§Ù† ÙÙŠ ÙˆÙƒØªÙŠ. Ø­Ø§ÙˆÙ„ Ø¨ØµÙˆØ±Ø© Ø£Ùˆ ÙˆØµÙ Ù…Ø®ØªÙ„Ù.'
       : 'This request could not be processed under Wakti safety rules. Please try a different image or prompt.';
   }
 
   return getGenericVideoErrorMessage(language);
 };
 
-// Wakti Cinema — the Director chooses the scene count for each connected video
+// Wakti Cinema â€” the Director chooses the scene count for each connected video
 const MIN_SCENE_COUNT = 3;
 const MAX_SCENE_COUNT = 6;
 const DEFAULT_SCENE_DURATION = 6;
@@ -528,7 +528,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     kidsModeToggleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [isKidsContentMode]);
 
-  // Trial access check — Ads Creator is locked for 24-hour trial users
+  // Trial access check â€” Ads Creator is locked for 24-hour trial users
   const { isSubscribed, isAdminGifted, hasTrialStarted, refetch: refetchUserProfile } = useUserProfile();
   const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
   const isVideoAdsLocked = isTrialUser || isGuest;
@@ -602,7 +602,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     }
   }, [operatorExecution]);
 
-  // Role 2 & 3 — Artist & Cloner
+  // Role 2 & 3 â€” Artist & Cloner
   const [sceneImages, setSceneImages] = useState<(string | null)[]>([]);
   const [sceneImageOptions, setSceneImageOptions] = useState<(string[] | null)[]>([]);
   const [anchorImageUrl, setAnchorImageUrl] = useState<string | null>(null);
@@ -611,7 +611,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [castingStatus, setCastingStatus] = useState('');
   const [activeCastingIdx, setActiveCastingIdx] = useState(0);
 
-  // Role 4 — Animator
+  // Role 4 â€” Animator
   const [videoClips, setVideoClips] = useState<(string | null)[]>([]);
   const [animTaskIds, setAnimTaskIds] = useState<(string | null)[]>([]);
   const [animProgress, setAnimProgress] = useState<('idle' | 'queued' | 'rendering' | 'done' | 'error')[]>([]);
@@ -622,11 +622,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [clipsReady, setClipsReady] = useState(false); // true when all clips done, before stitch
   const [autoStitchQueued, setAutoStitchQueued] = useState(false);
 
-  // Visual Supervisor — per-scene spatial motion briefs from Gemini Flash-Lite
+  // Visual Supervisor â€” per-scene spatial motion briefs from Gemini Flash-Lite
   const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>([]);
   const [vsStatus, setVsStatus] = useState<('idle' | 'scanning' | 'done' | 'error')[]>([]);
 
-  // Role 5 — Premiere
+  // Role 5 â€” Premiere
   const [isStitching, setIsStitching] = useState(false);
   const [stitchStatus, setStitchStatus] = useState('');
   const [stitchProgress, setStitchProgress] = useState(0);
@@ -638,7 +638,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [isCinemaSaving, setIsCinemaSaving] = useState(false);
   const [isCinemaSaved, setIsCinemaSaved] = useState(false);
 
-  // Brand anchor — the optional image and its declared role
+  // Brand anchor â€” the optional image and its declared role
   const [brandAnchor, setBrandAnchor] = useState<string | null>(null);
   const [isUploadingBrand, setIsUploadingBrand] = useState(false);
   const [showBrandSavedPicker, setShowBrandSavedPicker] = useState(false);
@@ -903,7 +903,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           console.error('[AIVideomaker] Amp prepare error:', prepErr);
           throw new Error(
             language === 'ar'
-              ? 'فشل تجهيز الصورة: ' + (prepErr?.message || '')
+              ? 'ÙØ´Ù„ ØªØ¬Ù‡ÙŠØ² Ø§Ù„ØµÙˆØ±Ø©: ' + (prepErr?.message || '')
               : 'Failed to prepare image: ' + (prepErr?.message || '')
           );
         }
@@ -917,7 +917,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         });
         if (data?.success && data?.text) {
           setPrompt(data.text);
-          toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+          toast.success(language === 'ar' ? 'ØªÙ… ØªØ­Ø³ÙŠÙ† Ø§Ù„ÙˆØµÙ âœ¨' : 'Prompt amped âœ¨');
         } else {
           throw new Error(data?.error || 'No improved prompt returned');
         }
@@ -1007,7 +1007,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           console.error('[AIVideomaker] Amp prepare error:', prepErr);
           throw new Error(
             language === 'ar'
-              ? 'فشل تجهيز الصور: ' + (prepErr?.message || '')
+              ? 'ÙØ´Ù„ ØªØ¬Ù‡ÙŠØ² Ø§Ù„ØµÙˆØ±: ' + (prepErr?.message || '')
               : 'Failed to prepare images: ' + (prepErr?.message || '')
           );
         }
@@ -1022,7 +1022,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         });
         if (data?.success && data?.text) {
           setPrompt(data.text);
-          toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+          toast.success(language === 'ar' ? 'ØªÙ… ØªØ­Ø³ÙŠÙ† Ø§Ù„ÙˆØµÙ âœ¨' : 'Prompt amped âœ¨');
         } else {
           throw new Error(data?.error || 'No improved prompt returned');
         }
@@ -1034,14 +1034,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         });
         if (data?.success && data?.text) {
           setPrompt(data.text);
-          toast.success(language === 'ar' ? 'تم تحسين الوصف ✨' : 'Prompt amped ✨');
+          toast.success(language === 'ar' ? 'ØªÙ… ØªØ­Ø³ÙŠÙ† Ø§Ù„ÙˆØµÙ âœ¨' : 'Prompt amped âœ¨');
         } else {
           throw new Error(data?.error || 'No improved prompt returned');
         }
       }
     } catch (err: any) {
       console.error('[AIVideomaker] Amp error:', err);
-      toast.error(language === 'ar' ? 'فشل تحسين الوصف: ' + (err.message || '') : 'Failed to amp: ' + (err.message || ''));
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ ØªØ­Ø³ÙŠÙ† Ø§Ù„ÙˆØµÙ: ' + (err.message || '') : 'Failed to amp: ' + (err.message || ''));
     } finally {
       setIsAmping(false);
     }
@@ -1152,12 +1152,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error(language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image');
+      toast.error(language === 'ar' ? 'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± ØµÙˆØ±Ø©' : 'Please select an image');
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max file size is 10MB');
+      toast.error(language === 'ar' ? 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ 10 Ù…ÙŠØ¬Ø§Ø¨Ø§ÙŠØª' : 'Max file size is 10MB');
       return;
     }
 
@@ -1175,12 +1175,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error(language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image');
+      toast.error(language === 'ar' ? 'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± ØµÙˆØ±Ø©' : 'Please select an image');
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max file size is 10MB');
+      toast.error(language === 'ar' ? 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ 10 Ù…ÙŠØ¬Ø§Ø¨Ø§ÙŠØª' : 'Max file size is 10MB');
       return;
     }
 
@@ -1286,8 +1286,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setSaveErrorMessage(null);
       toast.success(
         options?.auto
-          ? (language === 'ar' ? 'تم الحفظ تلقائياً في فيديوهاتي!' : 'Auto-saved to My Videos!')
-          : (language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!')
+          ? (language === 'ar' ? 'ØªÙ… Ø§Ù„Ø­ÙØ¸ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ!' : 'Auto-saved to My Videos!')
+          : (language === 'ar' ? 'ØªÙ… Ø§Ù„Ø­ÙØ¸ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ!' : 'Saved to My Videos!')
       );
       await loadLatestVideo();
       if (options?.navigateAfterSave && onSaveSuccess) {
@@ -1297,8 +1297,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     } catch (e: any) {
       console.error('Save failed:', e);
       const fallbackMessage = options?.auto
-        ? (language === 'ar' ? 'فشل الحفظ التلقائي — يمكنك الضغط على زر الحفظ أدناه' : 'Auto-save failed — you can tap Save below')
-        : (language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
+        ? (language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸ Ø§Ù„ØªÙ„Ù‚Ø§Ø¦ÙŠ â€” ÙŠÙ…ÙƒÙ†Ùƒ Ø§Ù„Ø¶ØºØ· Ø¹Ù„Ù‰ Ø²Ø± Ø§Ù„Ø­ÙØ¸ Ø£Ø¯Ù†Ø§Ù‡' : 'Auto-save failed â€” you can tap Save below')
+        : (language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸' : 'Failed to save');
       setSaveErrorMessage(fallbackMessage);
       toast.error(fallbackMessage);
       return false;
@@ -1342,8 +1342,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           setIsSaved(false);
           setSaveErrorMessage(null);
           setGenerationProgress(100);
-          setGenerationStatus(language === 'ar' ? 'جاري الحفظ في فيديوهاتي...' : 'Auto-saving to My Videos...');
-          toast.success(language === 'ar' ? 'تم إنشاء الفيديو!' : 'Video generated!');
+          setGenerationStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ...' : 'Auto-saving to My Videos...');
+          toast.success(language === 'ar' ? 'ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ!' : 'Video generated!');
           await loadQuota();
           if (trialQuotaFinished?.feature === 'ai_video' && trialQuotaFinished?.justExhausted === true) {
             emitEvent('wakti-trial-quota-finished', {
@@ -1458,14 +1458,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (needsArabicTranslation) return;
 
     if (loadingQuota) {
-      toast.message(language === 'ar' ? 'جاري التحقق من الحد...' : 'Checking quota...');
+      toast.message(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø­Ø¯...' : 'Checking quota...');
       return;
     }
 
     if (!quota) {
       await loadQuota();
       if (!quota) {
-        toast.error(language === 'ar' ? 'تعذر تحميل الحد الشهري' : 'Failed to load quota');
+        toast.error(language === 'ar' ? 'ØªØ¹Ø°Ø± ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø­Ø¯ Ø§Ù„Ø´Ù‡Ø±ÙŠ' : 'Failed to load quota');
         return;
       }
     }
@@ -1473,7 +1473,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (!quota.canGenerate) {
       toast.error(
         language === 'ar'
-          ? 'لقد وصلت للحد الشهري من الفيديوهات'
+          ? 'Ù„Ù‚Ø¯ ÙˆØµÙ„Øª Ù„Ù„Ø­Ø¯ Ø§Ù„Ø´Ù‡Ø±ÙŠ Ù…Ù† Ø§Ù„ÙÙŠØ¯ÙŠÙˆÙ‡Ø§Øª'
           : 'You have reached your monthly AI video limit'
       );
       return;
@@ -1491,14 +1491,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     try {
       let requestBody: Record<string, unknown>;
       const endingDirective = language === 'ar'
-        ? 'اختم بمشهد يهدأ تدريجياً مع تلاشي لطيف في النهاية.'
+        ? 'Ø§Ø®ØªÙ… Ø¨Ù…Ø´Ù‡Ø¯ ÙŠÙ‡Ø¯Ø£ ØªØ¯Ø±ÙŠØ¬ÙŠØ§Ù‹ Ù…Ø¹ ØªÙ„Ø§Ø´ÙŠ Ù„Ø·ÙŠÙ ÙÙŠ Ø§Ù„Ù†Ù‡Ø§ÙŠØ©.'
         : 'End with a smooth wind-down and a gentle fade-out.';
       const basePrompt = prompt.trim();
       const finalPrompt = basePrompt ? `${basePrompt}\n${endingDirective}` : endingDirective;
 
       if (generationMode === 'text_to_video') {
         // Text-to-Video: no image upload needed
-        setGenerationStatus(language === 'ar' ? 'جاري بدء الإنشاء...' : 'Starting generation...');
+        setGenerationStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø¨Ø¯Ø¡ Ø§Ù„Ø¥Ù†Ø´Ø§Ø¡...' : 'Starting generation...');
 
         requestBody = {
           generation_type: 'text_to_video',
@@ -1511,7 +1511,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         };
       } else if (generationMode === 'image_to_video') {
         // Image-to-Video: always compress + upload image to get a signed https URL
-        setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
+        setGenerationStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø©...' : 'Uploading image...');
         let imageUrl = '';
         try {
           const randomId = Math.random().toString(36).substring(2, 15);
@@ -1574,7 +1574,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           mode: 'async',
         };
       } else if (generationMode === '2images_to_video') {
-        setGenerationStatus(language === 'ar' ? 'جاري رفع الصور...' : 'Uploading images...');
+        setGenerationStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±...' : 'Uploading images...');
         let imageUrl1 = '';
 
         try {
@@ -1604,7 +1604,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           imageUrl1 = signedData1.signedUrl;
 
           if (imagePreview2) {
-            // Both images present — use Seedance 2images model
+            // Both images present â€” use Seedance 2images model
             const randomId2 = Math.random().toString(36).substring(2, 15);
             const storagePath2 = `${user.id}/ai-video-input/${randomId2}_2.jpg`;
             let sourceBlob2: Blob;
@@ -1641,7 +1641,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               mode: 'async',
             };
           } else {
-            // Only one image — fall back to grok image_to_video
+            // Only one image â€” fall back to grok image_to_video
             requestBody = {
               generation_type: 'image_to_video',
               image: imageUrl1,
@@ -1664,7 +1664,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       }
 
       setGenerationProgress(10);
-      setGenerationStatus(language === 'ar' ? 'جاري بدء الإنشاء...' : 'Starting generation...');
+      setGenerationStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø¨Ø¯Ø¡ Ø§Ù„Ø¥Ù†Ø´Ø§Ø¡...' : 'Starting generation...');
 
       // Call edge function
       const { data, error } = await supabase.functions.invoke('freepik-image2video', {
@@ -1726,7 +1726,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       taskProviderRef.current = taskProvider;
       setTaskId(tid);
       setGenerationProgress(15);
-      setGenerationStatus(language === 'ar' ? 'جاري إنشاء الفيديو...' : 'Generating video...');
+      setGenerationStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ...' : 'Generating video...');
 
       // Start polling every 5 seconds
       pollIntervalRef.current = setInterval(() => {
@@ -1829,23 +1829,23 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         : sceneArray(selectedScenes.length, DEFAULT_SCENE_DURATION);
       setSceneDurations(initialDurations);
       setCinemaStep('plan');
-      toast.success(language === 'ar' ? `تم إعداد خطة من ${selectedScenes.length} مشاهد — راجعها قبل البدء` : `${selectedScenes.length}-scene plan ready — review it before starting`);
+      toast.success(language === 'ar' ? `ØªÙ… Ø¥Ø¹Ø¯Ø§Ø¯ Ø®Ø·Ø© Ù…Ù† ${selectedScenes.length} Ù…Ø´Ø§Ù‡Ø¯ â€” Ø±Ø§Ø¬Ø¹Ù‡Ø§ Ù‚Ø¨Ù„ Ø§Ù„Ø¨Ø¯Ø¡` : `${selectedScenes.length}-scene plan ready â€” review it before starting`);
     } catch (err: any) {
       console.error('[AIVideomaker] Direct error:', err);
-      toast.error(language === 'ar' ? 'فشل إنشاء الفيديو: ' + (err.message || '') : 'Failed to create video: ' + (err.message || ''));
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ: ' + (err.message || '') : 'Failed to create video: ' + (err.message || ''));
     } finally {
       setIsDirecting(false);
     }
   }, [cinemaSubject, isDirecting, user, brandAnchor, anchorTag, language, presetSceneDurations, cinemaSeed, showPromptBlockedPopup]);
 
-  // ── Role 2 & 3: Artist & Cloner — Sequential Identity Handshake ──
+  // â”€â”€ Role 2 & 3: Artist & Cloner â€” Sequential Identity Handshake â”€â”€
   // S1 is generated first. Each user pick triggers the next scene using the
-  // SELECTED image as the i2i anchor → true continuity, zero identity drift.
+  // SELECTED image as the i2i anchor â†’ true continuity, zero identity drift.
 
-  // ── Shared poll helper (used by both handleCast and generateNextScene) ──
+  // â”€â”€ Shared poll helper (used by both handleCast and generateNextScene) â”€â”€
   const makePollTask = (artistCall: (body: Record<string, unknown>) => Promise<any>) =>
     async (task_id: string, scene_index: number): Promise<{ url: string; options: string[] }> => {
-      setCastingStatus(language === 'ar' ? `جاري التحقق من المشهد ${scene_index + 1}...` : `Checking Scene ${scene_index + 1}...`);
+      setCastingStatus(language === 'ar' ? `Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ù…Ø´Ù‡Ø¯ ${scene_index + 1}...` : `Checking Scene ${scene_index + 1}...`);
       for (let i = 0; i < 36; i++) {
         await new Promise(r => setTimeout(r, i === 0 ? 0 : 5000));
         let res: any;
@@ -1853,7 +1853,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           res = await artistCall({ mode: 'status', task_id, scene_index });
         } catch (err) {
           if (i < 35) {
-            setCastingStatus(language === 'ar' ? `تعذر التحقق من المشهد ${scene_index + 1} — إعادة المحاولة...` : `Scene ${scene_index + 1} status check failed — retrying...`);
+            setCastingStatus(language === 'ar' ? `ØªØ¹Ø°Ø± Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ù…Ø´Ù‡Ø¯ ${scene_index + 1} â€” Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©...` : `Scene ${scene_index + 1} status check failed â€” retrying...`);
             continue;
           }
           throw new Error(err instanceof Error ? err.message : 'Image generation failed');
@@ -1869,7 +1869,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       throw new Error('Image generation timed out');
     };
 
-  // ── generateNextScene: called when user picks a shot for scene `prevIdx` ──
+  // â”€â”€ generateNextScene: called when user picks a shot for scene `prevIdx` â”€â”€
   // prevIdx = 0-based index of the scene that was just picked
   // pickedUrl = the URL the user tapped
   const generateNextScene = useCallback(async (prevIdx: number, pickedUrl: string) => {
@@ -1896,8 +1896,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
           const allImagesReady = confirmedImages.slice(0, cinemaSceneCount).length === cinemaSceneCount && confirmedImages.slice(0, cinemaSceneCount).every(Boolean);
           setCastingStatus(allImagesReady
-            ? (language === 'ar' ? 'اكتملت جميع المشاهد — نبدأ تحريك الفيديو...' : 'All scenes are ready — starting animation...')
-            : (language === 'ar' ? `اكتمل المشهد ${nextIdx + 1} — ننتقل للمشهد التالي...` : `Scene ${nextIdx + 1} is ready — moving to the next scene...`));
+            ? (language === 'ar' ? 'Ø§ÙƒØªÙ…Ù„Øª Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ â€” Ù†Ø¨Ø¯Ø£ ØªØ­Ø±ÙŠÙƒ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ...' : 'All scenes are ready â€” starting animation...')
+            : (language === 'ar' ? `Ø§ÙƒØªÙ…Ù„ Ø§Ù„Ù…Ø´Ù‡Ø¯ ${nextIdx + 1} â€” Ù†Ù†ØªÙ‚Ù„ Ù„Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„ØªØ§Ù„ÙŠ...` : `Scene ${nextIdx + 1} is ready â€” moving to the next scene...`));
           castingAnchorRef.current[nextIdx + 1] = slotUrl;
           void runVisualSupervisor(nextIdx, slotUrl, scene.english_prompt || scene.text || '');
           chainAnchor = slotUrl;
@@ -1906,7 +1906,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         }
 
         setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'loading'; return n; });
-        setCastingStatus(language === 'ar' ? `جاري إنشاء المشهد ${nextIdx + 1} من ${cinemaSceneCount}...` : `Creating Scene ${nextIdx + 1} of ${cinemaSceneCount}...`);
+        setCastingStatus(language === 'ar' ? `Ø¬Ø§Ø±ÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø´Ù‡Ø¯ ${nextIdx + 1} Ù…Ù† ${cinemaSceneCount}...` : `Creating Scene ${nextIdx + 1} of ${cinemaSceneCount}...`);
         const artistCall = session.artistCall;
         const pollTask = makePollTask(artistCall);
         const effectiveTag = session.effectiveTag;
@@ -1939,25 +1939,25 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
         const allImagesReady = confirmedImages.slice(0, cinemaSceneCount).length === cinemaSceneCount && confirmedImages.slice(0, cinemaSceneCount).every(Boolean);
         setCastingStatus(allImagesReady
-          ? (language === 'ar' ? 'اكتملت جميع المشاهد — نبدأ تحريك الفيديو...' : 'All scenes are ready — starting animation...')
-          : (language === 'ar' ? `اكتمل المشهد ${nextIdx + 1} — ننتقل للمشهد التالي...` : `Scene ${nextIdx + 1} is ready — moving to the next scene...`));
+          ? (language === 'ar' ? 'Ø§ÙƒØªÙ…Ù„Øª Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ â€” Ù†Ø¨Ø¯Ø£ ØªØ­Ø±ÙŠÙƒ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ...' : 'All scenes are ready â€” starting animation...')
+          : (language === 'ar' ? `Ø§ÙƒØªÙ…Ù„ Ø§Ù„Ù…Ø´Ù‡Ø¯ ${nextIdx + 1} â€” Ù†Ù†ØªÙ‚Ù„ Ù„Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„ØªØ§Ù„ÙŠ...` : `Scene ${nextIdx + 1} is ready â€” moving to the next scene...`));
         void runVisualSupervisor(nextIdx, imgUrl, scene.english_prompt || scene.text || '');
         chainAnchor = imgUrl;
         nextIdx += 1;
       }
       if (castingImagesRef.current.slice(0, cinemaSceneCount).length === cinemaSceneCount && castingImagesRef.current.slice(0, cinemaSceneCount).every(Boolean)) {
-        toast.success(language === 'ar' ? '🎬 جميع المشاهد جاهزة!' : '🎬 All scenes ready!');
+        toast.success(language === 'ar' ? 'ðŸŽ¬ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ Ø¬Ø§Ù‡Ø²Ø©!' : 'ðŸŽ¬ All scenes ready!');
       }
     } catch (err: any) {
       console.error(`[cinema] generateNextScene ${nextIdx + 1} failed:`, err);
       setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'error'; return n; });
-      toast.error(language === 'ar' ? `فشل المشهد ${nextIdx + 1}` : `Scene ${nextIdx + 1} failed — tap Retry`);
+      toast.error(language === 'ar' ? `ÙØ´Ù„ Ø§Ù„Ù…Ø´Ù‡Ø¯ ${nextIdx + 1}` : `Scene ${nextIdx + 1} failed â€” tap Retry`);
     } finally {
       setIsCasting(false);
     }
   }, [cinemaScenes, cinemaSceneCount, subjectLock, brandAnchor, language, cinemaFormat, cinemaSeed, commitCastingImage]);
 
-  // ── handleCast: generates Scene 1 ONLY, then stops and waits for user pick ──
+  // â”€â”€ handleCast: generates Scene 1 ONLY, then stops and waits for user pick â”€â”€
   const handleCast = useCallback(async () => {
     if (!user || isCasting || cinemaScenes.length < cinemaSceneCount) return;
     const { data: sessionData } = await supabase.auth.getSession();
@@ -1967,7 +1967,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     // Reset all state
     castingAnchorRef.current = {};
     setIsCasting(true);
-    setCastingStatus(language === 'ar' ? 'جاري تجهيز المشهد الأول...' : 'Preparing Scene 1...');
+    setCastingStatus(language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ ØªØ¬Ù‡ÙŠØ² Ø§Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„Ø£ÙˆÙ„...' : 'Preparing Scene 1...');
     setAnchorImageUrl(null);
     castingImagesRef.current = sceneArray(cinemaSceneCount, null);
     setSceneImages(castingImagesRef.current);
@@ -2010,7 +2010,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
     const pollTask = makePollTask(artistCall);
 
-    // ── Build scene-slot map from reference image tags ──
+    // â”€â”€ Build scene-slot map from reference image tags â”€â”€
     const sceneSlotMap: Record<number, string> = {};
     cinemaReferenceImages.forEach((url, slotIdx) => {
       if (!url) return;
@@ -2034,9 +2034,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       const ep1 = scene1.english_prompt || scene1.text;
       const sceneSeed = cinemaSeed.trim() ? Number(cinemaSeed) : undefined;
 
-      // ── Scene 1: always anchored to brand identity asset ──
+      // â”€â”€ Scene 1: always anchored to brand identity asset â”€â”€
       if (sceneSlotMap[0]) {
-        // User pre-filled slot — use directly, skip generation
+        // User pre-filled slot â€” use directly, skip generation
         commitCastingImage(0, sceneSlotMap[0]);
         setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
         setAnchorImageUrl(sceneSlotMap[0]);
@@ -2047,7 +2047,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         try {
           let created: any;
           if (effectiveTag === 'logo' && brandAnchor) {
-            // Logo mode S1: i2i from brand logo — establishes the identity truth
+            // Logo mode S1: i2i from brand logo â€” establishes the identity truth
             created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: 0, aspect_ratio: cinemaFormat, seed: sceneSeed });
           } else if (effectiveTag === 'character' && brandAnchor) {
             // Character mode S1: i2i from character reference
@@ -2058,7 +2058,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           } else if (effectiveTag === 'style' && brandAnchor) {
             created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'style', scene_index: 0, aspect_ratio: cinemaFormat, seed: sceneSeed });
           } else {
-            // Style-only: S1 is t2i — no real identity image to anchor from
+            // Style-only: S1 is t2i â€” no real identity image to anchor from
             created = await artistCall({ mode: 't2i_create', prompt: ep1, aspect_ratio: cinemaFormat, seed: sceneSeed });
           }
           const { url: s1url } = await pollTask(created.task_id, 0);
@@ -2071,21 +2071,21 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         } catch (s1err: any) {
           console.error('[cinema] Scene 1 failed:', s1err);
           setCastingProgress(['error', ...sceneArray(Math.max(0, cinemaSceneCount - 1), 'idle')] as ('idle'|'loading'|'done'|'error')[]);
-          setCastingStatus(language === 'ar' ? 'فشل المشهد 1 — حاول مجدداً' : 'Scene 1 failed — please retry');
-          toast.error(language === 'ar' ? 'فشل المشهد 1 — حاول مجدداً' : 'Scene 1 failed — please retry');
+          setCastingStatus(language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„Ù…Ø´Ù‡Ø¯ 1 â€” Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹' : 'Scene 1 failed â€” please retry');
+          toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„Ù…Ø´Ù‡Ø¯ 1 â€” Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹' : 'Scene 1 failed â€” please retry');
         }
       }
     } catch (err: any) {
       console.error('[cinema] Cast error:', err);
-      setCastingStatus(language === 'ar' ? 'فشل إنشاء الصور — حاول مجدداً' : 'Image creation failed — please retry');
-      toast.error(language === 'ar' ? 'فشل إنشاء الصور: ' + err.message : 'Casting failed: ' + err.message);
+      setCastingStatus(language === 'ar' ? 'ÙØ´Ù„ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ØµÙˆØ± â€” Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹' : 'Image creation failed â€” please retry');
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ØµÙˆØ±: ' + err.message : 'Casting failed: ' + err.message);
       setCinemaStep('casting');
     } finally {
       setIsCasting(false);
     }
   }, [user, isCasting, cinemaScenes, cinemaSceneCount, cinemaFormat, language, cinemaReferenceImages, cinemaRefTags, anchorTag, brandAnchor, cinemaSeed, generateNextScene, commitCastingImage]);
 
-  // ── Visual Supervisor: fire-and-forget per-scene spatial analysis ──
+  // â”€â”€ Visual Supervisor: fire-and-forget per-scene spatial analysis â”€â”€
   // Called immediately when user picks Shot A or B. Runs in background, no await needed.
   const runVisualSupervisor = useCallback(async (idx: number, imageUrl: string, sceneScript: string) => {
     setVsStatus(prev => { const n = [...prev]; n[idx] = 'scanning'; return n; });
@@ -2113,14 +2113,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     }
   }, []);
 
-  // ── Role 4: Producer — Hailuo 2.3 parallel animation ──
+  // â”€â”€ Role 4: Producer â€” Hailuo 2.3 parallel animation â”€â”€
   // Fires ALL scene Hailuo tasks simultaneously (parallel), then polls until all done.
   // Uses sceneDurations (user-picked 6s/10s per scene). VS briefs injected into motion prompts.
   const handleFilm = useCallback(async (confirmedImages?: (string | null)[]) => {
     if (!user || isFilming) return;
     const images = confirmedImages ?? (castingImagesRef.current.length ? castingImagesRef.current : sceneImages);
     if (images.slice(0, cinemaSceneCount).some(img => img === null)) {
-      toast.error(language === 'ar' ? 'لم تكتمل جميع الصور بعد' : 'Not all scene images are ready');
+      toast.error(language === 'ar' ? 'Ù„Ù… ØªÙƒØªÙ…Ù„ Ø¬Ù…ÙŠØ¹ Ø§Ù„ØµÙˆØ± Ø¨Ø¹Ø¯' : 'Not all scene images are ready');
       return;
     }
 
@@ -2129,7 +2129,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setAnimTaskIds(Array(cinemaSceneCount).fill(null));
     setAutoStitchQueued(false);
     setCinemaStep('filming');
-    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق مشاهد الفيديو...' : '🎬 Launching your video scenes...');
+    setStitchStatus(language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ Ø¥Ø·Ù„Ø§Ù‚ Ù…Ø´Ø§Ù‡Ø¯ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ...' : 'ðŸŽ¬ Launching your video scenes...');
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
@@ -2171,7 +2171,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         return json;
       };
 
-      // ── Step 1: Fire ALL scene tasks in parallel ──
+      // â”€â”€ Step 1: Fire ALL scene tasks in parallel â”€â”€
       const taskPromises = imageUrls.map(async (imgUrl, idx) => {
         const vsBrief = visualSupervisorPrompts[idx];
         const basePrompt = scripts[idx] || '';
@@ -2194,9 +2194,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       });
 
       const taskIds = await Promise.all(taskPromises);
-      setStitchStatus(language === 'ar' ? '🎬 جاري تحريك اللقطات... ستظهر جاهزة واحدة تلو الأخرى' : '🎬 Rendering your clips... they will finish one by one');
+      setStitchStatus(language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ ØªØ­Ø±ÙŠÙƒ Ø§Ù„Ù„Ù‚Ø·Ø§Øª... Ø³ØªØ¸Ù‡Ø± Ø¬Ø§Ù‡Ø²Ø© ÙˆØ§Ø­Ø¯Ø© ØªÙ„Ùˆ Ø§Ù„Ø£Ø®Ø±Ù‰' : 'ðŸŽ¬ Rendering your clips... they will finish one by one');
 
-      // ── Step 2: Poll all tasks in parallel until every clip is done ──
+      // â”€â”€ Step 2: Poll all tasks in parallel until every clip is done â”€â”€
       const clipUrls: string[] = new Array(taskIds.length).fill('');
       const MAX_CLIP_POLLS = 80; // ~6.5 min
       for (let poll = 0; poll < MAX_CLIP_POLLS; poll++) {
@@ -2210,13 +2210,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               clipUrls[idx] = statusResult.video_url;
               setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-              console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
+              console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}â€¦`);
             } else if (['COMPLETED', 'SUCCESS', 'FINISHED'].includes(String(statusResult.status || '').toUpperCase())) {
               if (statusResult.video_url) {
                 clipUrls[idx] = statusResult.video_url;
                 setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
                 setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-                console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
+                console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}â€¦`);
               } else {
                 setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
                 pollFailure = statusResult.error || `Scene ${idx + 1} completed without a video URL`;
@@ -2240,8 +2240,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         const activeCount = taskIds.length - doneCount;
         setStitchStatus(
           language === 'ar'
-            ? `🎬 التحريك يعمل... ${doneCount}/${taskIds.length} جاهز • ${activeCount} ما زال يعمل`
-            : `🎬 Animation in progress... ${doneCount}/${taskIds.length} ready • ${activeCount} still working`
+            ? `ðŸŽ¬ Ø§Ù„ØªØ­Ø±ÙŠÙƒ ÙŠØ¹Ù…Ù„... ${doneCount}/${taskIds.length} Ø¬Ø§Ù‡Ø² â€¢ ${activeCount} Ù…Ø§ Ø²Ø§Ù„ ÙŠØ¹Ù…Ù„`
+            : `ðŸŽ¬ Animation in progress... ${doneCount}/${taskIds.length} ready â€¢ ${activeCount} still working`
         );
         if (clipUrls.every(Boolean)) break;
       }
@@ -2254,12 +2254,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setClipOrder(clipUrls.map((_, i) => i));
       setClipsReady(true);
       setAutoStitchQueued(true);
-      setStitchStatus(language === 'ar' ? '🎬 كل اللقطات جاهزة — جاري إنشاء الفيلم النهائي...' : '🎬 All clips are ready — starting your final film...');
+      setStitchStatus(language === 'ar' ? 'ðŸŽ¬ ÙƒÙ„ Ø§Ù„Ù„Ù‚Ø·Ø§Øª Ø¬Ø§Ù‡Ø²Ø© â€” Ø¬Ø§Ø±ÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ...' : 'ðŸŽ¬ All clips are ready â€” starting your final film...');
     } catch (err: any) {
       console.error('[ads] Film produce error:', err);
       setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
       setAutoStitchQueued(false);
-      toast.error(language === 'ar' ? 'فشل الإنتاج: ' + err.message : 'Production failed: ' + err.message);
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„Ø¥Ù†ØªØ§Ø¬: ' + err.message : 'Production failed: ' + err.message);
     } finally {
       setIsFilming(false);
     }
@@ -2281,7 +2281,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (allImagesReady) void handleFilm(confirmedImages);
   }, [cinemaStep, cinemaScenes, sceneImages, isCasting, isFilming, handleFilm]);
 
-  // ── Role 4b: Retry — re-trigger full Grok + Shotstack produce ──
+  // â”€â”€ Role 4b: Retry â€” re-trigger full Grok + Shotstack produce â”€â”€
   const handleRetryFilm = useCallback(async (_idx: number) => {
     setClipsReady(false);
     setClipOrder([]);
@@ -2300,11 +2300,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         setStitchStatus(msg);
       },
     });
-    if (!blob) throw new Error('Film assembly failed — no output produced');
+    if (!blob) throw new Error('Film assembly failed â€” no output produced');
     setStitchedBlobUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
 
     setStitchProgress(90);
-    setStitchStatus(language === 'ar' ? '🎬 جاري رفع الفيلم...' : '🎬 Uploading your film...');
+    setStitchStatus(language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ Ø±ÙØ¹ Ø§Ù„ÙÙŠÙ„Ù…...' : 'ðŸŽ¬ Uploading your film...');
 
     const fileName = `cinema/${user.id}/${Date.now()}.mp4`;
     const { error: uploadErr } = await supabase.storage
@@ -2334,7 +2334,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setIsStitching(true);
     setAutoStitchQueued(false);
     setStitchProgress(0);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تجهيز محرك الفيلم...' : '🎬 Preparing final film engine...');
+    setStitchStatus(language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ ØªØ¬Ù‡ÙŠØ² Ù…Ø­Ø±Ùƒ Ø§Ù„ÙÙŠÙ„Ù…...' : 'ðŸŽ¬ Preparing final film engine...');
     try {
       const url = await stitchOnServer(orderedUrls, orderedDurations);
       setStitchProgress(100);
@@ -2345,11 +2345,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setAnimProgress(Array(cinemaSceneCount).fill('done'));
       setCinemaStep('premiere');
       supabase.rpc('increment_ai_video_usage', { p_user_id: user.id }).then(() => loadQuota());
-      toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
+      toast.success(language === 'ar' ? 'ðŸŽ¬ Ø§Ù„ÙÙŠÙ„Ù… Ø¬Ø§Ù‡Ø²!' : 'ðŸŽ¬ Film ready!');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown server stitch error';
       console.error('[cinema] Server stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل إنشاء الفيلم: ' + errorMessage : 'Final film failed: ' + errorMessage);
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠÙ„Ù…: ' + errorMessage : 'Final film failed: ' + errorMessage);
     } finally {
       setIsStitching(false);
       setStitchProgress(0);
@@ -2363,7 +2363,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   }, [autoStitchQueued, isStitching, cinemaStep, clipsReady, clipOrder, handleStitchClips]);
 
 
-  // ── Cinema full reset ──
+  // â”€â”€ Cinema full reset â”€â”€
   const handleCinemaReset = useCallback(() => {
     setCinemaStep('desk');
     setCinemaVision('');
@@ -2429,7 +2429,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
-  // ── Storyboard: regenerate a single scene ──
+  // â”€â”€ Storyboard: regenerate a single scene â”€â”€
   const handleRegenScene = useCallback(async (sceneNum: number) => {
     if (!user || regenSceneNum !== null) return;
     setRegenSceneNum(sceneNum);
@@ -2461,17 +2461,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
             ? { ...s, text: newScene.text, english_prompt: newScene.english_prompt || newScene.text }
             : s
           ));
-          toast.success(language === 'ar' ? `تم إعادة كتابة المشهد ${sceneNum}` : `Scene ${sceneNum} rewritten!`);
+          toast.success(language === 'ar' ? `ØªÙ… Ø¥Ø¹Ø§Ø¯Ø© ÙƒØªØ§Ø¨Ø© Ø§Ù„Ù…Ø´Ù‡Ø¯ ${sceneNum}` : `Scene ${sceneNum} rewritten!`);
         }
       } else throw new Error(result?.error || 'No scene returned');
     } catch (err: any) {
-      toast.error(language === 'ar' ? 'فشل إعادة الكتابة' : 'Regen failed — please try again');
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„ÙƒØªØ§Ø¨Ø©' : 'Regen failed â€” please try again');
     } finally {
       setRegenSceneNum(null);
     }
   }, [user, regenSceneNum, cinemaSubject, language, brandAnchor, anchorTag]);
 
-  // ── Cinema AMP ⚡️ — enhance cinemaSubject prompt with gpt-4o-mini ──
+  // â”€â”€ Cinema AMP âš¡ï¸ â€” enhance cinemaSubject prompt with gpt-4o-mini â”€â”€
   const handleCinemaAmp = useCallback(async () => {
     const raw = cinemaSubject.trim();
     if (!raw || isCinemaAmping || !user) return;
@@ -2511,18 +2511,18 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       if (result?.ok && result.enhanced) {
         setCinemaAmpOriginal(raw);
         setCinemaAmpEnhanced(result.enhanced.slice(0, 1200));
-        toast.success(language === 'ar' ? '⚡️ تمت إضافة نسخة محسّنة — اختر ما تريد استخدامه' : '⚡️ Enhanced version ready — choose which version to use');
+        toast.success(language === 'ar' ? 'âš¡ï¸ ØªÙ…Øª Ø¥Ø¶Ø§ÙØ© Ù†Ø³Ø®Ø© Ù…Ø­Ø³Ù‘Ù†Ø© â€” Ø§Ø®ØªØ± Ù…Ø§ ØªØ±ÙŠØ¯ Ø§Ø³ØªØ®Ø¯Ø§Ù…Ù‡' : 'âš¡ï¸ Enhanced version ready â€” choose which version to use');
       } else {
         throw new Error(result?.error || 'No result');
       }
     } catch (err: any) {
-      toast.error(language === 'ar' ? 'فشل التحسين' : 'AMP failed: ' + err.message);
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„ØªØ­Ø³ÙŠÙ†' : 'AMP failed: ' + err.message);
     } finally {
       setIsCinemaAmping(false);
     }
   }, [cinemaSubject, isCinemaAmping, user, language, cinemaVibe, cinemaVibeCustom, cinemaCharacters, cinemaRelationship, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaCTA, cinemaCTACustom, cinemaSceneCount, presetSceneDurations, selectedSubFormat]);
 
-  // ── Storyboard: save inline scene text edit ──
+  // â”€â”€ Storyboard: save inline scene text edit â”€â”€
   const handleSaveSceneEdit = useCallback((sceneNum: number, newText: string) => {
     setCinemaScenes(prev => prev.map(s => s.scene === sceneNum ? { ...s, text: newText } : s));
     setEditingSceneNum(null);
@@ -2550,18 +2550,18 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       if (dbError) throw dbError;
 
       setIsCinemaSaved(true);
-      toast.success(language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!');
+      toast.success(language === 'ar' ? 'ØªÙ… Ø§Ù„Ø­ÙØ¸ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ!' : 'Saved to My Videos!');
       await loadLatestVideo();
       if (onSaveSuccess) setTimeout(() => onSaveSuccess(), 1000);
     } catch (e: any) {
       console.error('Cinema save failed:', e);
-      toast.error(language === 'ar' ? 'فشل الحفظ — استخدم زر التنزيل أدناه' : 'Save failed — use the Download button below');
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸ â€” Ø§Ø³ØªØ®Ø¯Ù… Ø²Ø± Ø§Ù„ØªÙ†Ø²ÙŠÙ„ Ø£Ø¯Ù†Ø§Ù‡' : 'Save failed â€” use the Download button below');
     } finally {
       setIsCinemaSaving(false);
     }
   };
 
-  // ── Casting: regenerate a single scene image with optional note and master style ──
+  // â”€â”€ Casting: regenerate a single scene image with optional note and master style â”€â”€
   const handleCastingRegenScene = useCallback(async (sceneIdx: number, note: string, useMaster: boolean, sceneAnchor: string | null = null, promptOverride: string | null = null) => {
     if (!user) return;
     const { data: sessionData } = await supabase.auth.getSession();
@@ -2600,13 +2600,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       const finalPrompt = note ? `${lockedPrompt}. Director note: ${note}` : lockedPrompt;
 
       // Retry strategy: if this is a quick-retry (no note, no explicit sceneAnchor upload),
-      // always use T2I for maximum reliability — the original I2I may have been the failure cause.
+      // always use T2I for maximum reliability â€” the original I2I may have been the failure cause.
       // Only use I2I when the user explicitly uploaded a scene-specific anchor image.
       const forceT2I = !note && !sceneAnchor;
 
       let result: { url: string; options: string[] };
       if (!forceT2I && sceneAnchor) {
-        // User explicitly uploaded a scene anchor — use I2I with it
+        // User explicitly uploaded a scene anchor â€” use I2I with it
         const created = await regenArtistCall({
           mode: 'i2i_create',
           prompt: finalPrompt,
@@ -2616,7 +2616,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         });
         result = await regenPollTask(created.task_id);
       } else {
-        // T2I — reliable fresh generation with a new prompt
+        // T2I â€” reliable fresh generation with a new prompt
         const created = await regenArtistCall({
           mode: 't2i_create',
           prompt: finalPrompt,
@@ -2634,11 +2634,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         setSceneImageOptions(prev => { const n = [...prev]; n[sceneIdx] = null; return n; });
       }
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'done'; return n; });
-      toast.success(language === 'ar' ? `تم إعادة توليد المشهد ${sceneIdx + 1}` : `Scene ${sceneIdx + 1} regenerated!`);
+      toast.success(language === 'ar' ? `ØªÙ… Ø¥Ø¹Ø§Ø¯Ø© ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ù…Ø´Ù‡Ø¯ ${sceneIdx + 1}` : `Scene ${sceneIdx + 1} regenerated!`);
     } catch (err: any) {
       console.error('[cinema] regen scene failed:', sceneIdx, err?.message || err);
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'error'; return n; });
-      toast.error(language === 'ar' ? 'فشل إعادة التوليد' : 'Regen failed — please try again');
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„ØªÙˆÙ„ÙŠØ¯' : 'Regen failed â€” please try again');
     } finally {
       setIsRegenningScene(false);
       setCastingRegenModal(null);
@@ -2662,7 +2662,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setBrandAnchor(urlData.publicUrl);
     } catch (error) {
       console.error('[cinema] simple reference upload failed:', error);
-      toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Image upload failed');
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø©' : 'Image upload failed');
     } finally {
       setIsUploadingBrand(false);
     }
@@ -2690,7 +2690,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         return updated;
       });
     } catch (e: any) {
-      toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Image upload failed');
+      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø©' : 'Image upload failed');
       console.error('[cinema] ref upload failed:', e);
     } finally {
       setIsUploadingRef(false);
@@ -2726,7 +2726,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         });
       } else {
         await navigator.clipboard.writeText(generatedVideoUrl);
-        toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied');
+        toast.success(language === 'ar' ? 'ØªÙ… Ù†Ø³Ø® Ø§Ù„Ø±Ø§Ø¨Ø·' : 'Link copied');
       }
     } catch (e) {
       console.error('Share failed:', e);
@@ -2772,10 +2772,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
   // Map generationMode to trial feature key/limit/label
   const videoTrialMap: Record<string, { key: string; limit: number; en: string; ar: string }> = {
-    'image_to_video':    { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'فيديو الذكاء' },
-    'text_to_video':     { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'فيديو الذكاء' },
-    '2images_to_video':  { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'فيديو الذكاء' },
-    'cinema':            { key: 'cinema', limit: 1, en: 'Cinema',            ar: 'سينما' },
+    'image_to_video':    { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'ÙÙŠØ¯ÙŠÙˆ Ø§Ù„Ø°ÙƒØ§Ø¡' },
+    'text_to_video':     { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'ÙÙŠØ¯ÙŠÙˆ Ø§Ù„Ø°ÙƒØ§Ø¡' },
+    '2images_to_video':  { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'ÙÙŠØ¯ÙŠÙˆ Ø§Ù„Ø°ÙƒØ§Ø¡' },
+    'cinema':            { key: 'cinema', limit: 1, en: 'Cinema',            ar: 'Ø³ÙŠÙ†Ù…Ø§' },
   };
   const activeVideoTrial = videoTrialMap[generationMode] || videoTrialMap['image_to_video'];
 
@@ -2785,20 +2785,20 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         <Volume2 className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,100%,65%)]" />
         <div>
           <p className="text-xs font-semibold text-foreground">
-            {language === 'ar' ? 'جودة الحوار' : 'Dialogue quality'}
+            {language === 'ar' ? 'Ø¬ÙˆØ¯Ø© Ø§Ù„Ø­ÙˆØ§Ø±' : 'Dialogue quality'}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground/90">
             {textVideoDialogueMode === 'english'
               ? (language === 'ar'
-                  ? 'تم اختيار الحوار الإنجليزي افتراضيًا لأفضل وضوح في الكلام واللهجات.'
+                  ? 'ØªÙ… Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ø­ÙˆØ§Ø± Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠ Ø§ÙØªØ±Ø§Ø¶ÙŠÙ‹Ø§ Ù„Ø£ÙØ¶Ù„ ÙˆØ¶ÙˆØ­ ÙÙŠ Ø§Ù„ÙƒÙ„Ø§Ù… ÙˆØ§Ù„Ù„Ù‡Ø¬Ø§Øª.'
                   : 'English dialogue is selected by default for clearer speech and accents.')
               : (language === 'ar'
-                  ? 'استخدم Gemini عندما تكون جودة الحوار العربي هي الأهم.'
+                  ? 'Ø§Ø³ØªØ®Ø¯Ù… Gemini Ø¹Ù†Ø¯Ù…Ø§ ØªÙƒÙˆÙ† Ø¬ÙˆØ¯Ø© Ø§Ù„Ø­ÙˆØ§Ø± Ø§Ù„Ø¹Ø±Ø¨ÙŠ Ù‡ÙŠ Ø§Ù„Ø£Ù‡Ù….'
                   : 'Use Gemini when Arabic dialogue quality matters most.')}
           </p>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label={language === 'ar' ? 'اختيار جودة الحوار' : 'Dialogue quality choice'}>
+      <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label={language === 'ar' ? 'Ø§Ø®ØªÙŠØ§Ø± Ø¬ÙˆØ¯Ø© Ø§Ù„Ø­ÙˆØ§Ø±' : 'Dialogue quality choice'}>
         <button
           type="button"
           onClick={() => handleTextVideoDialogueModeChange('arabic')}
@@ -2810,7 +2810,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {language === 'ar' ? 'أفضل حوار عربي' : 'Best Arabic dialogue'}
+          {language === 'ar' ? 'Ø£ÙØ¶Ù„ Ø­ÙˆØ§Ø± Ø¹Ø±Ø¨ÙŠ' : 'Best Arabic dialogue'}
         </button>
         <button
           type="button"
@@ -2823,7 +2823,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {language === 'ar' ? 'الحوار الإنجليزي واللهجات' : 'English dialogue & accents'}
+          {language === 'ar' ? 'Ø§Ù„Ø­ÙˆØ§Ø± Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠ ÙˆØ§Ù„Ù„Ù‡Ø¬Ø§Øª' : 'English dialogue & accents'}
         </button>
       </div>
     </div>
@@ -2840,11 +2840,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-foreground">
-              {language === 'ar' ? 'تحسين الجودة العربية' : 'Arabic quality boost'}
+              {language === 'ar' ? 'ØªØ­Ø³ÙŠÙ† Ø§Ù„Ø¬ÙˆØ¯Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©' : 'Arabic quality boost'}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground/90">
               {language === 'ar'
-                ? 'يحسّن النصوص والنتائج المرئية بالعربية. عند تفعيله يتم إيقاف حماية الأطفال تلقائيًا.'
+                ? 'ÙŠØ­Ø³Ù‘Ù† Ø§Ù„Ù†ØµÙˆØµ ÙˆØ§Ù„Ù†ØªØ§Ø¦Ø¬ Ø§Ù„Ù…Ø±Ø¦ÙŠØ© Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©. Ø¹Ù†Ø¯ ØªÙØ¹ÙŠÙ„Ù‡ ÙŠØªÙ… Ø¥ÙŠÙ‚Ø§Ù Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„ ØªÙ„Ù‚Ø§Ø¦ÙŠÙ‹Ø§.'
                 : 'Improves Arabic text and visual results. Turning it on switches off Child protection automatically.'}
             </p>
           </div>
@@ -2878,11 +2878,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
             <Eye className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,100%,65%)]" />
             <div>
               <p className="text-xs font-semibold text-foreground">
-                {language === 'ar' ? 'حماية الأطفال' : 'Child protection'}
+                {language === 'ar' ? 'Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„' : 'Child protection'}
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground/90">
                 {language === 'ar'
-                  ? 'يُفعّل حماية الأطفال. عند تشغيله يتم إيقاف تحسين الجودة العربية تلقائيًا.'
+                  ? 'ÙŠÙÙØ¹Ù‘Ù„ Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„. Ø¹Ù†Ø¯ ØªØ´ØºÙŠÙ„Ù‡ ÙŠØªÙ… Ø¥ÙŠÙ‚Ø§Ù ØªØ­Ø³ÙŠÙ† Ø§Ù„Ø¬ÙˆØ¯Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© ØªÙ„Ù‚Ø§Ø¦ÙŠÙ‹Ø§.'
                   : 'Protects images with children. Turning it on switches off the Arabic quality boost automatically.'}
               </p>
             </div>
@@ -2901,7 +2901,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         </div>
         {highlightKidsModeToggle && !isKidsContentMode && (
           <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
-            {language === 'ar' ? 'أبقِ حماية الأطفال مفعّلة ثم أعد المحاولة.' : 'Keep Child protection ON and try again.'}
+            {language === 'ar' ? 'Ø£Ø¨Ù‚Ù Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„ Ù…ÙØ¹Ù‘Ù„Ø© Ø«Ù… Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©.' : 'Keep Child protection ON and try again.'}
           </p>
         )}
       </button>
@@ -2909,7 +2909,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       {isKidsContentMode && (
         <p className="rounded-lg border border-[hsl(210,100%,65%)]/25 bg-[hsl(210,100%,65%)]/10 px-3 py-2 text-[11px] font-medium text-[hsl(210,100%,65%)]">
           {language === 'ar'
-            ? 'حماية الأطفال مفعّلة افتراضيًا. عند تشغيل تحسين الجودة العربية سيتم إيقافها تلقائيًا.'
+            ? 'Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„ Ù…ÙØ¹Ù‘Ù„Ø© Ø§ÙØªØ±Ø§Ø¶ÙŠÙ‹Ø§. Ø¹Ù†Ø¯ ØªØ´ØºÙŠÙ„ ØªØ­Ø³ÙŠÙ† Ø§Ù„Ø¬ÙˆØ¯Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ø³ÙŠØªÙ… Ø¥ÙŠÙ‚Ø§ÙÙ‡Ø§ ØªÙ„Ù‚Ø§Ø¦ÙŠÙ‹Ø§.'
             : 'Child protection is ON by default. Turning on the Arabic quality boost switches it off automatically.'}
         </p>
       )}
@@ -2937,12 +2937,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               </div>
               <div>
                 <h2 className="text-lg font-bold bg-gradient-to-r from-[#060541] to-[hsl(210,100%,45%)] dark:from-white dark:to-[hsl(210,100%,75%)] bg-clip-text text-transparent">
-                  {language === 'ar' ? 'صانع الفيديو بالذكاء الاصطناعي' : 'AI Video Generator'}
+                  {language === 'ar' ? 'ØµØ§Ù†Ø¹ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ø¨Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ' : 'AI Video Generator'}
                 </h2>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* Duration selector — always rendered here because this branch
+              {/* Duration selector â€” always rendered here because this branch
                   already excluded Cinema mode at the outer wrapper. The
                   redundant inner `!== 'cinema'` check was a TS no-op (its
                   narrowing already proved the comparison always true). */}
@@ -2959,7 +2959,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '6 ث' : '6s'}
+                      {language === 'ar' ? '6 Ø«' : '6s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('8')}
@@ -2970,7 +2970,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '8 ث' : '8s'}
+                      {language === 'ar' ? '8 Ø«' : '8s'}
                     </button>
                   </>
                 ) : generationMode === 'text_to_video' ? (
@@ -2985,7 +2985,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             : 'text-muted-foreground hover:text-primary'
                         }`}
                       >
-                        {language === 'ar' ? '5 ث' : '5s'}
+                        {language === 'ar' ? '5 Ø«' : '5s'}
                       </button>
                       <button
                         onClick={() => !isGenerating && setDuration('10')}
@@ -2996,7 +2996,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             : 'text-muted-foreground hover:text-primary'
                         }`}
                       >
-                        {language === 'ar' ? '10 ث' : '10s'}
+                        {language === 'ar' ? '10 Ø«' : '10s'}
                       </button>
                     </>
                   ) : (
@@ -3010,7 +3010,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             : 'text-muted-foreground hover:text-primary'
                         }`}
                       >
-                        {language === 'ar' ? '4 ث' : '4s'}
+                        {language === 'ar' ? '4 Ø«' : '4s'}
                       </button>
                       <button
                         onClick={() => !isGenerating && setDuration('6')}
@@ -3021,7 +3021,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             : 'text-muted-foreground hover:text-primary'
                         }`}
                       >
-                        {language === 'ar' ? '6 ث' : '6s'}
+                        {language === 'ar' ? '6 Ø«' : '6s'}
                       </button>
                       <button
                         onClick={() => !isGenerating && setDuration('8')}
@@ -3032,7 +3032,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             : 'text-muted-foreground hover:text-primary'
                         }`}
                       >
-                        {language === 'ar' ? '8 ث' : '8s'}
+                        {language === 'ar' ? '8 Ø«' : '8s'}
                       </button>
                     </>
                   )
@@ -3047,7 +3047,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '4 ث' : '4s'}
+                      {language === 'ar' ? '4 Ø«' : '4s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('6')}
@@ -3058,7 +3058,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '6 ث' : '6s'}
+                      {language === 'ar' ? '6 Ø«' : '6s'}
                     </button>
                     {resolution === '480p' && (
                       <>
@@ -3071,7 +3071,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               : 'text-muted-foreground hover:text-primary'
                           }`}
                         >
-                          {language === 'ar' ? '8 ث' : '8s'}
+                          {language === 'ar' ? '8 Ø«' : '8s'}
                         </button>
                         <button
                           onClick={() => !isGenerating && setDuration('10')}
@@ -3082,7 +3082,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               : 'text-muted-foreground hover:text-primary'
                           }`}
                         >
-                          {language === 'ar' ? '10 ث' : '10s'}
+                          {language === 'ar' ? '10 Ø«' : '10s'}
                         </button>
                       </>
                     )}
@@ -3098,7 +3098,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '4 ث' : '4s'}
+                      {language === 'ar' ? '4 Ø«' : '4s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('6')}
@@ -3109,7 +3109,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '6 ث' : '6s'}
+                      {language === 'ar' ? '6 Ø«' : '6s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('8')}
@@ -3120,7 +3120,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '8 ث' : '8s'}
+                      {language === 'ar' ? '8 Ø«' : '8s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('10')}
@@ -3131,7 +3131,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '10 ث' : '10s'}
+                      {language === 'ar' ? '10 Ø«' : '10s'}
                     </button>
                   </>
                 )}
@@ -3154,7 +3154,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               isGenerating ? 'opacity-80' : ''
             } bg-[linear-gradient(135deg,rgba(252,254,253,0.98),rgba(233,206,176,0.34))] border-[#060541]/10 shadow-[0_10px_28px_rgba(6,5,65,0.10)] dark:bg-[linear-gradient(135deg,rgba(12,15,20,0.96),rgba(30,34,42,0.94))] dark:border-white/10 dark:shadow-[0_18px_42px_rgba(0,0,0,0.42)]`}
             role="group"
-            aria-label={language === 'ar' ? 'وضع إنشاء الفيديو' : 'Video generation mode'}
+            aria-label={language === 'ar' ? 'ÙˆØ¶Ø¹ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ' : 'Video generation mode'}
           >
             <button
               type="button"
@@ -3174,7 +3174,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               }}
             >
               <ImageIcon className="h-3.5 w-3.5" />
-              <span>{language === 'ar' ? 'صورة ← فيديو' : 'Image → Video'}</span>
+              <span>{language === 'ar' ? 'ØµÙˆØ±Ø© â† ÙÙŠØ¯ÙŠÙˆ' : 'Image â†’ Video'}</span>
             </button>
 
             <button
@@ -3195,7 +3195,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               }}
             >
               <Type className="h-3.5 w-3.5" />
-              <span>{language === 'ar' ? 'نص ← فيديو' : 'Text → Video'}</span>
+              <span>{language === 'ar' ? 'Ù†Øµ â† ÙÙŠØ¯ÙŠÙˆ' : 'Text â†’ Video'}</span>
             </button>
 
             <button
@@ -3216,7 +3216,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               }}
             >
               <Images className="h-3.5 w-3.5" />
-              <span>{language === 'ar' ? 'صورتان ← فيديو' : '2Images → Video'}</span>
+              <span>{language === 'ar' ? 'ØµÙˆØ±ØªØ§Ù† â† ÙÙŠØ¯ÙŠÙˆ' : '2Images â†’ Video'}</span>
             </button>
 
             <button
@@ -3239,7 +3239,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               }}
             >
               <Film className="h-3.5 w-3.5" />
-              <span>{language === 'ar' ? 'إعلانات الفيديو' : 'Video Ads'}</span>
+              <span>{language === 'ar' ? 'Ø¥Ø¹Ù„Ø§Ù†Ø§Øª Ø§Ù„ÙÙŠØ¯ÙŠÙˆ' : 'Video Ads'}</span>
               {isVideoAdsLocked && <Lock className="h-3 w-3 ml-0.5 opacity-60" />}
             </button>
           </div>
@@ -3262,10 +3262,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                         <div className="text-center px-3">
                           <p className="font-semibold text-sm">
-                            {language === 'ar' ? 'رفع صورة' : 'Upload Image'}
+                            {language === 'ar' ? 'Ø±ÙØ¹ ØµÙˆØ±Ø©' : 'Upload Image'}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {language === 'ar' ? 'PNG, JPG • 10MB' : 'PNG, JPG • 10MB'}
+                            {language === 'ar' ? 'PNG, JPG â€¢ 10MB' : 'PNG, JPG â€¢ 10MB'}
                           </p>
                         </div>
                       </div>
@@ -3280,7 +3280,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           <GalleryHorizontalEnd className="h-4 w-4 text-white" />
                         </div>
                         <p className="font-semibold text-sm">
-                          {language === 'ar' ? 'اختر من المحفوظات' : 'Pick from Saved'}
+                          {language === 'ar' ? 'Ø§Ø®ØªØ± Ù…Ù† Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø§Øª' : 'Pick from Saved'}
                         </p>
                       </div>
                     </div>
@@ -3314,7 +3314,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isGenerating}
                         >
-                          {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                          {language === 'ar' ? 'ØªØºÙŠÙŠØ± Ø§Ù„ØµÙˆØ±Ø©' : 'Change Image'}
                         </Button>
                       </div>
                     </div>
@@ -3328,7 +3328,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   accept="image/*"
                   className="hidden"
                   onChange={handleImageSelect}
-                  aria-label={language === 'ar' ? 'اختر صورة' : 'Select image'}
+                  aria-label={language === 'ar' ? 'Ø§Ø®ØªØ± ØµÙˆØ±Ø©' : 'Select image'}
                 />
               </div>
             )}
@@ -3340,7 +3340,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 <div className="relative">
                   <div className="mb-1.5 flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(210,100%,65%)]/20 to-[hsl(180,85%,60%)]/20 border border-[hsl(210,100%,65%)]/30 text-[hsl(210,100%,65%)] truncate max-w-full">
-                      <span>▶</span> <span className="truncate">{language === 'ar' ? 'البداية' : 'Start'}</span>
+                      <span>â–¶</span> <span className="truncate">{language === 'ar' ? 'Ø§Ù„Ø¨Ø¯Ø§ÙŠØ©' : 'Start'}</span>
                     </span>
                   </div>
                   {!imagePreview ? (
@@ -3355,7 +3355,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           </div>
                           <div className="text-center px-1">
                             <p className="font-semibold text-[10px] sm:text-xs">
-                              {language === 'ar' ? 'صورة البداية' : 'Start Image'}
+                              {language === 'ar' ? 'ØµÙˆØ±Ø© Ø§Ù„Ø¨Ø¯Ø§ÙŠØ©' : 'Start Image'}
                             </p>
                             <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">PNG, JPG</p>
                           </div>
@@ -3370,7 +3370,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             <GalleryHorizontalEnd className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
                           </div>
                           <p className="font-semibold text-[10px] sm:text-xs">
-                            {language === 'ar' ? 'من المحفوظات' : 'From Saved'}
+                            {language === 'ar' ? 'Ù…Ù† Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø§Øª' : 'From Saved'}
                           </p>
                         </div>
                       </div>
@@ -3401,7 +3401,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isGenerating}
                         >
-                          {language === 'ar' ? 'تغيير' : 'Change'}
+                          {language === 'ar' ? 'ØªØºÙŠÙŠØ±' : 'Change'}
                         </Button>
                       </div>
                     </div>
@@ -3412,7 +3412,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageSelect}
-                    aria-label={language === 'ar' ? 'اختر الصورة الأولى' : 'Select first image'}
+                    aria-label={language === 'ar' ? 'Ø§Ø®ØªØ± Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ø£ÙˆÙ„Ù‰' : 'Select first image'}
                   />
                 </div>
 
@@ -3420,7 +3420,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 <div className="relative">
                   <div className="mb-1.5 flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[hsl(280,70%,65%)]/20 to-[hsl(320,75%,70%)]/20 border border-[hsl(280,70%,65%)]/30 text-[hsl(280,70%,65%)] truncate max-w-full">
-                      <span>⏹</span> <span className="truncate">{language === 'ar' ? 'النهاية' : 'End'}</span>
+                      <span>â¹</span> <span className="truncate">{language === 'ar' ? 'Ø§Ù„Ù†Ù‡Ø§ÙŠØ©' : 'End'}</span>
                     </span>
                   </div>
                   {!imagePreview2 ? (
@@ -3435,7 +3435,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           </div>
                           <div className="text-center px-1">
                             <p className="font-semibold text-[10px] sm:text-xs">
-                              {language === 'ar' ? 'صورة النهاية' : 'End Image'}
+                              {language === 'ar' ? 'ØµÙˆØ±Ø© Ø§Ù„Ù†Ù‡Ø§ÙŠØ©' : 'End Image'}
                             </p>
                             <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">PNG, JPG</p>
                           </div>
@@ -3450,7 +3450,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             <GalleryHorizontalEnd className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
                           </div>
                           <p className="font-semibold text-[10px] sm:text-xs">
-                            {language === 'ar' ? 'من المحفوظات' : 'From Saved'}
+                            {language === 'ar' ? 'Ù…Ù† Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø§Øª' : 'From Saved'}
                           </p>
                         </div>
                       </div>
@@ -3481,7 +3481,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           onClick={() => fileInputRef2.current?.click()}
                           disabled={isGenerating}
                         >
-                          {language === 'ar' ? 'تغيير' : 'Change'}
+                          {language === 'ar' ? 'ØªØºÙŠÙŠØ±' : 'Change'}
                         </Button>
                       </div>
                     </div>
@@ -3492,7 +3492,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageSelect2}
-                    aria-label={language === 'ar' ? 'اختر الصورة الثانية' : 'Select second image'}
+                    aria-label={language === 'ar' ? 'Ø§Ø®ØªØ± Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ø«Ø§Ù†ÙŠØ©' : 'Select second image'}
                   />
                 </div>
               </div>
@@ -3511,7 +3511,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   return (
                     <div className="flex flex-col gap-3 max-w-xl mx-auto w-full py-3">
 
-                      {/* ── 1. PROMPT ── */}
+                      {/* â”€â”€ 1. PROMPT â”€â”€ */}
                       <div className="rounded-2xl overflow-hidden" style={{border:`1px solid ${hasIdea ? 'rgba(226,199,168,0.55)' : simpleBorder}`,boxShadow: hasIdea ? '0 0 0 3px rgba(226,199,168,0.08)' : 'none',transition:'box-shadow 0.2s,border-color 0.2s'}}>
                         <textarea
                           value={cinemaSubject}
@@ -3520,17 +3520,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           autoFocus
                           rows={4}
                           maxLength={500}
-                          placeholder={language === 'ar' ? 'مثال: شخصية صغيرة تكتشف مدينة مضيئة تحت البحر...' : 'Example: a small character discovers a glowing city under the ocean...'}
+                          placeholder={language === 'ar' ? 'Ù…Ø«Ø§Ù„: Ø´Ø®ØµÙŠØ© ØµØºÙŠØ±Ø© ØªÙƒØªØ´Ù Ù…Ø¯ÙŠÙ†Ø© Ù…Ø¶ÙŠØ¦Ø© ØªØ­Øª Ø§Ù„Ø¨Ø­Ø±...' : 'Example: a small character discovers a glowing city under the ocean...'}
                           className="w-full resize-none px-4 pt-4 pb-2 text-base leading-7 outline-none"
                           style={{background:simpleIsDark ? 'rgba(12,15,20,0.85)' : '#fff',color:simpleText}}
                         />
                         <div className="flex justify-between px-4 pb-3">
-                          <span className="text-[10px]" style={{color:simpleMuted}}>{language === 'ar' ? 'قصة، إعلان، منتج — لا تحتاج إلى كتابة مشاهد.' : 'Story, ad, product — no scene prompts needed.'}</span>
+                          <span className="text-[10px]" style={{color:simpleMuted}}>{language === 'ar' ? 'Ù‚ØµØ©ØŒ Ø¥Ø¹Ù„Ø§Ù†ØŒ Ù…Ù†ØªØ¬ â€” Ù„Ø§ ØªØ­ØªØ§Ø¬ Ø¥Ù„Ù‰ ÙƒØªØ§Ø¨Ø© Ù…Ø´Ø§Ù‡Ø¯.' : 'Story, ad, product â€” no scene prompts needed.'}</span>
                           <span className="text-[10px] font-semibold" style={{color:simpleMuted}}>{cinemaSubject.length}/500</span>
                         </div>
                       </div>
 
-                      {/* ── 2. SCENE BUILDER (collapsible) ── */}
+                      {/* â”€â”€ 2. SCENE BUILDER (collapsible) â”€â”€ */}
                       <div className="rounded-2xl overflow-hidden" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${cinemaSceneBuilderOpen ? (simpleIsDark ? 'rgba(226,199,168,0.3)' : 'rgba(226,199,168,0.55)') : simpleBorder}`}}>
                         <button
                           type="button"
@@ -3541,20 +3541,20 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             <Film className="h-4 w-4 flex-shrink-0" style={{color:'#C5A47E'}} />
                             <span className="text-sm font-semibold" style={{color:simpleText}}>
                               {presetSceneDurations === null
-                                ? (language === 'ar' ? 'مشاهد الفيلم — تلقائي' : 'Film scenes — Auto')
-                                : `${presetSceneDurations.length} ${language === 'ar' ? 'مشاهد' : 'scenes'} · ${presetSceneDurations.reduce((s,d)=>s+d,0)}s`
+                                ? (language === 'ar' ? 'Ù…Ø´Ø§Ù‡Ø¯ Ø§Ù„ÙÙŠÙ„Ù… â€” ØªÙ„Ù‚Ø§Ø¦ÙŠ' : 'Film scenes â€” Auto')
+                                : `${presetSceneDurations.length} ${language === 'ar' ? 'Ù…Ø´Ø§Ù‡Ø¯' : 'scenes'} Â· ${presetSceneDurations.reduce((s,d)=>s+d,0)}s`
                               }
                             </span>
                             {presetSceneDurations !== null && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{background:'rgba(226,199,168,0.15)',color:'#C5A47E'}}>custom</span>
                             )}
                           </div>
-                          <span className="text-xs" style={{color:simpleMuted,transform:cinemaSceneBuilderOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform 0.2s'}}>▼</span>
+                          <span className="text-xs" style={{color:simpleMuted,transform:cinemaSceneBuilderOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform 0.2s'}}>â–¼</span>
                         </button>
                         {cinemaSceneBuilderOpen && (
                           <div className="px-4 pb-4 flex flex-col gap-3" style={{borderTop:`1px solid ${simpleBorder}`}}>
                             <div className="pt-3 flex flex-col gap-2">
-                            {/* ── Scene Builder content ── */}
+                            {/* â”€â”€ Scene Builder content â”€â”€ */}
                             {presetSceneDurations === null ? (
                               <button
                                 type="button"
@@ -3563,10 +3563,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 style={{background:'linear-gradient(135deg,rgba(226,199,168,0.08),rgba(197,164,126,0.04))',color:simpleText,border:'1px solid rgba(226,199,168,0.2)',boxShadow:'0 2px 12px rgba(226,199,168,0.08)'}}
                               >
                                 <div className="flex items-center gap-2">
-                                  <span style={{color:'#E2C7A8',fontSize:'16px'}}>✦</span>
-                                  <span style={{color:simpleText}}>{language === 'ar' ? 'تلقائي — يقرر المخرج' : 'Auto — Director decides'}</span>
+                                  <span style={{color:'#E2C7A8',fontSize:'16px'}}>âœ¦</span>
+                                  <span style={{color:simpleText}}>{language === 'ar' ? 'ØªÙ„Ù‚Ø§Ø¦ÙŠ â€” ÙŠÙ‚Ø±Ø± Ø§Ù„Ù…Ø®Ø±Ø¬' : 'Auto â€” Director decides'}</span>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(226,199,168,0.1)',color:'rgba(226,199,168,0.6)'}}>{language === 'ar' ? 'خصّص' : 'customize'}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{background:'rgba(226,199,168,0.1)',color:'rgba(226,199,168,0.6)'}}>{language === 'ar' ? 'Ø®ØµÙ‘Øµ' : 'customize'}</span>
                               </button>
                             ) : (
                               <div className="flex flex-col gap-3">
@@ -3584,11 +3584,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                             onClick={() => setPresetSceneDurations(prev => prev!.filter((_, i) => i !== idx))}
                                             className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold leading-none transition-all active:scale-90"
                                             style={{background:'rgba(248,113,113,0.85)',color:'#fff'}}
-                                          >×</button>
+                                          >Ã—</button>
                                         )}
                                         {/* Scene label */}
                                         <p className="text-[9px] font-bold uppercase tracking-widest" style={{color:'rgba(226,199,168,0.45)'}}>
-                                          {language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}
+                                          {language === 'ar' ? `Ù…Ø´Ù‡Ø¯ ${idx + 1}` : `Scene ${idx + 1}`}
                                         </p>
                                         {/* 6s / 10s toggle */}
                                         <div className="flex rounded-xl overflow-hidden" style={{background:'rgba(0,0,0,0.35)',padding:'2px',gap:'2px'}}>
@@ -3623,7 +3623,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       style={{border:'1.5px dashed rgba(226,199,168,0.22)',background:'transparent',color:'rgba(226,199,168,0.4)',minHeight:'84px'}}
                                     >
                                       <span className="text-2xl font-extralight leading-none">+</span>
-                                      <span className="text-[9px] font-semibold uppercase tracking-wider">{language === 'ar' ? 'مشهد' : 'scene'}</span>
+                                      <span className="text-[9px] font-semibold uppercase tracking-wider">{language === 'ar' ? 'Ù…Ø´Ù‡Ø¯' : 'scene'}</span>
                                     </button>
                                   )}
                                 </div>
@@ -3635,7 +3635,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                   return (
                                     <div className="flex flex-col gap-1.5">
                                       <div className="flex justify-between items-center text-[10px]">
-                                        <span style={{color:'rgba(255,255,255,0.35)'}}>{presetSceneDurations.length} {language === 'ar' ? 'مشاهد' : 'scenes'}</span>
+                                        <span style={{color:'rgba(255,255,255,0.35)'}}>{presetSceneDurations.length} {language === 'ar' ? 'Ù…Ø´Ø§Ù‡Ø¯' : 'scenes'}</span>
                                         <span className="font-bold" style={{color: over ? '#f87171' : '#E2C7A8'}}>{total}s <span style={{opacity:0.5}}>/ {MAX_VIDEO_DURATION}s</span></span>
                                       </div>
                                       {/* Segmented bar */}
@@ -3652,43 +3652,43 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 <button type="button" onClick={() => setPresetSceneDurations(null)}
                                   className="self-start text-[10px] font-semibold transition-opacity"
                                   style={{color:'rgba(226,199,168,0.4)'}}>
-                                  {language === 'ar' ? '← تلقائي' : '← Auto'}
+                                  {language === 'ar' ? 'â† ØªÙ„Ù‚Ø§Ø¦ÙŠ' : 'â† Auto'}
                                 </button>
                               </div>
                             )}
                             {/* Seed */}
                             <label className="flex flex-col gap-1 text-[10px] font-semibold" style={{color:simpleMuted}}>
-                              {language === 'ar' ? 'Seed رقمي (اختياري)' : 'Numeric seed (optional)'}
-                              <input value={cinemaSeed} onChange={(e) => setCinemaSeed(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))} inputMode="numeric" placeholder={language === 'ar' ? 'تلقائي' : 'Auto'} className="rounded-xl px-3 py-2 text-xs outline-none" style={{background:simpleIsDark ? 'rgba(12,15,20,0.75)' : 'rgba(255,255,255,0.8)',color:simpleText,border:`1px solid ${simpleBorder}`}} />
+                              {language === 'ar' ? 'Seed Ø±Ù‚Ù…ÙŠ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)' : 'Numeric seed (optional)'}
+                              <input value={cinemaSeed} onChange={(e) => setCinemaSeed(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))} inputMode="numeric" placeholder={language === 'ar' ? 'ØªÙ„Ù‚Ø§Ø¦ÙŠ' : 'Auto'} className="rounded-xl px-3 py-2 text-xs outline-none" style={{background:simpleIsDark ? 'rgba(12,15,20,0.75)' : 'rgba(255,255,255,0.8)',color:simpleText,border:`1px solid ${simpleBorder}`}} />
                             </label>
                           </div>
                         </div>
                       </div>
 
-                      {/* ── 3. AMP + REFERENCE IMAGE ── */}
+                      {/* â”€â”€ 3. AMP + REFERENCE IMAGE â”€â”€ */}
                       <div className="rounded-2xl p-3 space-y-3" style={{background:simpleIsDark ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.04)',border:`1px solid ${simpleBorder}`}}>
                         {/* AMP row */}
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-[11px]" style={{color:simpleMuted}}>
-                            {language === 'ar' ? 'AMP — يحسّن فكرتك دون حذف طلبك' : 'AMP — improves your idea without removing your request'}
+                            {language === 'ar' ? 'AMP â€” ÙŠØ­Ø³Ù‘Ù† ÙÙƒØ±ØªÙƒ Ø¯ÙˆÙ† Ø­Ø°Ù Ø·Ù„Ø¨Ùƒ' : 'AMP â€” improves your idea without removing your request'}
                           </span>
                           <button type="button" onClick={handleCinemaAmp} disabled={!hasIdea || isCinemaAmping || isDirecting}
                             className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold disabled:opacity-40 transition-all active:scale-95"
                             style={{background:'linear-gradient(135deg,rgba(139,92,246,0.35),rgba(217,70,239,0.3))',border:'1px solid rgba(196,181,253,0.5)',color:'#e9d5ff'}}>
                             <Wand2 className={`h-3.5 w-3.5 ${isCinemaAmping ? 'animate-spin' : ''}`} />
-                            {isCinemaAmping ? (language === 'ar' ? 'جاري...' : 'Amping...') : '✦ AMP'}
+                            {isCinemaAmping ? (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ...' : 'Amping...') : 'âœ¦ AMP'}
                           </button>
                         </div>
                         {cinemaAmpEnhanced && (
                           <div className="rounded-2xl p-3 space-y-2" style={{background:'rgba(139,92,246,0.08)',border:'1px solid rgba(196,181,253,0.35)'}}>
                             <div className="flex items-center justify-between gap-2">
-                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{color:'#ddd6fe'}}>{language === 'ar' ? 'النسخة المحسّنة' : 'Enhanced version'}</p>
-                              <button type="button" onClick={() => setCinemaAmpEnhanced('')} className="text-[10px] text-white/40">✕</button>
+                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{color:'#ddd6fe'}}>{language === 'ar' ? 'Ø§Ù„Ù†Ø³Ø®Ø© Ø§Ù„Ù…Ø­Ø³Ù‘Ù†Ø©' : 'Enhanced version'}</p>
+                              <button type="button" onClick={() => setCinemaAmpEnhanced('')} className="text-[10px] text-white/40">âœ•</button>
                             </div>
                             <textarea value={cinemaAmpEnhanced} onChange={(e) => setCinemaAmpEnhanced(e.target.value.slice(0, 1200))} rows={4} className="w-full resize-none rounded-xl px-3 py-2 text-xs leading-5 outline-none" style={{background:'rgba(12,15,20,0.55)',color:simpleText,border:'1px solid rgba(196,181,253,0.25)'}} />
                             <div className="grid grid-cols-2 gap-2">
-                              <button type="button" onClick={() => { setCinemaSubject(cinemaAmpOriginal || cinemaSubject); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-semibold" style={{background:simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)',color:simpleMuted}}>{language === 'ar' ? 'إبقاء فكرتي' : 'Keep my idea'}</button>
-                              <button type="button" onClick={() => { setCinemaSubject(cinemaAmpEnhanced); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-bold" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>{language === 'ar' ? 'استخدام المحسّنة' : 'Use enhanced'}</button>
+                              <button type="button" onClick={() => { setCinemaSubject(cinemaAmpOriginal || cinemaSubject); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-semibold" style={{background:simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)',color:simpleMuted}}>{language === 'ar' ? 'Ø¥Ø¨Ù‚Ø§Ø¡ ÙÙƒØ±ØªÙŠ' : 'Keep my idea'}</button>
+                              <button type="button" onClick={() => { setCinemaSubject(cinemaAmpEnhanced); setCinemaAmpEnhanced(''); }} className="py-2 rounded-xl text-[11px] font-bold" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>{language === 'ar' ? 'Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ù…Ø­Ø³Ù‘Ù†Ø©' : 'Use enhanced'}</button>
                             </div>
                           </div>
                         )}
@@ -3696,12 +3696,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         <div style={{height:'1px',background:simpleBorder}} />
                         {/* Reference image */}
                         <div>
-                          <p className="text-[11px] font-semibold mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'صورة مرجعية (اختياري) — شعار، منتج، شخصية' : 'Reference image (optional) — logo, product, character'}</p>
+                          <p className="text-[11px] font-semibold mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'ØµÙˆØ±Ø© Ù…Ø±Ø¬Ø¹ÙŠØ© (Ø§Ø®ØªÙŠØ§Ø±ÙŠ) â€” Ø´Ø¹Ø§Ø±ØŒ Ù…Ù†ØªØ¬ØŒ Ø´Ø®ØµÙŠØ©' : 'Reference image (optional) â€” logo, product, character'}</p>
                           <div className="flex items-center gap-3">
                             {brandAnchor ? (
                               <div className="relative flex-shrink-0">
                                 <img src={brandAnchor} alt="Reference" className="w-16 h-16 rounded-xl object-cover" style={{border:'1px solid rgba(226,199,168,0.55)'}} />
-                                <button type="button" onClick={() => setBrandAnchor(null)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(248,113,113,0.9)',color:'#fff'}}>×</button>
+                                <button type="button" onClick={() => setBrandAnchor(null)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(248,113,113,0.9)',color:'#fff'}}>Ã—</button>
                               </div>
                             ) : (
                               <label className="flex-shrink-0 w-16 h-16 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95" style={{background:simpleIsDark ? 'rgba(255,255,255,0.06)' : 'rgba(6,5,65,0.06)',border:'2px dashed rgba(226,199,168,0.4)'}}>
@@ -3713,13 +3713,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
                               style={{color:'#E2C7A8',background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.3)'}}>
                               <Images className="h-3.5 w-3.5 flex-shrink-0" />
-                              {language === 'ar' ? 'من المحفوظة' : 'Choose from saved'}
+                              {language === 'ar' ? 'Ù…Ù† Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø©' : 'Choose from saved'}
                             </button>
                           </div>
                           {brandAnchor && (
                             <div className="flex gap-2 mt-2 flex-wrap">
                               {(['logo','product','character','style'] as const).map((role) => {
-                                const labels: Record<string,{en:string;ar:string}> = {logo:{en:'Logo',ar:'شعار'},product:{en:'Product',ar:'منتج'},character:{en:'Character',ar:'شخصية'},style:{en:'Style',ar:'نمط'}};
+                                const labels: Record<string,{en:string;ar:string}> = {logo:{en:'Logo',ar:'Ø´Ø¹Ø§Ø±'},product:{en:'Product',ar:'Ù…Ù†ØªØ¬'},character:{en:'Character',ar:'Ø´Ø®ØµÙŠØ©'},style:{en:'Style',ar:'Ù†Ù…Ø·'}};
                                 return (
                                   <button key={role} type="button" onClick={() => setAnchorTag(role)}
                                     className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
@@ -3733,9 +3733,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                       </div>
 
-                      {/* ── 4. SCENE REFERENCES ── */}
+                      {/* â”€â”€ 4. SCENE REFERENCES â”€â”€ */}
                       <div className="rounded-2xl p-3 space-y-2" style={{background:simpleIsDark ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)',border:`1px solid ${simpleBorder}`}}>
-                        <p className="text-[11px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'مراجع المشاهد (اختياري)' : 'Scene references (optional)'}</p>
+                        <p className="text-[11px] font-semibold" style={{color:simpleMuted}}>{language === 'ar' ? 'Ù…Ø±Ø§Ø¬Ø¹ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)' : 'Scene references (optional)'}</p>
                         <div className="grid grid-cols-3 gap-2">
                           {Array.from({ length: 3 }, (_, idx) => {
                             const refUrl = cinemaReferenceImages[idx];
@@ -3743,16 +3743,16 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               <label key={idx} className="relative aspect-square rounded-xl overflow-hidden flex items-center justify-center cursor-pointer" style={{background:simpleIsDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,5,65,0.05)',border:`1px dashed ${refUrl ? 'rgba(226,199,168,0.55)' : simpleBorder}`}}>
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleCinemaRefUpload(file, idx, `scene${idx + 1}`); e.target.value = ''; }} />
                                 {refUrl ? <img src={refUrl} alt={`Scene ${idx + 1} reference`} className="w-full h-full object-cover" /> : <Upload className="h-4 w-4" style={{color:'#C5A47E'}} />}
-                                <span className="absolute bottom-1 left-1 right-1 rounded-md px-1 py-0.5 text-center text-[8px] font-bold" style={{background:simpleIsDark ? 'rgba(12,15,20,0.78)' : 'rgba(6,5,65,0.75)',color:'#E2C7A8'}}>{language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}</span>
+                                <span className="absolute bottom-1 left-1 right-1 rounded-md px-1 py-0.5 text-center text-[8px] font-bold" style={{background:simpleIsDark ? 'rgba(12,15,20,0.78)' : 'rgba(6,5,65,0.75)',color:'#E2C7A8'}}>{language === 'ar' ? `Ù…Ø´Ù‡Ø¯ ${idx + 1}` : `Scene ${idx + 1}`}</span>
                               </label>
                             );
                           })}
                         </div>
                       </div>
 
-                      {/* ── 5. VIDEO SHAPE ── */}
+                      {/* â”€â”€ 5. VIDEO SHAPE â”€â”€ */}
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'شكل الفيديو (اختياري)' : 'VIDEO SHAPE (OPTIONAL)'}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{color:simpleMuted}}>{language === 'ar' ? 'Ø´ÙƒÙ„ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)' : 'VIDEO SHAPE (OPTIONAL)'}</p>
                         <div className="grid grid-cols-3 gap-2">
                           {(['16:9','9:16','4:5'] as const).map((format) => (
                             <button key={format} type="button" onClick={() => setCinemaFormat(format)} className="py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
@@ -3773,730 +3773,15 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       {isDirecting ? (
                         <div className="flex flex-col items-center gap-3 py-5" style={{color:'#E2C7A8'}}>
                           <Loader2 className="h-7 w-7 animate-spin" />
-                          <p className="text-sm font-semibold">{language === 'ar' ? 'وكتي يبني فيديوك...' : 'Wakti is creating your video...'}</p>
-                          <p className="text-xs text-center" style={{color:simpleMuted}}>{language === 'ar' ? 'المخرج يختار القصة وعدد المشاهد تلقائياً.' : 'The Director is choosing the story structure and scene count automatically.'}</p>
+                          <p className="text-sm font-semibold">{language === 'ar' ? 'ÙˆÙƒØªÙŠ ÙŠØ¨Ù†ÙŠ ÙÙŠØ¯ÙŠÙˆÙƒ...' : 'Wakti is creating your video...'}</p>
+                          <p className="text-xs text-center" style={{color:simpleMuted}}>{language === 'ar' ? 'Ø§Ù„Ù…Ø®Ø±Ø¬ ÙŠØ®ØªØ§Ø± Ø§Ù„Ù‚ØµØ© ÙˆØ¹Ø¯Ø¯ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹.' : 'The Director is choosing the story structure and scene count automatically.'}</p>
                         </div>
                       ) : (
                         <button type="button" onClick={handleDirect} disabled={!hasIdea || isDirecting} className="w-full h-14 rounded-2xl text-base font-bold transition-all active:scale-[0.98] disabled:opacity-40" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E,#E2C7A8)',backgroundSize:'200% 100%',color:'#0c0f14',boxShadow:hasIdea ? '0 10px 35px rgba(226,199,168,0.35)' : 'none'}}>
-                          <Sparkles className="inline h-5 w-5 mr-2" />{language === 'ar' ? 'اصنع شيئاً مذهلاً' : 'CREATE SOMETHING AMAZING'}
+                          <Sparkles className="inline h-5 w-5 mr-2" />{language === 'ar' ? 'Ø§ØµÙ†Ø¹ Ø´ÙŠØ¦Ø§Ù‹ Ù…Ø°Ù‡Ù„Ø§Ù‹' : 'CREATE SOMETHING AMAZING'}
                         </button>
                       )}
                     </div>
-                  );
-                  // Multi-select → comma-separated string helpers
-                  const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
-                  const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
-                  const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
-                  const effectiveCTA = cinemaCTA.includes('Custom') ? cinemaCTACustom : cinemaCTA.filter(v => v !== 'Custom').join(', ');
-                  const effectiveCharacters = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
-                  const isDark = theme === 'dark';
-
-                  const f1 = cinemaSubject.trim().length > 0;
-                  const platformDone = !!selectedSubFormat;
-                  const f2 = cinemaCTA.length > 0 && (cinemaCTA.includes('Custom') ? cinemaCTACustom.trim().length > 0 : true);
-                  const f4 = cinemaVibe.length > 0 && (cinemaVibe.includes('Custom') ? cinemaVibeCustom.trim().length > 0 : true);
-                  const f5 = cinemaCharacters.length > 0;
-                  const hasStructuredDirection = [
-                    f2,
-                    f4,
-                    f5,
-                    cinemaSetting.length > 0,
-                    cinemaAction.length > 0,
-                  ].some(Boolean);
-                  const hasCreativeInput = f1 || hasStructuredDirection || !!brandAnchor;
-                  const isFormReady = hasCreativeInput;
-                  const filledCount = hasCreativeInput ? 1 : 0;
-                  const totalFields = 1;
-                  const progressPct = filledCount === 0 ? 0 : 100;
-
-                  const openSection = cinemaOpenSection;
-
-                  // Theme-aware color tokens
-                  const clr = {
-                    text:       isDark ? 'rgba(255,255,255,0.85)' : '#1a1d2e',
-                    textMuted:  isDark ? 'rgba(255,255,255,0.4)'  : 'rgba(0,0,0,0.35)',
-                    textSubtle: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)',
-                    cardBg:     isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-                    cardBgOpen: isDark ? 'rgba(226,199,168,0.06)' : 'rgba(226,199,168,0.12)',
-                    cardBorder: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
-                    cardBorderOpen: isDark ? 'rgba(226,199,168,0.25)' : 'rgba(226,199,168,0.5)',
-                    inputBg:    isDark ? 'rgba(12,15,20,0.7)'    : 'rgba(255,255,255,0.8)',
-                    inputBorder: (active: boolean) => active
-                      ? 'rgba(226,199,168,0.6)'
-                      : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)',
-                    chipBg:     isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                    chipBorder: isDark ? 'rgba(255,255,255,0.1)'  : 'rgba(0,0,0,0.1)',
-                    chipText:   isDark ? 'rgba(255,255,255,0.7)'  : 'rgba(0,0,0,0.65)',
-                    numBg:      isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-                    numBorder:  isDark ? 'rgba(255,255,255,0.1)'  : 'rgba(0,0,0,0.1)',
-                    numText:    isDark ? 'rgba(255,255,255,0.5)'  : 'rgba(0,0,0,0.45)',
-                    stickyBg:   isDark
-                      ? 'linear-gradient(to bottom,rgba(12,15,20,0.98) 70%,transparent)'
-                      : 'linear-gradient(to bottom,rgba(252,254,253,0.98) 70%,transparent)',
-                    secNumBg:   isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
-                    optBadgeBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-                    progressTrack: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
-                  };
-
-                  // Chip helper — dimmed=true when Max-3 reached and this chip is unselected
-                  type ChipProps = { label: string; emoji: string; value: string; selected: boolean; onSelect: () => void; disabled?: boolean; dimmed?: boolean };
-                  const Chip = ({ label, emoji, value: _v, selected, onSelect, disabled, dimmed }: ChipProps) => (
-                    <button type="button" onClick={onSelect} disabled={disabled || dimmed}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 whitespace-nowrap"
-                      style={{
-                        background: selected ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : clr.chipBg,
-                        border: selected ? '1px solid rgba(226,199,168,0.9)' : `1px solid ${clr.chipBorder}`,
-                        color: selected ? '#0c0f14' : clr.chipText,
-                        boxShadow: selected ? '0 2px 12px rgba(226,199,168,0.35)' : 'none',
-                        opacity: dimmed ? 0.3 : disabled ? 0.4 : 1,
-                        pointerEvents: dimmed ? 'none' : undefined,
-                      }}>{emoji} {label}</button>
-                  );
-
-                  // Section header helper
-                  const SecHeader = ({ idx, label, done, optional, summary }: { idx: number; label: string; done: boolean; optional?: boolean; summary?: string }) => (
-                    <button type="button" onClick={() => setCinemaOpenSection(openSection === idx ? -1 : idx)}
-                      className="w-full flex items-center justify-between gap-2 text-left">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all"
-                          style={{background: done ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : optional ? clr.optBadgeBg : clr.secNumBg, color: done ? '#0c0f14' : clr.textMuted}}>
-                          {done ? '✓' : (idx + 1)}
-                        </span>
-                        <span className="text-xs font-bold uppercase tracking-wider truncate"
-                          style={{color: done ? '#C5A47E' : optional ? clr.textMuted : clr.text}}>{label}</span>
-                        {done && summary && openSection !== idx && (
-                          <span className="text-[10px] truncate ml-1 hidden sm:block" style={{color: clr.textMuted}}>— {summary.length > 28 ? summary.slice(0,28)+'…' : summary}</span>
-                        )}
-                        {optional && !done && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full ml-1 font-semibold" style={{background: clr.optBadgeBg, color: clr.textMuted}}>
-                            {language==='ar'?'اختياري':'optional'}
-                          </span>
-                        )}
-                      </div>
-                      <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
-                    </button>
-                  );
-
-                  const SetupHeader = ({ idx, label, done, summary, optional }: { idx: number; label: string; done: boolean; summary?: string; optional?: boolean }) => (
-                    <button
-                      type="button"
-                      onClick={() => setCinemaOpenSection(openSection === idx ? -1 : idx)}
-                      className="w-full flex items-center justify-between gap-3 text-left px-3 py-3 rounded-xl transition-all"
-                      style={{background: openSection === idx ? 'rgba(226,199,168,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${openSection === idx ? 'rgba(226,199,168,0.3)' : clr.cardBorder}`}}
-                    >
-                      <div className="min-w-0 flex items-center gap-2">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                          style={{background: done ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : optional ? clr.optBadgeBg : clr.secNumBg, color: done ? '#0c0f14' : clr.textMuted}}>
-                          {done ? '✓' : String.fromCharCode(65 + idx)}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[11px] font-bold uppercase tracking-wider truncate" style={{color: done ? '#C5A47E' : clr.text}}>{label}</span>
-                            {optional && !done && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{background: clr.optBadgeBg, color: clr.textMuted}}>
-                                {language==='ar'?'اختياري':'optional'}
-                              </span>
-                            )}
-                          </div>
-                          {summary && openSection !== idx && (
-                            <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>{summary}</p>
-                          )}
-                        </div>
-                      </div>
-                      <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: openSection === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
-                    </button>
-                  );
-
-                  return (
-                  <div className="flex flex-col gap-0 py-2">
-                    {/* Sticky gold progress bar */}
-                    <div className="sticky top-0 z-20 pt-1 pb-3" style={{background: clr.stickyBg}}>
-                      <div className="text-center mb-2">
-                        <h3 className="text-xl font-bold" style={{color: clr.text, textShadow: isDark ? '0 0 20px rgba(226,199,168,0.5)' : 'none'}}>
-                          {language === 'ar' ? 'صانع الفيديو الإبداعي' : 'AI Video Creator'}
-                        </h3>
-                        <p className="mt-2 text-xs" style={{color:'rgba(226,199,168,0.7)'}}>
-                          {language === 'ar' ? 'اكتب فكرتك أو اختر ما يساعدك — المخرج يفهم الصورة كاملة' : 'Describe your idea or choose helpful guidance — the Director understands the whole picture'}
-                        </p>
-                      </div>
-                      <div className="relative h-[3px] rounded-full overflow-hidden" style={{background: clr.progressTrack}}>
-                        <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
-                          style={{width:`${progressPct}%`, background:'linear-gradient(90deg,#C5A47E,#E2C7A8,#fff9ee)', boxShadow: progressPct > 0 ? '0 0 8px rgba(226,199,168,0.8),0 0 16px rgba(226,199,168,0.4)' : 'none'}} />
-                      </div>
-                      {filledCount > 0 && (
-                        <p className="text-[10px] text-[#E2C7A8]/60 text-right mt-1">
-                          {isFormReady ? (language==='ar'?'✨ جاهز للتصوير!':'✨ Ready to direct!') : (language==='ar'?`${progressPct}% مكتمل`:`${progressPct}% complete`)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-2 max-w-lg mx-auto w-full">
-                      <div className="rounded-2xl px-4 py-3 transition-all"
-                        style={{background: cinemaSetupOpen ? clr.cardBgOpen : clr.cardBg, border: `1px solid ${cinemaSetupOpen ? 'rgba(226,199,168,0.45)' : clr.cardBorder}`}}>
-                        <button
-                          type="button"
-                          onClick={() => setCinemaSetupOpen(prev => !prev)}
-                          className="w-full flex items-center justify-between gap-3 text-left"
-                        >
-                          <div className="min-w-0 flex items-center gap-2">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                              style={{background: isFormReady ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : clr.secNumBg, color: isFormReady ? '#0c0f14' : clr.textMuted}}>
-                              {isFormReady ? '✓' : '1'}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'الإعداد الإبداعي':'Creative Setup'}</p>
-                              <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>
-                                {language==='ar' ? 'فكرة، توجيه، مرجع بصري، ومنصة اختيارية' : 'Idea, guidance, visual reference, and optional platform'}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="flex-shrink-0 text-xs" style={{color: clr.textMuted, transform: cinemaSetupOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s'}}>▼</span>
-                        </button>
-
-                        {cinemaSetupOpen && (
-                          <div className="mt-4 flex flex-col gap-3">
-                            <div>
-                              <SetupHeader idx={0} label={language==='ar'?'الفكرة الإبداعية':'Creative Idea'} done={f1} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
-                              {openSection === 0 && (
-                                <div className="mt-3 flex flex-col gap-2 px-1">
-                                  <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
-                                    <textarea
-                                      value={cinemaSubject}
-                                      onChange={(e) => setCinemaSubject(e.target.value.slice(0,800))}
-                                      onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,220)}px`; t.style.overflowY=t.scrollHeight>220?'auto':'hidden'; }}
-                                      disabled={isDirecting} autoFocus rows={5} maxLength={800}
-                                      placeholder={language==='ar'?'مثال: أريد فيديو عن شخصية تكتشف عالماً جديداً، أو إعلاناً لمنتج بأسلوب سينمائي...':'e.g., a character discovers a new world, or a cinematic advertisement for my product...'}
-                                      className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[120px] max-h-[220px] leading-7" style={{color: clr.text}}
-                                    />
-                                  </div>
-                                  <div className="flex items-center justify-between px-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px]" style={{color: cinemaSubject.length > 720 ? '#f97316' : clr.textSubtle}}>{cinemaSubject.length}/800</span>
-                                      {cinemaSubject.trim().length > 3 && (
-                                        <button
-                                          type="button"
-                                          onClick={handleCinemaAmp}
-                                          disabled={isCinemaAmping}
-                                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50"
-                                          style={{background:'rgba(99,102,241,0.15)',border:'1px solid rgba(99,102,241,0.35)',color:'rgba(165,167,255,0.95)'}}
-                                        >
-                                          {isCinemaAmping
-                                            ? <><Loader2 className="h-3 w-3 animate-spin" /><span>{language==='ar'?'...':'AMP...'}</span></>
-                                            : <><span>⚡</span><span>{language==='ar'?'تحسين':'AMP'}</span></>
-                                          }
-                                        </button>
-                                      )}
-                                    </div>
-                                    {f1 && (
-                                      <button type="button" onClick={()=>setCinemaOpenSection(1)}
-                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                        {language==='ar'?'التالي ›':'Next ›'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <SetupHeader idx={1} label={language==='ar'?'مرجع العلامة (اختياري)':'Brand Reference (optional)'} done={!!brandAnchor} summary={brandAnchor ? (language==='ar'?'تمت الإضافة':'Added') : undefined} optional />
-                              {openSection === 1 && (
-                                <div className="mt-3 flex flex-col gap-3 px-1">
-                                  <div className="mt-1 rounded-xl p-3 flex flex-col gap-2" style={{background: brandAnchor ? 'rgba(226,199,168,0.08)' : clr.cardBg, border: `1px solid ${brandAnchor ? 'rgba(226,199,168,0.35)' : clr.cardBorder}`}}>
-                                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{color: brandAnchor ? '#C5A47E' : clr.textMuted}}>
-                                      {language==='ar' ? '🎨 شعار أو صورة علامتك التجارية' : '🎨 Logo or brand image'}
-                                      {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
-                                    </p>
-                                    <p className="text-[9px]" style={{color: clr.textSubtle}}>
-                                      {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks your brand identity across all selected scenes'}
-                                    </p>
-                                    <div className="flex items-center gap-3">
-                                      {brandAnchor ? (
-                                        <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.5)'}}>
-                                          <img src={brandAnchor} alt="brand anchor" className="w-full h-full object-cover" />
-                                          <button
-                                            onClick={() => setBrandAnchor(null)}
-                                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
-                                          >✕</button>
-                                        </div>
-                                      ) : (
-                                        <div className="flex flex-col gap-2">
-                                          <label className="w-16 h-16 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
-                                            style={{background: clr.numBg, border:`2px dashed rgba(226,199,168,0.3)`}}>
-                                            <input type="file" accept="image/*" className="hidden"
-                                              onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file || !user) return;
-                                                setIsUploadingBrand(true);
-                                                try {
-                                                  const ext = file.name.split('.').pop() || 'jpg';
-                                                  const path = `${user.id}/cinema-refs/brand-${Date.now()}.${ext}`;
-                                                  await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
-                                                  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-                                                  if (urlData?.publicUrl) setBrandAnchor(urlData.publicUrl);
-                                                } catch { toast.error(language==='ar'?'فشل رفع الصورة':'Upload failed'); }
-                                                finally { setIsUploadingBrand(false); }
-                                              }}
-                                            />
-                                            {isUploadingBrand ? <Loader2 className="h-4 w-4 animate-spin" style={{color:clr.textMuted}} /> : <span className="text-xl leading-none" style={{color:clr.textSubtle}}>+</span>}
-                                          </label>
-                                          <button
-                                            type="button"
-                                            onClick={() => setShowBrandSavedPicker(true)}
-                                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-semibold transition-all active:scale-95"
-                                            style={{background:'rgba(226,199,168,0.1)', border:'1px solid rgba(226,199,168,0.3)', color:'#E2C7A8', whiteSpace:'nowrap'}}
-                                          >
-                                            <Images className="h-3 w-3 flex-shrink-0" />
-                                            {language === 'ar' ? 'من المحفوظة' : 'From Saved'}
-                                          </button>
-                                        </div>
-                                      )}
-                                      <p className="text-[9px] leading-relaxed" style={{color: clr.textMuted}}>
-                                        {brandAnchor
-                                          ? (language==='ar' ? 'المخرج والمصور سيحافظان على هذا النمط في كل مشهد' : 'The Director & Artist will lock this style across all scenes')
-                                          : (language==='ar' ? 'إذا لم ترفع صورة، سيبتكر الذكاء الاصطناعي نمطه الخاص' : 'Without one, the AI will invent its own visual style')}
-                                      </p>
-                                    </div>
-
-            {showBrandSavedPicker && (
-              <SavedImagesPicker
-                onSelect={(url) => { setBrandAnchor(url); setShowBrandSavedPicker(false); }}
-                onClose={() => setShowBrandSavedPicker(false)}
-              />
-            )}
-
-                                    {brandAnchor && (
-                                      <div className="mt-2 flex flex-col gap-1.5">
-                                        <p className="text-[9px] font-bold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                          {language==='ar' ? '🏷 ما هذه الصورة؟' : '🏷 What is this?'}
-                                        </p>
-                                        <div className="flex gap-1.5 flex-wrap">
-                                          {([
-                                            { value: 'logo',      labelEn: 'Logo / Text',       labelAr: 'شعار / نص',         descEn: 'AI Background Integration', descAr: 'تكامل الخلفية بالذكاء' },
-                                            { value: 'style',     labelEn: 'Style / Colors',    labelAr: 'نمط / ألوان',       descEn: 'Mood & palette guide',     descAr: 'مرشد المزاج واللون' },
-                                            { value: 'character', labelEn: 'Character / Person', labelAr: 'شخصية / وجه',       descEn: 'Identity consistency',     descAr: 'تناسق الهوية البصرية' },
-                                          ] as const).map(opt => {
-                                            const isActive = anchorTag === opt.value;
-                                            return (
-                                              <button
-                                                key={opt.value}
-                                                type="button"
-                                                onClick={() => setAnchorTag(opt.value)}
-                                                className="flex flex-col items-start px-2.5 py-2 rounded-xl text-left transition-all active:scale-95 flex-1 min-w-[80px] relative"
-                                                style={{
-                                                  background: isActive ? 'linear-gradient(135deg,rgba(226,199,168,0.22),rgba(197,164,126,0.14))' : clr.numBg,
-                                                  border: `2px solid ${isActive ? '#C5A47E' : clr.cardBorder}`,
-                                                  boxShadow: isActive ? '0 0 0 3px rgba(226,199,168,0.15), 0 4px 16px rgba(226,199,168,0.2)' : 'none',
-                                                }}
-                                              >
-                                                {isActive && (
-                                                  <span className="absolute top-1 right-1.5 text-[8px] font-black" style={{color:'#C5A47E'}}>✓</span>
-                                                )}
-                                                <span className="text-[10px] font-bold leading-tight" style={{color: isActive ? '#E2C7A8' : clr.textMuted}}>
-                                                  {language==='ar' ? opt.labelAr : opt.labelEn}
-                                                </span>
-                                                <span className="text-[8px] leading-tight mt-0.5" style={{color: isActive ? 'rgba(226,199,168,0.7)' : clr.textSubtle}}>
-                                                  {language==='ar' ? opt.descAr : opt.descEn}
-                                                </span>
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {f1 && (
-                                    <div className="flex justify-end mt-2">
-                                      <button type="button" onClick={()=>setCinemaOpenSection(2)}
-                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                        {language==='ar'?'التالي ›':'Next ›'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <SetupHeader idx={2} label={language==='ar'?'المنصة':'Platform'} done={platformDone} summary={selectedSubFormat || undefined} />
-                              {openSection === 2 && (
-                                <div className="mt-3 px-1">
-                                  <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر منصة النشر':'Choose your publishing platform'}</p>
-                                  <div className="flex flex-wrap gap-2">
-
-                                <div className="relative">
-                                  <button
-                                    type="button" disabled={isDirecting}
-                                    onClick={()=>setSelectedPlatform(p => p==='youtube' ? null : 'youtube')}
-                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
-                                    style={selectedPlatform==='youtube'||selectedSubFormat?.includes('YouTube')
-                                      ? {background:'rgba(255,0,0,0.15)',border:'1.5px solid rgba(255,0,0,0.6)',color:'#fff',boxShadow:'0 0 8px rgba(255,0,0,0.3)'}
-                                      : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
-                                  >
-                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="#FF0000"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                                    <span>{selectedSubFormat?.includes('YouTube') ? selectedSubFormat.replace(' (16:9)','').replace(' (9:16)','') : (language==='ar'?'يوتيوب':'YouTube')}</span>
-                                    <span className="text-[9px] opacity-60">{selectedPlatform==='youtube' ? '▴' : '▾'}</span>
-                                  </button>
-                                  {selectedPlatform==='youtube' && (
-                                    <div className="absolute left-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-xl" style={{background:'#1a1f2e',border:'1px solid rgba(255,0,0,0.4)',minWidth:'160px'}}>
-                                      {([
-                                        {label:language==='ar'?'فيديو عادي':'Standard Video', sub:'16:9', fmt:'16:9' as const, sfName:'YouTube Standard (16:9)'},
-                                        {label:language==='ar'?'يوتيوب شورتس':'YouTube Shorts', sub:'9:16', fmt:'9:16' as const, sfName:'YouTube Shorts (9:16)'},
-                                      ]).map(({label,sub,fmt,sfName})=>(
-                                        <button key={sfName} type="button"
-                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null);}}
-                                          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-red-900/30 active:scale-[0.98]"
-                                          style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(255,0,0,0.2)' : 'transparent'}}>
-                                          <span>{label}</span>
-                                          <span className="opacity-50 text-[9px]">{sub}</span>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <button
-                                  type="button" disabled={isDirecting}
-                                  onClick={()=>{setSelectedPlatform('tiktok');setCinemaFormat('9:16');setSelectedSubFormat('TikTok Vertical (9:16)');}}
-                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
-                                  style={selectedSubFormat?.includes('TikTok')
-                                    ? {background:'rgba(0,0,0,0.5)',border:'1.5px solid #69C9D0',color:'#fff',boxShadow:'0 0 8px rgba(105,201,208,0.4)'}
-                                    : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
-                                >
-                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.29 6.29 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.16 8.16 0 0 0 4.77 1.52V6.76a4.85 4.85 0 0 1-1-.07z"/></svg>
-                                  <span>{language==='ar'?'تيك توك':'TikTok'}</span>
-                                </button>
-
-                                <div className="relative">
-                                  <button
-                                    type="button" disabled={isDirecting}
-                                    onClick={()=>setSelectedPlatform(p => p==='instagram' ? null : 'instagram')}
-                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
-                                    style={selectedPlatform==='instagram'||selectedSubFormat?.includes('Instagram')
-                                      ? {background:'rgba(188,24,136,0.2)',border:'1.5px solid #cc2366',color:'#fff',boxShadow:'0 0 8px rgba(188,24,136,0.3)'}
-                                      : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
-                                  >
-                                    <svg viewBox="0 0 24 24" width="13" height="13"><defs><linearGradient id="ig3" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#f09433"/><stop offset="50%" stopColor="#dc2743"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs><path fill="url(#ig3)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                                    <span>{selectedSubFormat?.includes('Instagram') ? selectedSubFormat.replace(' (9:16)','').replace(' (4:5)','') : (language==='ar'?'إنستغرام':'Instagram')}</span>
-                                    <span className="text-[9px] opacity-60">{selectedPlatform==='instagram' ? '▴' : '▾'}</span>
-                                  </button>
-                                  {selectedPlatform==='instagram' && (
-                                    <div className="absolute left-0 top-full mt-1 z-50 rounded-xl overflow-hidden shadow-xl" style={{background:'#1a1f2e',border:'1px solid rgba(204,35,102,0.5)',minWidth:'160px'}}>
-                                      {([
-                                        {label:language==='ar'?'ريلز':'Reels', sub:'9:16', fmt:'9:16' as const, sfName:'Instagram Reels (9:16)'},
-                                        {label:language==='ar'?'بوست':'Feed Post', sub:'4:5', fmt:'4:5' as const, sfName:'Instagram Feed Post (4:5)'},
-                                        {label:language==='ar'?'ستوري':'Story', sub:'9:16', fmt:'9:16' as const, sfName:'Instagram Story (9:16)'},
-                                      ]).map(({label,sub,fmt,sfName})=>(
-                                        <button key={sfName} type="button"
-                                          onClick={()=>{setCinemaFormat(fmt);setSelectedSubFormat(sfName);setSelectedPlatform(null);}}
-                                          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-all hover:bg-pink-900/30 active:scale-[0.98]"
-                                          style={{color: selectedSubFormat===sfName ? '#fff' : 'rgba(255,255,255,0.75)', background: selectedSubFormat===sfName ? 'rgba(188,24,136,0.25)' : 'transparent'}}>
-                                          <span>{label}</span>
-                                          <span className="opacity-50 text-[9px]">{sub}</span>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <button
-                                  type="button" disabled={isDirecting}
-                                  onClick={()=>{setSelectedPlatform('snapchat');setCinemaFormat('9:16');setSelectedSubFormat('Snapchat Story (9:16)');}}
-                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-40"
-                                  style={selectedSubFormat?.includes('Snapchat')
-                                    ? {background:'rgba(255,252,0,0.15)',border:'1.5px solid rgba(255,252,0,0.7)',color:'#fff',boxShadow:'0 0 8px rgba(255,252,0,0.3)'}
-                                    : {background: clr.numBg, border:`1px solid ${clr.numBorder}`, color: clr.numText}}
-                                >
-                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="#FFFC00"><path d="M12.166.006c.94-.006 4.55.26 6.22 3.79.56 1.17.44 3.14.35 4.73l-.02.3c-.01.21-.02.41-.03.58.24-.09.5-.22.74-.39.3-.21.61-.3.9-.27.5.05.95.43.98.85.03.38-.2.79-.73 1.1-.09.05-.21.11-.35.17-.44.19-1.07.43-1.27 1.01-.1.3.01.64.34 1.03.02.02 1.93 2.44 4.55 2.86.18.03.31.19.29.37-.02.16-.14.29-.29.32-.03.01-.05.01-.08.02-.45.09-2.18.46-2.48 1.5-.06.2-.22.31-.43.26-.11-.02-.22-.04-.36-.07-.56-.12-1.29-.28-2.29-.28-.42 0-.86.03-1.29.1-.87.14-1.62.61-2.42 1.11-.97.59-1.96 1.21-3.27 1.21s-2.3-.62-3.27-1.21c-.8-.5-1.55-.97-2.42-1.11-.43-.07-.87-.1-1.29-.1-1 0-1.73.16-2.29.28-.13.03-.25.05-.36.07-.21.05-.37-.06-.43-.26-.3-1.04-2.03-1.41-2.48-1.5-.03 0-.05-.01-.08-.02-.15-.03-.27-.16-.29-.32-.02-.18.11-.34.29-.37 2.62-.42 4.52-2.82 4.55-2.86.33-.39.44-.73.34-1.03-.2-.58-.83-.82-1.27-1.01-.14-.06-.26-.12-.35-.17-.48-.28-.74-.68-.73-1.1.03-.42.48-.8.98-.85.29-.03.6.06.9.27.24.17.5.3.74.39-.01-.17-.02-.37-.03-.58l-.02-.3c-.09-1.59-.21-3.56.35-4.73C7.616.272 11.17.012 12.116.006h.05z"/></svg>
-                                  <span>{language==='ar'?'سناب شات':'Snapchat'}</span>
-                                </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {(<>
-
-                            <div>
-                              <SetupHeader idx={3} label={language==='ar'?'الهدف أو الغرض':'Purpose or Goal'} done={f2} summary={effectiveCTA ? effectiveCTA.split(' —')[0].trim() : undefined} />
-                              {openSection === 3 && (
-                                <div className="mt-3 px-1">
-                                  <div className="flex flex-wrap gap-2">
-                                    {([
-                                      {e:'🛍️',en:'Sell Product',ar:'بيع منتج',v:'sell or promote a product — end with a strong desire to buy'},
-                                      {e:'🏷️',en:'Brand',ar:'هوية العلامة',v:'build brand identity — make the audience feel who we are'},
-                                      {e:'📣',en:'Announce',ar:'إعلان حدث',v:'announce an event or launch — create urgency and excitement'},
-                                      {e:'💪',en:'Inspire',ar:'إلهام',v:'inspire and motivate the viewer — leave them feeling empowered'},
-                                      {e:'❤️',en:'Emotional',ar:'تواصل عاطفي',v:'create an emotional connection — make the audience feel deeply'},
-                                      {e:'📱',en:'Go Viral',ar:'انتشار واسع',v:'grow social media presence — designed to be shared and go viral'},
-                                      {e:'🏠',en:'Real Estate',ar:'جولة عقارية',v:'showcase a property — highlight space, luxury finishes, and lifestyle — make the viewer want to live there'},
-                                      {e:'🚗',en:'Automotive',ar:'عرض سيارات',v:'showcase an automotive vehicle — power, speed, design — evoke desire and aspiration'},
-                                      {e:'🍴',en:'Food & Beverage',ar:'مطاعم ومأكولات',v:'showcase food and dining — close-up textures, steam, pour shots, appetite appeal'},
-                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                      const ctaNonCustomCount = cinemaCTA.filter(x=>x!=='Custom').length;
-                                      const isDimmedCTA = !cinemaCTA.includes(v) && ctaNonCustomCount >= 3;
-                                      return (
-                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v}
-                                        dimmed={isDimmedCTA}
-                                        selected={cinemaCTA.includes(v)} onSelect={()=>setCinemaCTA(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })} disabled={isDirecting} />
-                                    );})}
-                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                      selected={cinemaCTA.includes('Custom')} onSelect={()=>setCinemaCTA(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
-                                  </div>
-                                  {cinemaCTA.includes('Custom') && (
-                                    <input type="text" value={cinemaCTACustom} onChange={(e)=>setCinemaCTACustom(e.target.value)}
-                                      disabled={isDirecting} placeholder={language==='ar'?'صف الهدف...':'Describe the goal...'}
-                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                                  )}
-                                  {f2 && (
-                                    <div className="flex justify-end mt-3">
-                                      <button type="button" onClick={()=>setCinemaOpenSection(4)}
-                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                        {language==='ar'?'التالي ›':'Next ›'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <SetupHeader idx={4} label={language==='ar'?'الأسلوب البصري':'Visual Style'} done={f4} summary={effectiveVibe ? effectiveVibe.split(' —')[0].trim() : undefined} />
-                              {openSection === 4 && (
-                                <div className="mt-3 px-1">
-                                  <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {([
-                                      {e:'🔥',en:'Epic & Grand',ar:'ملحمي وعظيم',v:'Epic and grand — cinematic score, wide establishing shots, larger than life'},
-                                      {e:'✨',en:'Luxurious',ar:'فاخر وراقي',v:'Luxurious and prestigious — slow motion, rich textures, gold tones'},
-                                      {e:'⚡',en:'Dramatic',ar:'درامي مكثف',v:'Dramatic and intense — high contrast, deep shadows, powerful tension'},
-                                      {e:'💛',en:'Emotional',ar:'عاطفي مؤثر',v:'Emotional and heartfelt — soft light, intimate close-ups, stirring music'},
-                                      {e:'🌅',en:'Inspiring',ar:'ملهم',v:'Inspiring and uplifting — bright light, rising motion, hopeful tone'},
-                                      {e:'💥',en:'High Energy',ar:'طاقة عالية',v:'Exciting and high energy — fast cuts, dynamic movement, adrenaline'},
-                                      {e:'🌿',en:'Peaceful',ar:'هادئ',v:'Peaceful and serene — slow camera, nature, stillness, gentle pace'},
-                                      {e:'📺',en:'Nostalgic',ar:'نوستالجيا',v:'Nostalgic and retro — warm film grain, faded colors, childhood memory aesthetic'},
-                                      {e:'🎞️',en:'Vintage Film',ar:'فيلم كلاسيكي',v:'Vintage film look — heavy grain, muted tones, old-money cinematic quality'},
-                                      {e:'🛸',en:'Futuristic',ar:'مستقبلي',v:'Futuristic and hi-tech — neon accents, sleek surfaces, modern urban atmosphere'},
-                                      {e:'⬛',en:'Minimalist',ar:'بسيط هادئ',v:'Minimalist and clean — negative space, simple geometry, silent elegance'},
-                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                      const vibeNonCustomCount = cinemaVibe.filter(x=>x!=='Custom').length;
-                                      const isDimmedVibe = !cinemaVibe.includes(v) && vibeNonCustomCount >= 3;
-                                      return (
-                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaVibe.includes(v)}
-                                        dimmed={isDimmedVibe}
-                                        onSelect={()=>{ setCinemaVibe(prev => { const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })(); const nonCustomCount = newVal.filter(x=>x!=='Custom').length; if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(5), 300); return newVal; }); }} disabled={isDirecting} />
-                                    );})}
-                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                      selected={cinemaVibe.includes('Custom')}
-                                      onSelect={()=>setCinemaVibe(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
-                                      disabled={isDirecting} />
-                                  </div>
-                                  {cinemaVibe.includes('Custom') && (
-                                    <input type="text" value={cinemaVibeCustom} onChange={(e)=>setCinemaVibeCustom(e.target.value)}
-                                      disabled={isDirecting} placeholder={language==='ar'?'صف الأسلوب...':'Describe the style...'}
-                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                                  )}
-                                  {f4 && (
-                                    <div className="flex justify-end mt-3">
-                                      <button type="button" onClick={()=>setCinemaOpenSection(5)}
-                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                        {language==='ar'?'التالي ›':'Next ›'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <SetupHeader idx={5} label={language==='ar'?'الشخصيات أو الموضوع':'Characters or Subject'} done={f5} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
-                              {openSection === 5 && (
-                                <div className="mt-3 px-1">
-                                  <div className="flex flex-wrap gap-2">
-                                    {([
-                                      {e:'📦',en:'No People',ar:'بدون أشخاص',v:'no people — product, object, or creature only'},
-                                      {e:'👤',en:'Solo Hero',ar:'بطل واحد',v:'one solo person — the hero, the protagonist'},
-                                      {e:'👥',en:'Two People',ar:'شخصان',v:'two people'},
-                                      {e:'👨‍👩‍👧‍👦',en:'Family',ar:'العائلة',v:'a family — warm, authentic moments between family members'},
-                                      {e:'💼',en:'Professionals',ar:'محترفون',v:'a group of professionals — confident, competent, business-ready'},
-                                      {e:'🦅',en:'Animals',ar:'حيوانات',v:'animals or wildlife — majestic creatures as the visual subject'},
-                                      {e:'🏟️',en:'Crowd',ar:'حشد',v:'a crowd or community — many people united'},
-                                    ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                      const castNonCustomCount = cinemaCharacters.filter(x=>x!=='Custom').length;
-                                      const isDimmedCast = !cinemaCharacters.includes(v) && castNonCustomCount >= 3;
-                                      return (
-                                      <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaCharacters.includes(v)}
-                                        dimmed={isDimmedCast}
-                                        onSelect={()=>setCinemaCharacters(prev => { const newVal = prev.includes(v) ? prev.filter(x=>x!==v) : (() => { const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })(); const nonCustomCount = newVal.filter(x=>x!=='Custom').length; if (nonCustomCount === 3) setTimeout(() => setCinemaOpenSection(6), 300); return newVal; })} disabled={isDirecting} />
-                                    );})}
-                                    <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                      selected={cinemaCharacters.includes('Custom')} onSelect={()=>setCinemaCharacters(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])} disabled={isDirecting} />
-                                  </div>
-                                  {cinemaCharacters.includes('Custom') && (
-                                    <input type="text" value={cinemaRelationship} onChange={(e)=>setCinemaRelationship(e.target.value)}
-                                      disabled={isDirecting}
-                                      placeholder={language==='ar'?'صف من أو ما الذي يجب أن يظهر...':'Describe who or what should appear...'}
-                                      className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                      style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                                  )}
-                                  {f5 && (
-                                    <div className="flex justify-end mt-3">
-                                      <button type="button" onClick={()=>setCinemaOpenSection(6)}
-                                        className="px-4 py-1.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-                                        style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)', color:'#0c0f14', boxShadow:'0 2px 12px rgba(226,199,168,0.4)'}}>
-                                        {language==='ar'?'التالي ›':'Next ›'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <SetupHeader idx={6} label={language==='ar'?'التوجيه الإضافي':'Extra Direction'} done={!!(effectiveSetting || effectiveAction)} summary={effectiveSetting || effectiveAction || undefined} optional />
-                              {openSection === 6 && (
-                                <div className="mt-3 flex flex-col gap-5 px-1">
-                                  <div>
-                                    <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{color: effectiveSetting ? '#C5A47E' : clr.text}}>
-                                      {language==='ar'?'الموقع':'Setting'}{effectiveSetting && <span className="text-[#E2C7A8] ml-1">✓</span>}
-                                    </p>
-                                    <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {([
-                                        {e:'🏙️',en:'City Night',ar:'مدينة ليلاً',v:'a futuristic modern city skyline at night, glass towers reflecting light'},
-                                        {e:'🌇',en:'City Day',ar:'مدينة نهاراً',v:'a vibrant modern city skyline during the day, blue sky, busy streets, urban energy'},
-                                        {e:'🏜️',en:'Desert',ar:'صحراء',v:'a vast open desert at golden hour, endless sand dunes, warm haze'},
-                                        {e:'🌊',en:'Ocean',ar:'ساحل',v:'an ocean coastline at sunrise, crashing waves, warm mist'},
-                                        {e:'🚀',en:'Space',ar:'الفضاء',v:'outer space, earth from orbit, stars and galaxies stretching forever'},
-                                        {e:'🏔️',en:'Mountains',ar:'جبال',v:'dramatic mountain peaks above the clouds, epic wide shot'},
-                                        {e:'🌲',en:'Forest',ar:'غابة',v:'a lush green forest, rays of light through tall trees'},
-                                        {e:'🏠',en:'Luxury Interior',ar:'تصميم داخلي فاخر',v:'a high-end luxury interior — marble floors, tall ceilings, warm ambient lighting, premium furniture'},
-                                        {e:'🕌',en:'Heritage',ar:'تراثي',v:'a traditional GCC heritage setting — old market, wind towers, traditional architecture, warm earth tones'},
-                                        {e:'🏢',en:'Modern Office',ar:'مكتب عصري',v:'a sleek modern corporate office — glass walls, open plan, professional lighting'},
-                                        {e:'🛣️',en:'Highway',ar:'طريق سريعة',v:'a long open highway stretching into the horizon, heat haze, dramatic sky'},
-                                      ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                        const settingNonCustomCount = cinemaSetting.filter(x=>x!=='Custom').length;
-                                        const isDimmedSetting = !cinemaSetting.includes(v) && settingNonCustomCount >= 3;
-                                        return (
-                                        <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaSetting.includes(v)}
-                                          dimmed={isDimmedSetting}
-                                          onSelect={()=>setCinemaSetting(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })}
-                                          disabled={isDirecting} />
-                                      );})}
-                                      <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                        selected={cinemaSetting.includes('Custom')}
-                                        onSelect={()=>setCinemaSetting(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
-                                        disabled={isDirecting} />
-                                    </div>
-                                    {cinemaSetting.includes('Custom') && (
-                                      <input type="text" value={cinemaSettingCustom} onChange={(e)=>setCinemaSettingCustom(e.target.value)}
-                                        disabled={isDirecting} placeholder={language==='ar'?'صف الموقع...':'Describe the setting...'}
-                                        className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                        style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                      {language==='ar'?'الحركة أو الحدث':'Main Action or Event'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
-                                    </p>
-                                    <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {([
-                                        {e:'🎬',en:'Dramatic Reveal',ar:'كشف درامي',v:'a slow dramatic cinematic reveal — the subject emerges from darkness into a spotlight'},
-                                        {e:'🚀',en:'Soaring Flight',ar:'تحليق جريء',v:'soaring and flying at high speed through a dramatic environment'},
-                                        {e:'❤️',en:'Human Moment',ar:'لحظة إنسانية',v:'an intimate human moment — warmth, connection, and genuine emotion'},
-                                        {e:'🌍',en:'Epic Journey',ar:'رحلة ملحمية',v:'a sweeping aerial journey — camera glides over landscapes and terrain'},
-                                        {e:'🎉',en:'Celebration',ar:'احتفال',v:'a joyful celebration — energy, movement, confetti, people coming together'},
-                                        {e:'🛸',en:'Drone Sweep',ar:'مسح درون',v:'a cinematic drone sweep — wide aerial pull-back revealing scale and grandeur of the scene'},
-                                        {e:'🔍',en:'Product Close-up',ar:'لقطة مقربة',v:'a detailed product close-up — macro lens, texture and craftsmanship, slow rotation'},
-                                        {e:'🚶‍♂️',en:'Cinematic Walk',ar:'مشي سينمائي',v:'a confident cinematic walk — hero strides forward, camera tracks alongside or follows from behind'},
-                                        {e:'⚡',en:'Fast Motion',ar:'حركة سريعة',v:'fast motion and speed — blurred streaks, rapid movement, adrenaline-fueled energy'},
-                                      ] as {e:string;en:string;ar:string;v:string}[]).map(({e,en,ar,v})=>{
-                                        const actionNonCustomCount = cinemaAction.filter(x=>x!=='Custom').length;
-                                        const isDimmedAction = !cinemaAction.includes(v) && actionNonCustomCount >= 3;
-                                        return (
-                                        <Chip key={v} emoji={e} label={language==='ar'?ar:en} value={v} selected={cinemaAction.includes(v)}
-                                          dimmed={isDimmedAction}
-                                          onSelect={()=>setCinemaAction(prev => { if (prev.includes(v)) return prev.filter(x=>x!==v); const nonCustom = prev.filter(x=>x!=='Custom'); if (nonCustom.length >= 3) return prev; return [...nonCustom, v]; })}
-                                          disabled={isDirecting} />
-                                      );})}
-                                      <Chip emoji="✏️" label={language==='ar'?'مخصص':'Custom'} value="Custom"
-                                        selected={cinemaAction.includes('Custom')}
-                                        onSelect={()=>setCinemaAction(prev => prev.includes('Custom') ? prev.filter(x=>x!=='Custom') : [...prev, 'Custom'])}
-                                        disabled={isDirecting} />
-                                    </div>
-                                    {cinemaAction.includes('Custom') && (
-                                      <input type="text" value={cinemaActionCustom} onChange={(e)=>setCinemaActionCustom(e.target.value)}
-                                        disabled={isDirecting} placeholder={language==='ar'?'صف الحدث...':'Describe the action...'}
-                                        className="mt-2 w-full bg-transparent rounded-xl px-4 py-3 text-sm placeholder:text-black/25 outline-none"
-                                        style={{background: clr.inputBg, border:'1px solid rgba(226,199,168,0.4)', color: clr.text}} autoFocus />
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            </>)}
-
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* PREVIEW & START DIRECTING button */}
-                    <div className="pt-2 max-w-lg mx-auto w-full">
-                      {isDirecting ? (
-                        <div className="flex flex-col items-center gap-4 py-8">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div className="w-4 h-4 rounded-full bg-[#E2C7A8] animate-pulse" />
-                              <div className="absolute inset-0 w-4 h-4 rounded-full bg-[#E2C7A8] animate-ping opacity-30" />
-                            </div>
-                            <span className="text-lg font-semibold text-[#E2C7A8] animate-pulse">
-                              {language === 'ar' ? 'المخرج يكتب السيناريو...' : 'Director is scripting...'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-white/60 max-w-md text-center">
-                            {language === 'ar'
-                              ? 'جاري فهم فكرتك وإنشاء فيديو إبداعي مترابط...'
-                              : 'Understanding your idea and scripting one connected creative video...'}
-                          </p>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={handleDirect}
-                          disabled={!isFormReady || isDirecting}
-                          className="relative w-full h-16 text-lg font-bold rounded-xl border-0 transition-all active:scale-[0.98] overflow-hidden"
-                          style={{
-                            background: isFormReady
-                              ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 50%, #E2C7A8 100%)'
-                              : 'rgba(226,199,168,0.12)',
-                            backgroundSize: isFormReady ? '200% 100%' : '100% 100%',
-                            animation: isFormReady ? 'shimmerGold 2.5s ease-in-out infinite' : 'none',
-                            boxShadow: isFormReady ? '0 12px 40px rgba(226,199,168,0.45), 0 6px 20px rgba(197,164,126,0.3)' : 'none',
-                            color: isFormReady ? '#0c0f14' : 'rgba(226,199,168,0.4)',
-                            border: isFormReady ? 'none' : '1px solid rgba(226,199,168,0.2)',
-                            cursor: isFormReady ? 'pointer' : 'not-allowed',
-                          }}
-                        >
-                          <div className="flex items-center justify-center gap-3">
-                            <Film className={`h-6 w-6 ${!isFormReady ? 'opacity-40' : ''}`} />
-                            <span>
-                              {isFormReady
-                                ? (language === 'ar' ? 'معاينة وابدأ الإخراج' : 'PREVIEW & START DIRECTING')
-                                : (language === 'ar' ? 'أكمل الحقول للمتابعة...' : 'Fill in the fields above to continue...')}
-                            </span>
-                          </div>
-                        </button>
-                      )}
-                    </div>
-                  </div>
                   );
                 })() : null}
 
@@ -4506,23 +3791,23 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       <div className="mx-auto w-14 h-14 rounded-2xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(226,199,168,0.25),rgba(139,92,246,0.3))',boxShadow:'0 0 32px rgba(139,92,246,0.25)'}}>
                         <Sparkles className="h-7 w-7" style={{color:'#E2C7A8'}} />
                       </div>
-                      <h3 className="text-xl font-bold text-white">{language === 'ar' ? 'خطة الفيديو جاهزة' : 'Your video plan is ready'}</h3>
-                      <p className="text-sm text-white/50">{language === 'ar' ? 'راجع ما فهمه المخرج قبل أن يبدأ إنشاء الصور.' : 'Review what the Director understood before images are created.'}</p>
+                      <h3 className="text-xl font-bold text-white">{language === 'ar' ? 'Ø®Ø·Ø© Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ø¬Ø§Ù‡Ø²Ø©' : 'Your video plan is ready'}</h3>
+                      <p className="text-sm text-white/50">{language === 'ar' ? 'Ø±Ø§Ø¬Ø¹ Ù…Ø§ ÙÙ‡Ù…Ù‡ Ø§Ù„Ù…Ø®Ø±Ø¬ Ù‚Ø¨Ù„ Ø£Ù† ÙŠØ¨Ø¯Ø£ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ØµÙˆØ±.' : 'Review what the Director understood before images are created.'}</p>
                     </div>
                     <div className="rounded-3xl p-4 space-y-3" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(226,199,168,0.25)'}}>
                       <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
-                        <div className="rounded-xl py-2 bg-white/[0.04]"><p className="text-white/40">{language === 'ar' ? 'المشاهد' : 'Scenes'}</p><p className="text-sm font-bold text-[#E2C7A8] mt-0.5">{cinemaSceneCount}</p></div>
+                        <div className="rounded-xl py-2 bg-white/[0.04]"><p className="text-white/40">{language === 'ar' ? 'Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯' : 'Scenes'}</p><p className="text-sm font-bold text-[#E2C7A8] mt-0.5">{cinemaSceneCount}</p></div>
                         <div className="rounded-xl py-2 bg-white/[0.04]"><p className="text-white/40">{language === 'ar' ? 'Seed' : 'Seed'}</p><p className="text-sm font-bold text-[#E2C7A8] mt-0.5">{cinemaSeed || 'Auto'}</p></div>
-                        <div className="rounded-xl py-2 bg-white/[0.04]"><p className="text-white/40">{language === 'ar' ? 'المراجع' : 'References'}</p><p className="text-sm font-bold text-[#E2C7A8] mt-0.5">{(brandAnchor ? 1 : 0) + cinemaReferenceImages.filter(Boolean).length}</p></div>
+                        <div className="rounded-xl py-2 bg-white/[0.04]"><p className="text-white/40">{language === 'ar' ? 'Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹' : 'References'}</p><p className="text-sm font-bold text-[#E2C7A8] mt-0.5">{(brandAnchor ? 1 : 0) + cinemaReferenceImages.filter(Boolean).length}</p></div>
                       </div>
-                      {subjectLock && <div className="rounded-2xl px-3 py-2" style={{background:'rgba(226,199,168,0.06)',border:'1px solid rgba(226,199,168,0.15)'}}><p className="text-[9px] uppercase tracking-wider text-white/35">{language === 'ar' ? 'قفل الهوية' : 'Identity lock'}</p><p className="text-xs text-[#E2C7A8]/85 mt-1">{subjectLock}</p></div>}
+                      {subjectLock && <div className="rounded-2xl px-3 py-2" style={{background:'rgba(226,199,168,0.06)',border:'1px solid rgba(226,199,168,0.15)'}}><p className="text-[9px] uppercase tracking-wider text-white/35">{language === 'ar' ? 'Ù‚ÙÙ„ Ø§Ù„Ù‡ÙˆÙŠØ©' : 'Identity lock'}</p><p className="text-xs text-[#E2C7A8]/85 mt-1">{subjectLock}</p></div>}
                       <div className="space-y-2">
-                        {cinemaScenes.map((scene) => <div key={scene.scene} className="flex gap-3 rounded-2xl px-3 py-2.5" style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}><span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(226,199,168,0.18)',color:'#E2C7A8'}}>{scene.scene}</span><div className="min-w-0"><p className="text-xs leading-relaxed text-white/75">{language === 'ar' ? scene.text : (scene.english_prompt || scene.text)}</p><p className="text-[9px] text-white/30 mt-1">{scene.story_state || (language === 'ar' ? 'يحافظ على الاستمرارية مع المشهد السابق' : 'Maintains continuity with the previous scene')}</p></div></div>)}
+                        {cinemaScenes.map((scene) => <div key={scene.scene} className="flex gap-3 rounded-2xl px-3 py-2.5" style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}><span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(226,199,168,0.18)',color:'#E2C7A8'}}>{scene.scene}</span><div className="min-w-0"><p className="text-xs leading-relaxed text-white/75">{language === 'ar' ? scene.text : (scene.english_prompt || scene.text)}</p><p className="text-[9px] text-white/30 mt-1">{scene.story_state || (language === 'ar' ? 'ÙŠØ­Ø§ÙØ¸ Ø¹Ù„Ù‰ Ø§Ù„Ø§Ø³ØªÙ…Ø±Ø§Ø±ÙŠØ© Ù…Ø¹ Ø§Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„Ø³Ø§Ø¨Ù‚' : 'Maintains continuity with the previous scene')}</p></div></div>)}
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <button type="button" onClick={() => setCinemaStep('desk')} className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60" style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}>{language === 'ar' ? 'رجوع' : 'Back'}</button>
-                      <button type="button" onClick={() => void handleCast()} disabled={isCasting || !cinemaScenes.length} className="flex-1 h-12 rounded-xl text-sm font-bold disabled:opacity-40" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14',boxShadow:'0 8px 24px rgba(226,199,168,0.25)'}}>{language === 'ar' ? 'ابدأ الإنشاء التلقائي' : 'START AUTOMATIC CREATION'}</button>
+                      <button type="button" onClick={() => setCinemaStep('desk')} className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60" style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}>{language === 'ar' ? 'Ø±Ø¬ÙˆØ¹' : 'Back'}</button>
+                      <button type="button" onClick={() => void handleCast()} disabled={isCasting || !cinemaScenes.length} className="flex-1 h-12 rounded-xl text-sm font-bold disabled:opacity-40" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14',boxShadow:'0 8px 24px rgba(226,199,168,0.25)'}}>{language === 'ar' ? 'Ø§Ø¨Ø¯Ø£ Ø§Ù„Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ØªÙ„Ù‚Ø§Ø¦ÙŠ' : 'START AUTOMATIC CREATION'}</button>
                     </div>
                   </div>
                 )}
@@ -4532,10 +3817,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     {/* Header + controls row */}
                     <div className="flex items-center justify-between px-1 gap-2">
                       <div className="min-w-0">
-                        <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'اللوحة الإخراجية' : 'The Storyboard'}</h3>
-                        <p className="text-xs text-white/50 mt-0.5">{language === 'ar' ? 'حرر أو أعد كتابة أي مشهد' : 'Edit or rewrite any scene'}</p>
+                        <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'Ø§Ù„Ù„ÙˆØ­Ø© Ø§Ù„Ø¥Ø®Ø±Ø§Ø¬ÙŠØ©' : 'The Storyboard'}</h3>
+                        <p className="text-xs text-white/50 mt-0.5">{language === 'ar' ? 'Ø­Ø±Ø± Ø£Ùˆ Ø£Ø¹Ø¯ ÙƒØªØ§Ø¨Ø© Ø£ÙŠ Ù…Ø´Ù‡Ø¯' : 'Edit or rewrite any scene'}</p>
                         <p className="text-[10px] font-semibold mt-1" style={{color: totalSceneDuration >= MAX_VIDEO_DURATION ? '#f87171' : 'rgba(226,199,168,0.75)'}}>
-                          {language === 'ar' ? `⏱ الإجمالي: ${totalSceneDuration}ث من ${MAX_VIDEO_DURATION}ث كحد أقصى` : `⏱ Total: ${totalSceneDuration}s of ${MAX_VIDEO_DURATION}s max`}
+                          {language === 'ar' ? `â± Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ: ${totalSceneDuration}Ø« Ù…Ù† ${MAX_VIDEO_DURATION}Ø« ÙƒØ­Ø¯ Ø£Ù‚ØµÙ‰` : `â± Total: ${totalSceneDuration}s of ${MAX_VIDEO_DURATION}s max`}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -4546,10 +3831,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             disabled={isDirecting || regenSceneNum !== null}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[10px] font-bold transition-all active:scale-95 disabled:opacity-40"
                             style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.3)',color:'#E2C7A8'}}
-                            title={language === 'ar' ? 'إعادة كتابة كل المشاهد' : 'Rewrite all scenes'}
+                            title={language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© ÙƒØªØ§Ø¨Ø© ÙƒÙ„ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯' : 'Rewrite all scenes'}
                           >
                             <RefreshCw className="h-3 w-3" />
-                            <span>{language === 'ar' ? 'إعادة الكل' : 'Regen All'}</span>
+                            <span>{language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„ÙƒÙ„' : 'Regen All'}</span>
                           </button>
                         )}
                       </div>
@@ -4579,7 +3864,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                   {sceneNum}
                                 </div>
                                 <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
-                                  {language === 'ar' ? `المشهد ${sceneNum}` : `SCENE ${sceneNum}`}
+                                  {language === 'ar' ? `Ø§Ù„Ù…Ø´Ù‡Ø¯ ${sceneNum}` : `SCENE ${sceneNum}`}
                                 </span>
                                 {/* Per-scene duration picker: 5s/6s/8s/10s, live-capped at MAX_VIDEO_DURATION total */}
                                 <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{background:'rgba(255,255,255,0.06)'}}>
@@ -4612,10 +3897,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                     onClick={() => { setEditingSceneNum(sceneNum); setEditingSceneText(scene.text); }}
                                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-semibold transition-all active:scale-95"
                                     style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.5)'}}
-                                    title={language === 'ar' ? 'تحرير' : 'Edit scene'}
+                                    title={language === 'ar' ? 'ØªØ­Ø±ÙŠØ±' : 'Edit scene'}
                                   >
                                     <Pencil className="h-2.5 w-2.5" />
-                                    <span>{language === 'ar' ? 'تحرير' : 'Edit'}</span>
+                                    <span>{language === 'ar' ? 'ØªØ­Ø±ÙŠØ±' : 'Edit'}</span>
                                   </button>
                                   {/* Regen this scene */}
                                   <button
@@ -4623,16 +3908,16 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                     disabled={regenSceneNum !== null}
                                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-semibold transition-all active:scale-95 disabled:opacity-40"
                                     style={{background:'rgba(226,199,168,0.1)',border:'1px solid rgba(226,199,168,0.25)',color:'#E2C7A8'}}
-                                    title={language === 'ar' ? 'إعادة كتابة هذا المشهد' : 'Rewrite this scene'}
+                                    title={language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© ÙƒØªØ§Ø¨Ø© Ù‡Ø°Ø§ Ø§Ù„Ù…Ø´Ù‡Ø¯' : 'Rewrite this scene'}
                                   >
                                     {isRegening ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
-                                    <span>{language === 'ar' ? 'إعادة' : 'Regen'}</span>
+                                    <span>{language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø©' : 'Regen'}</span>
                                   </button>
                                 </div>
                               )}
                             </div>
 
-                            {/* Scene text — view or edit */}
+                            {/* Scene text â€” view or edit */}
                             {(() => {
                               // Sanitize: strip Visual DNA and SCENE ACTION technical blocks from display
                               const sanitizeSceneText = (raw: string) => {
@@ -4659,8 +3944,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               {dnaBadge && !isEditing && (
                                 <div className="mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold"
                                   style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.25)',color:'rgba(226,199,168,0.7)'}}>
-                                  <span>🎨</span>
-                                  <span>{language === 'ar' ? 'النمط: ' : 'Style: '}{dnaBadge}</span>
+                                  <span>ðŸŽ¨</span>
+                                  <span>{language === 'ar' ? 'Ø§Ù„Ù†Ù…Ø·: ' : 'Style: '}{dnaBadge}</span>
                                 </div>
                               )}
                               {isEditing ? (
@@ -4671,7 +3956,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                     className="w-full text-xs leading-relaxed text-[#E2C7A8]/90 bg-transparent resize-none outline-none rounded-lg p-2"
                                     rows={5}
                                     style={{border:'1px solid rgba(226,199,168,0.3)',background:'rgba(0,0,0,0.3)'}}
-                                    aria-label={language === 'ar' ? 'تحرير نص المشهد' : 'Edit scene text'}
+                                    aria-label={language === 'ar' ? 'ØªØ­Ø±ÙŠØ± Ù†Øµ Ø§Ù„Ù…Ø´Ù‡Ø¯' : 'Edit scene text'}
                                     autoFocus
                                   />
                                   <div className="flex gap-2 justify-end">
@@ -4679,18 +3964,18 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       onClick={() => { setEditingSceneNum(null); setEditingSceneText(''); }}
                                       className="px-3 py-1 rounded-lg text-[10px] font-semibold transition-all"
                                       style={{background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.5)'}}
-                                    >{language === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                                    >{language === 'ar' ? 'Ø¥Ù„ØºØ§Ø¡' : 'Cancel'}</button>
                                     <button
                                       onClick={() => handleSaveSceneEdit(sceneNum, editingSceneText)}
                                       className="px-3 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
                                       style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}
-                                    >{language === 'ar' ? 'حفظ' : 'Save'}</button>
+                                    >{language === 'ar' ? 'Ø­ÙØ¸' : 'Save'}</button>
                                   </div>
                                 </div>
                               ) : isRegening ? (
                                 <div className="flex items-center gap-2 text-[#E2C7A8]/50">
                                   <Loader2 className="h-4 w-4 animate-spin" />
-                                  <span className="text-xs">{language === 'ar' ? 'يعيد الكتابة...' : 'Rewriting...'}</span>
+                                  <span className="text-xs">{language === 'ar' ? 'ÙŠØ¹ÙŠØ¯ Ø§Ù„ÙƒØªØ§Ø¨Ø©...' : 'Rewriting...'}</span>
                                 </div>
                               ) : scene ? (
                                 <p className="text-xs leading-relaxed text-[#E2C7A8]/90">
@@ -4705,16 +3990,16 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           );
                             })()}
 
-                            {/* ── Text Overlay field ── */}
+                            {/* â”€â”€ Text Overlay field â”€â”€ */}
                             {scene && (
                               <div className="flex flex-col gap-1">
                                 <label className="text-[9px] font-semibold uppercase tracking-wider" style={{color:'rgba(226,199,168,0.5)'}}>
-                                  {language === 'ar' ? '📝 نص على الصورة (اختياري)' : '📝 Text overlay (optional)'}
+                                  {language === 'ar' ? 'ðŸ“ Ù†Øµ Ø¹Ù„Ù‰ Ø§Ù„ØµÙˆØ±Ø© (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)' : 'ðŸ“ Text overlay (optional)'}
                                 </label>
                                 <input
                                   type="text"
                                   maxLength={60}
-                                  placeholder={language === 'ar' ? 'مثال: اتصل بنا • info@company.com' : 'e.g. Call us • info@company.com'}
+                                  placeholder={language === 'ar' ? 'Ù…Ø«Ø§Ù„: Ø§ØªØµÙ„ Ø¨Ù†Ø§ â€¢ info@company.com' : 'e.g. Call us â€¢ info@company.com'}
                                   value={sceneOverlayText[sceneNum - 1] || ''}
                                   onChange={e => setSceneOverlayText(prev => { const n = [...prev]; n[sceneNum - 1] = e.target.value; return n; })}
                                   className="w-full text-xs px-3 py-1.5 rounded-lg outline-none transition-all"
@@ -4727,19 +4012,19 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       })}
                     </div>
 
-                    {/* Style & Brand Foundation reminder — upload is in Step 1 */}
+                    {/* Style & Brand Foundation reminder â€” upload is in Step 1 */}
                     {cinemaScenes.length >= cinemaSceneCount && brandAnchor && (
                       <div className="rounded-xl px-3 py-2.5 flex items-center gap-2.5" style={{background:'rgba(226,199,168,0.06)',border:'1px solid rgba(226,199,168,0.18)'}}>
                         <img src={brandAnchor} alt="Brand anchor" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" style={{border:'1px solid rgba(226,199,168,0.35)'}} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold text-[#E2C7A8] uppercase tracking-wider">{language === 'ar' ? 'أساس الهوية البصرية مُفعَّل' : 'Style & Brand Foundation Active'}</p>
-                          <p className="text-[9px] text-white/35 mt-0.5 truncate">{language === 'ar' ? 'جميع المشاهد ستُنجز بنمط هذه الصورة' : 'All scenes will be rendered in this style'}</p>
+                          <p className="text-[10px] font-bold text-[#E2C7A8] uppercase tracking-wider">{language === 'ar' ? 'Ø£Ø³Ø§Ø³ Ø§Ù„Ù‡ÙˆÙŠØ© Ø§Ù„Ø¨ØµØ±ÙŠØ© Ù…ÙÙØ¹ÙŽÙ‘Ù„' : 'Style & Brand Foundation Active'}</p>
+                          <p className="text-[9px] text-white/35 mt-0.5 truncate">{language === 'ar' ? 'Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ Ø³ØªÙÙ†Ø¬Ø² Ø¨Ù†Ù…Ø· Ù‡Ø°Ù‡ Ø§Ù„ØµÙˆØ±Ø©' : 'All scenes will be rendered in this style'}</p>
                         </div>
-                        <span className="text-green-400 text-sm flex-shrink-0">✓</span>
+                        <span className="text-green-400 text-sm flex-shrink-0">âœ“</span>
                       </div>
                     )}
 
-                    {/* Sticky footer — CAST YOUR MOVIE */}
+                    {/* Sticky footer â€” CAST YOUR MOVIE */}
                     {cinemaScenes.length >= cinemaSceneCount && (
                       <div className="cinema-sticky-footer px-4 py-3">
                         <button
@@ -4753,12 +4038,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           {isCasting ? (
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className="h-5 w-5 animate-spin" />
-                              <span>{language === 'ar' ? 'المصور يرسم الصور...' : 'Artist is painting...'}</span>
+                              <span>{language === 'ar' ? 'Ø§Ù„Ù…ØµÙˆØ± ÙŠØ±Ø³Ù… Ø§Ù„ØµÙˆØ±...' : 'Artist is painting...'}</span>
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-2">
                               <Camera className="h-5 w-5" />
-                              <span>{language === 'ar' ? 'إنشاء المشاهد تلقائياً' : 'GENERATE THE SCENES'}</span>
+                              <span>{language === 'ar' ? 'Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹' : 'GENERATE THE SCENES'}</span>
                               <ArrowRight className="h-5 w-5" />
                             </div>
                           )}
@@ -4778,30 +4063,30 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         <div className="mx-auto w-16 h-16 rounded-3xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(210,180,140,0.3),rgba(110,80,180,0.35))',boxShadow:'0 0 40px rgba(170,130,220,0.28)'}}>
                           <Camera className="h-8 w-8" style={{color:'#E2C7A8'}} />
                         </div>
-                        <h3 className="text-xl font-bold text-white">{language === 'ar' ? 'وكتي يبني فيديوك' : 'Wakti is building your video'}</h3>
-                        <p className="text-sm text-white/50">{language === 'ar' ? 'يولد كل مشهد ويحافظ على الاستمرارية تلقائياً.' : 'Every scene is being created automatically with continuity.'}</p>
+                        <h3 className="text-xl font-bold text-white">{language === 'ar' ? 'ÙˆÙƒØªÙŠ ÙŠØ¨Ù†ÙŠ ÙÙŠØ¯ÙŠÙˆÙƒ' : 'Wakti is building your video'}</h3>
+                        <p className="text-sm text-white/50">{language === 'ar' ? 'ÙŠÙˆÙ„Ø¯ ÙƒÙ„ Ù…Ø´Ù‡Ø¯ ÙˆÙŠØ­Ø§ÙØ¸ Ø¹Ù„Ù‰ Ø§Ù„Ø§Ø³ØªÙ…Ø±Ø§Ø±ÙŠØ© ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹.' : 'Every scene is being created automatically with continuity.'}</p>
                       </div>
                       <div className="rounded-3xl p-5 space-y-4" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(226,199,168,0.25)'}}>
-                        <p className="text-xs text-center text-white/55">{castingStatus || (isCasting ? (language === 'ar' ? 'جاري إنشاء المشاهد...' : 'Creating your scenes...') : (language === 'ar' ? 'المشاهد جاهزة' : 'Scenes are ready'))}</p>
+                        <p className="text-xs text-center text-white/55">{castingStatus || (isCasting ? (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯...' : 'Creating your scenes...') : (language === 'ar' ? 'Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ Ø¬Ø§Ù‡Ø²Ø©' : 'Scenes are ready'))}</p>
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-[#E2C7A8]">{language === 'ar' ? 'المشاهد' : 'Scenes'}</span>
+                          <span className="font-semibold text-[#E2C7A8]">{language === 'ar' ? 'Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯' : 'Scenes'}</span>
                           <span className="text-white/50">{finishedScenes} / {cinemaSceneCount}</span>
                         </div>
                         <div className="h-2 rounded-full overflow-hidden bg-white/10">
                           <div className="h-full rounded-full transition-all duration-700" style={{width:`${progress}%`,background:'linear-gradient(90deg,#C5A47E,#E2C7A8)',boxShadow:'0 0 16px rgba(226,199,168,0.5)'}} />
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-center text-[10px] text-white/45">
-                          <span className="rounded-xl py-2 bg-white/[0.03]">{language === 'ar' ? 'المخرج ✓' : 'Director ✓'}</span>
-                          <span className="rounded-xl py-2 bg-white/[0.03]">{finishedScenes === cinemaSceneCount ? (language === 'ar' ? 'المصور ✓' : 'Artist ✓') : (language === 'ar' ? 'المصور...' : 'Artist...')}</span>
-                          <span className="rounded-xl py-2 bg-white/[0.03]">{language === 'ar' ? 'المحرك لاحقاً' : 'Animator next'}</span>
+                          <span className="rounded-xl py-2 bg-white/[0.03]">{language === 'ar' ? 'Ø§Ù„Ù…Ø®Ø±Ø¬ âœ“' : 'Director âœ“'}</span>
+                          <span className="rounded-xl py-2 bg-white/[0.03]">{finishedScenes === cinemaSceneCount ? (language === 'ar' ? 'Ø§Ù„Ù…ØµÙˆØ± âœ“' : 'Artist âœ“') : (language === 'ar' ? 'Ø§Ù„Ù…ØµÙˆØ±...' : 'Artist...')}</span>
+                          <span className="rounded-xl py-2 bg-white/[0.03]">{language === 'ar' ? 'Ø§Ù„Ù…Ø­Ø±Ùƒ Ù„Ø§Ø­Ù‚Ø§Ù‹' : 'Animator next'}</span>
                         </div>
                       </div>
                       {hasSceneError && !isCasting && (
                         <button type="button" onClick={() => void handleCast()} className="w-full h-12 rounded-2xl text-sm font-bold" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>
-                          {language === 'ar' ? 'إعادة المحاولة تلقائياً' : 'RETRY AUTOMATICALLY'}
+                          {language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹' : 'RETRY AUTOMATICALLY'}
                         </button>
                       )}
-                      <button type="button" onClick={handleCinemaReset} className="mx-auto text-xs text-white/35 hover:text-white/60 transition-colors">{language === 'ar' ? 'إلغاء والبدء من جديد' : 'Cancel and start over'}</button>
+                      <button type="button" onClick={handleCinemaReset} className="mx-auto text-xs text-white/35 hover:text-white/60 transition-colors">{language === 'ar' ? 'Ø¥Ù„ØºØ§Ø¡ ÙˆØ§Ù„Ø¨Ø¯Ø¡ Ù…Ù† Ø¬Ø¯ÙŠØ¯' : 'Cancel and start over'}</button>
                     </div>
                   );
                   return (
@@ -4809,12 +4094,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     {/* Header */}
                     <div className="text-center space-y-1 px-1">
                       <h3 className="text-lg font-bold text-white">
-                        {language === 'ar' ? '🎥 تجهيز المشاهد' : '🎥 Preparing the Scenes'}
+                        {language === 'ar' ? 'ðŸŽ¥ ØªØ¬Ù‡ÙŠØ² Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯' : 'ðŸŽ¥ Preparing the Scenes'}
                       </h3>
                       <p className="text-xs text-white/50">
                         {isCasting
-                          ? (language === 'ar' ? 'المصور الذكي يرسم مشاهدك...' : 'AI Artist is painting your scenes...')
-                          : (language === 'ar' ? 'المشاهد جاهزة — راجعها ثم ابدأ التصوير' : 'Your scenes are ready — review them, then approve to film')}
+                          ? (language === 'ar' ? 'Ø§Ù„Ù…ØµÙˆØ± Ø§Ù„Ø°ÙƒÙŠ ÙŠØ±Ø³Ù… Ù…Ø´Ø§Ù‡Ø¯Ùƒ...' : 'AI Artist is painting your scenes...')
+                          : (language === 'ar' ? 'Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯ Ø¬Ø§Ù‡Ø²Ø© â€” Ø±Ø§Ø¬Ø¹Ù‡Ø§ Ø«Ù… Ø§Ø¨Ø¯Ø£ Ø§Ù„ØªØµÙˆÙŠØ±' : 'Your scenes are ready â€” review them, then approve to film')}
                       </p>
                     </div>
 
@@ -4826,9 +4111,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       </div>
                     )}
 
-                    {/* ── Automatic scene progress ── */}
+                    {/* â”€â”€ Automatic scene progress â”€â”€ */}
                     {cinemaMode === 'custom' ? (
-                      // ── Legacy upload fallback ──
+                      // â”€â”€ Legacy upload fallback â”€â”€
                       <div className="grid grid-cols-2 gap-3">
                         {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                           const img = sceneImages[idx];
@@ -4857,7 +4142,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       }
                                     } catch {
                                       setCastingProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-                                      toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Upload failed');
+                                      toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø©' : 'Upload failed');
                                     }
                                     e.target.value = '';
                                   }}
@@ -4870,13 +4155,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                   <div className="flex flex-col items-center gap-1.5">
                                     <Upload className="h-5 w-5 text-white/30" />
                                     <span className="text-[9px] text-white/30 font-semibold">
-                                      {language === 'ar' ? 'اضغط للرفع' : 'Tap to upload'}
+                                      {language === 'ar' ? 'Ø§Ø¶ØºØ· Ù„Ù„Ø±ÙØ¹' : 'Tap to upload'}
                                     </span>
                                   </div>
                                 )}
                                 <div className="absolute top-1.5 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
                                   style={{background:'rgba(12,15,20,0.75)',color: img ? '#E2C7A8' : 'rgba(255,255,255,0.35)'}}>
-                                  {language === 'ar' ? `م${idx+1}` : `S${idx+1}`}{img && ' ✓'}
+                                  {language === 'ar' ? `Ù…${idx+1}` : `S${idx+1}`}{img && ' âœ“'}
                                 </div>
                                 {img && (
                                   <button
@@ -4884,12 +4169,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                     onClick={(e) => { e.preventDefault(); commitCastingImage(idx, null); setCastingProgress(prev => { const n = [...prev]; n[idx] = 'idle'; return n; }); }}
                                     className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
                                     style={{background:'rgba(0,0,0,0.7)',color:'rgba(255,255,255,0.7)'}}
-                                  >✕</button>
+                                  >âœ•</button>
                                 )}
                               </label>
                               {cinemaScenes[idx] && (
                                 <p className="text-[9px] text-white/40 px-1 line-clamp-2 leading-tight">
-                                  {cinemaScenes[idx].text.slice(0, 60)}{cinemaScenes[idx].text.length > 60 ? '…' : ''}
+                                  {cinemaScenes[idx].text.slice(0, 60)}{cinemaScenes[idx].text.length > 60 ? 'â€¦' : ''}
                                 </p>
                               )}
                             </div>
@@ -4897,7 +4182,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         })}
                       </div>
                     ) : (
-                      // ── Automatic scene progress fallback ──
+                      // â”€â”€ Automatic scene progress fallback â”€â”€
                       <div className="flex flex-col gap-2">
                         {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                           const img = sceneImages[idx];
@@ -4908,7 +4193,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           const hasChoice = opts && opts.length >= 1 && !img;
                           const sceneText = cinemaScenes[idx]?.text || '';
 
-                          // ── DONE + COLLAPSED: slim summary bar ──
+                          // â”€â”€ DONE + COLLAPSED: slim summary bar â”€â”€
                           if (isDone && !isActive) {
                             return (
                               <button
@@ -4925,26 +4210,26 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 {/* Scene label */}
                                 <div className="flex-1 text-left min-w-0">
                                   <p className="text-xs font-bold" style={{color:'#E2C7A8'}}>
-                                    {language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`}
+                                    {language === 'ar' ? `Ù…Ø´Ù‡Ø¯ ${idx + 1}` : `Scene ${idx + 1}`}
                                   </p>
                                   {sceneText && (
                                     <p className="text-[10px] truncate" style={{color:'rgba(255,255,255,0.35)'}}>
-                                      {sceneText.slice(0, 45)}{sceneText.length > 45 ? '…' : ''}
+                                      {sceneText.slice(0, 45)}{sceneText.length > 45 ? 'â€¦' : ''}
                                     </p>
                                   )}
                                 </div>
                                 {/* Green checkmark + edit hint */}
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                                  <span className="text-sm" style={{color:'#4ade80'}}>✓</span>
+                                  <span className="text-sm" style={{color:'#4ade80'}}>âœ“</span>
                                   <span className="text-[9px]" style={{color:'rgba(255,255,255,0.25)'}}>
-                                    {language === 'ar' ? 'تغيير' : 'change'}
+                                    {language === 'ar' ? 'ØªØºÙŠÙŠØ±' : 'change'}
                                   </span>
                                 </div>
                               </button>
                             );
                           }
 
-                          // ── IDLE / LOADING / ERROR: not yet active ──
+                          // â”€â”€ IDLE / LOADING / ERROR: not yet active â”€â”€
                           if (!isActive && !isDone) {
                             const canOpen = opts && opts.length >= 1 && !img;
                             // A future scene is "locked" if the previous scene hasn't been picked yet
@@ -4961,7 +4246,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                   {prog === 'loading' ? (
                                     <Loader2 className="h-4 w-4 animate-spin text-[#E2C7A8]/40" />
                                   ) : prog === 'error' ? (
-                                    <span className="text-red-400 text-xs">✗</span>
+                                    <span className="text-red-400 text-xs">âœ—</span>
                                   ) : isLocked ? (
                                     <Lock className="h-3 w-3" style={{color:'rgba(255,255,255,0.15)'}} />
                                   ) : (
@@ -4970,14 +4255,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 </div>
                                 <p className="text-xs flex-1" style={{color: canOpen ? 'rgba(226,199,168,0.7)' : isLocked ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.2)'}}>
                                   {prog === 'loading'
-                                    ? (language === 'ar' ? 'جاري الرسم...' : 'Painting…')
+                                    ? (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø±Ø³Ù…...' : 'Paintingâ€¦')
                                     : prog === 'error'
-                                    ? (language === 'ar' ? 'فشل التوليد' : 'Generation failed')
+                                    ? (language === 'ar' ? 'ÙØ´Ù„ Ø§Ù„ØªÙˆÙ„ÙŠØ¯' : 'Generation failed')
                                     : canOpen
-                                    ? (language === 'ar' ? `مشهد ${idx + 1} — اضغط للاختيار` : `Scene ${idx + 1} — being prepared automatically`)
+                                    ? (language === 'ar' ? `Ù…Ø´Ù‡Ø¯ ${idx + 1} â€” Ø§Ø¶ØºØ· Ù„Ù„Ø§Ø®ØªÙŠØ§Ø±` : `Scene ${idx + 1} â€” being prepared automatically`)
                                     : isLocked
-                                    ? (language === 'ar' ? `مشهد ${idx + 1} — في انتظار اختيارك للمشهد السابق` : `Scene ${idx + 1} — waiting for automatic continuity`)
-                                    : (language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`)}
+                                    ? (language === 'ar' ? `Ù…Ø´Ù‡Ø¯ ${idx + 1} â€” ÙÙŠ Ø§Ù†ØªØ¸Ø§Ø± Ø§Ø®ØªÙŠØ§Ø±Ùƒ Ù„Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„Ø³Ø§Ø¨Ù‚` : `Scene ${idx + 1} â€” waiting for automatic continuity`)
+                                    : (language === 'ar' ? `Ù…Ø´Ù‡Ø¯ ${idx + 1}` : `Scene ${idx + 1}`)}
                                 </p>
                                 {prog === 'error' && (
                                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -4988,7 +4273,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all active:scale-95 disabled:opacity-40"
                                       style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.35)',color:'#E2C7A8'}}
                                     >
-                                      <span>{language === 'ar' ? 'مشهد جديد' : 'New Scene'}</span>
+                                      <span>{language === 'ar' ? 'Ù…Ø´Ù‡Ø¯ Ø¬Ø¯ÙŠØ¯' : 'New Scene'}</span>
                                     </button>
                                     <button
                                       type="button"
@@ -4998,7 +4283,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.4)',color:'#f87171'}}
                                     >
                                       <RefreshCw className="h-2.5 w-2.5" />
-                                      <span>{language === 'ar' ? 'إعادة' : 'Retry'}</span>
+                                      <span>{language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø©' : 'Retry'}</span>
                                     </button>
                                   </div>
                                 )}
@@ -5006,7 +4291,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             );
                           }
 
-                          // ── ACTIVE: expanded focused card ──
+                          // â”€â”€ ACTIVE: expanded focused card â”€â”€
                           return (
                             <div key={idx} className="flex flex-col gap-3 rounded-2xl p-4" style={{background:'rgba(226,199,168,0.06)', border:'1.5px solid rgba(226,199,168,0.4)'}}>
                               {/* Header: Scene X of N */}
@@ -5014,12 +4299,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 <div>
                                   <h4 className="text-sm font-bold" style={{color:'#E2C7A8'}}>
                                     {language === 'ar'
-                                      ? `مشهد ${idx + 1} من ${cinemaSceneCount}`
+                                      ? `Ù…Ø´Ù‡Ø¯ ${idx + 1} Ù…Ù† ${cinemaSceneCount}`
                                       : `Scene ${idx + 1} of ${cinemaSceneCount}`}
                                   </h4>
                                   {sceneText && (
                                     <p className="text-[11px] italic mt-0.5 leading-tight" style={{color:'rgba(255,255,255,0.45)'}}>
-                                      {sceneText.slice(0, 50)}{sceneText.length > 50 ? '…' : ''}
+                                      {sceneText.slice(0, 50)}{sceneText.length > 50 ? 'â€¦' : ''}
                                     </p>
                                   )}
                                 </div>
@@ -5031,10 +4316,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
                               {/* Multi-shot picker or single-image or loading/error state */}
                               {hasChoice && opts ? (
-                                // All returned shots — vertical stack, labeled Shot 1 / Shot 2 / ...
+                                // All returned shots â€” vertical stack, labeled Shot 1 / Shot 2 / ...
                                 <div>
                                   <p className="text-[10px] font-semibold mb-2 text-center" style={{color:'rgba(226,199,168,0.7)'}}>
-                                    {language === 'ar' ? `اختر لقطة (${opts.length} متاحة)` : `Pick a shot (${opts.length} available)`}
+                                    {language === 'ar' ? `Ø§Ø®ØªØ± Ù„Ù‚Ø·Ø© (${opts.length} Ù…ØªØ§Ø­Ø©)` : `Pick a shot (${opts.length} available)`}
                                   </p>
                                   <div className="flex flex-col gap-2">
                                     {opts.map((shotUrl, shotIdx) => (
@@ -5056,7 +4341,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                         <img src={shotUrl} alt={`Shot ${shotIdx + 1}`} className="w-full object-cover block" style={{maxHeight:'300px'}} />
                                         {/* Shot number badge */}
                                         <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-full text-[11px] font-bold" style={{background:'rgba(12,15,20,0.88)',color:'#E2C7A8'}}>
-                                          {language === 'ar' ? `لقطة ${shotIdx + 1}` : `Shot ${shotIdx + 1}`}
+                                          {language === 'ar' ? `Ù„Ù‚Ø·Ø© ${shotIdx + 1}` : `Shot ${shotIdx + 1}`}
                                         </div>
                                         {/* Text overlay burn-in */}
                                         {sceneOverlayText[idx] && (
@@ -5064,11 +4349,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                             <span className="text-white font-bold text-xs leading-tight drop-shadow-lg" style={{textShadow:'0 1px 4px rgba(0,0,0,0.9)'}}>{sceneOverlayText[idx]}</span>
                                           </div>
                                         )}
-                                        {/* VS scanning overlay — only on the most recently picked shot */}
+                                        {/* VS scanning overlay â€” only on the most recently picked shot */}
                                         {vsStatus[idx] === 'scanning' && (
                                           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1" style={{background:'rgba(12,15,20,0.85)',color:'rgba(226,199,168,0.8)'}}>
                                             <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{background:'#E2C7A8'}} />
-                                            {language === 'ar' ? '🎬 تحليل اللقطة...' : '🎬 Mapping physics for this shot...'}
+                                            {language === 'ar' ? 'ðŸŽ¬ ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù„Ù‚Ø·Ø©...' : 'ðŸŽ¬ Mapping physics for this shot...'}
                                           </div>
                                         )}
                                       </button>
@@ -5076,7 +4361,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                   </div>
                                 </div>
                               ) : img ? (
-                                // Single image — show with regen option
+                                // Single image â€” show with regen option
                                 <div className="relative rounded-2xl overflow-hidden" style={{border:'1px solid rgba(226,199,168,0.35)'}}>
                                   <img src={img} alt={`Scene ${idx+1}`} className="w-full object-cover" style={{maxHeight:'300px'}} />
                                   {/* Text overlay burn-in */}
@@ -5093,13 +4378,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       style={{background:'rgba(12,15,20,0.85)',border:'1px solid rgba(226,199,168,0.4)',color:'#E2C7A8',backdropFilter:'blur(8px)'}}
                                     >
                                       <RefreshCw className="h-3 w-3" />
-                                      <span>{language === 'ar' ? 'إعادة' : 'Regen'}</span>
+                                      <span>{language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø©' : 'Regen'}</span>
                                     </button>
                                   )}
                                 </div>
                               ) : prog === 'error' ? (
                                 <div className="flex flex-col items-center gap-3 py-6">
-                                  <span className="text-red-400 text-2xl">✗</span>
+                                  <span className="text-red-400 text-2xl">âœ—</span>
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
@@ -5108,7 +4393,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
                                       style={{background:'rgba(226,199,168,0.12)',border:'1px solid rgba(226,199,168,0.35)',color:'#E2C7A8'}}
                                     >
-                                      <span>{language === 'ar' ? 'مشهد جديد' : 'New Scene'}</span>
+                                      <span>{language === 'ar' ? 'Ù…Ø´Ù‡Ø¯ Ø¬Ø¯ÙŠØ¯' : 'New Scene'}</span>
                                     </button>
                                     <button
                                       type="button"
@@ -5118,7 +4403,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.5)',color:'#f87171'}}
                                     >
                                       <RefreshCw className="h-3.5 w-3.5" />
-                                      <span>{language === 'ar' ? 'إعادة محاولة' : 'Retry Scene'}</span>
+                                      <span>{language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© Ù…Ø­Ø§ÙˆÙ„Ø©' : 'Retry Scene'}</span>
                                     </button>
                                   </div>
                                 </div>
@@ -5127,7 +4412,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 <div className="flex flex-col items-center gap-2 py-8">
                                   <Loader2 className="h-8 w-8 animate-spin" style={{color:'rgba(226,199,168,0.4)'}} />
                                   <p className="text-xs" style={{color:'rgba(255,255,255,0.3)'}}>
-                                    {language === 'ar' ? 'الذكاء الاصطناعي يرسم...' : 'AI is painting…'}
+                                    {language === 'ar' ? 'Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ ÙŠØ±Ø³Ù…...' : 'AI is paintingâ€¦'}
                                   </p>
                                 </div>
                               )}
@@ -5149,21 +4434,21 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           <div className="flex items-center justify-between">
                             <h4 className="text-sm font-bold text-[#E2C7A8]">
                               {(castingRegenModal.mode || 'regen') === 'new'
-                                ? (language === 'ar' ? `مشهد جديد للمشهد ${castingRegenModal.sceneIdx + 1}` : `New Scene for Scene ${castingRegenModal.sceneIdx + 1}`)
-                                : (language === 'ar' ? `إعادة توليد المشهد ${castingRegenModal.sceneIdx + 1}` : `Regenerate Scene ${castingRegenModal.sceneIdx + 1}`)}
+                                ? (language === 'ar' ? `Ù…Ø´Ù‡Ø¯ Ø¬Ø¯ÙŠØ¯ Ù„Ù„Ù…Ø´Ù‡Ø¯ ${castingRegenModal.sceneIdx + 1}` : `New Scene for Scene ${castingRegenModal.sceneIdx + 1}`)
+                                : (language === 'ar' ? `Ø¥Ø¹Ø§Ø¯Ø© ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ù…Ø´Ù‡Ø¯ ${castingRegenModal.sceneIdx + 1}` : `Regenerate Scene ${castingRegenModal.sceneIdx + 1}`)}
                             </h4>
                             <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingNewScenePrompt(''); setCastingRegenSceneAnchor(null); }}
-                              className="text-white/40 hover:text-white/70 text-sm transition-colors">✕</button>
+                              className="text-white/40 hover:text-white/70 text-sm transition-colors">âœ•</button>
                           </div>
                           {(castingRegenModal.mode || 'regen') === 'new' && (
                             <div className="flex flex-col gap-1.5">
                               <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                                {language === 'ar' ? 'وصف المشهد الجديد' : 'New scene prompt'}
+                                {language === 'ar' ? 'ÙˆØµÙ Ø§Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„Ø¬Ø¯ÙŠØ¯' : 'New scene prompt'}
                               </label>
                               <textarea
                                 value={castingNewScenePrompt}
                                 onChange={(e) => setCastingNewScenePrompt(e.target.value)}
-                                placeholder={language === 'ar' ? 'اكتب وصف المشهد الذي تريد توليده...' : 'Type the new scene you want to generate...'}
+                                placeholder={language === 'ar' ? 'Ø§ÙƒØªØ¨ ÙˆØµÙ Ø§Ù„Ù…Ø´Ù‡Ø¯ Ø§Ù„Ø°ÙŠ ØªØ±ÙŠØ¯ ØªÙˆÙ„ÙŠØ¯Ù‡...' : 'Type the new scene you want to generate...'}
                                 className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none min-h-[96px] resize-none"
                                 style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
                               />
@@ -5173,20 +4458,20 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             <>
                               <div className="flex flex-col gap-1.5">
                                 <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                                  {language === 'ar' ? 'تغييرات محددة (اختياري)' : 'Director\'s note (optional)'}
+                                  {language === 'ar' ? 'ØªØºÙŠÙŠØ±Ø§Øª Ù…Ø­Ø¯Ø¯Ø© (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)' : 'Director\'s note (optional)'}
                                 </label>
                                 <input
                                   type="text"
                                   value={castingRegenNote}
                                   onChange={(e) => setCastingRegenNote(e.target.value)}
-                                  placeholder={language === 'ar' ? 'مثال: أضف ضوءاً ذهبياً، غيّر الخلفية...' : 'e.g., Add golden light, change background...'}
+                                  placeholder={language === 'ar' ? 'Ù…Ø«Ø§Ù„: Ø£Ø¶Ù Ø¶ÙˆØ¡Ø§Ù‹ Ø°Ù‡Ø¨ÙŠØ§Ù‹ØŒ ØºÙŠÙ‘Ø± Ø§Ù„Ø®Ù„ÙÙŠØ©...' : 'e.g., Add golden light, change background...'}
                                   className="w-full bg-transparent rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 outline-none"
                                   style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)'}}
                                 />
                               </div>
                               <div className="flex flex-col gap-1.5">
                                 <label className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                                  {language === 'ar' ? 'مرجع مشهد مخصص (يستبدل الهوية العامة لهذا المشهد فقط)' : 'Scene-specific reference (overrides brand anchor for this scene only)'}
+                                  {language === 'ar' ? 'Ù…Ø±Ø¬Ø¹ Ù…Ø´Ù‡Ø¯ Ù…Ø®ØµØµ (ÙŠØ³ØªØ¨Ø¯Ù„ Ø§Ù„Ù‡ÙˆÙŠØ© Ø§Ù„Ø¹Ø§Ù…Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„Ù…Ø´Ù‡Ø¯ ÙÙ‚Ø·)' : 'Scene-specific reference (overrides brand anchor for this scene only)'}
                                 </label>
                                 <div className="flex items-center gap-3">
                                   {castingRegenSceneAnchor ? (
@@ -5195,7 +4480,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       <button
                                         onClick={() => setCastingRegenSceneAnchor(null)}
                                         className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/80 text-white text-[9px] flex items-center justify-center hover:bg-red-500/80 transition-colors"
-                                      >✕</button>
+                                      >âœ•</button>
                                     </div>
                                   ) : (
                                     <label className="w-14 h-14 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-all hover:opacity-80"
@@ -5211,7 +4496,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                             await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
                                             const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
                                             if (urlData?.publicUrl) setCastingRegenSceneAnchor(urlData.publicUrl);
-                                          } catch { toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Upload failed'); }
+                                          } catch { toast.error(language === 'ar' ? 'ÙØ´Ù„ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø©' : 'Upload failed'); }
                                           finally { setIsUploadingRegenAnchor(false); }
                                         }}
                                       />
@@ -5220,8 +4505,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                   )}
                                   <p className="text-[9px] text-white/35 leading-relaxed">
                                     {castingRegenSceneAnchor
-                                      ? (language === 'ar' ? 'هذه الصورة ستُستخدم كمرجع حصري لهذا المشهد فقط (قوة ٧٠٪)' : 'This image overrides the brand anchor for this scene at 70% strength')
-                                      : (language === 'ar' ? 'اتركها فارغة لاستخدام أساس النمط العام' : 'Leave empty to use the global Style & Brand Foundation')}
+                                      ? (language === 'ar' ? 'Ù‡Ø°Ù‡ Ø§Ù„ØµÙˆØ±Ø© Ø³ØªÙØ³ØªØ®Ø¯Ù… ÙƒÙ…Ø±Ø¬Ø¹ Ø­ØµØ±ÙŠ Ù„Ù‡Ø°Ø§ Ø§Ù„Ù…Ø´Ù‡Ø¯ ÙÙ‚Ø· (Ù‚ÙˆØ© Ù§Ù Ùª)' : 'This image overrides the brand anchor for this scene at 70% strength')
+                                      : (language === 'ar' ? 'Ø§ØªØ±ÙƒÙ‡Ø§ ÙØ§Ø±ØºØ© Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø£Ø³Ø§Ø³ Ø§Ù„Ù†Ù…Ø· Ø§Ù„Ø¹Ø§Ù…' : 'Leave empty to use the global Style & Brand Foundation')}
                                   </p>
                                 </div>
                               </div>
@@ -5238,10 +4523,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               </div>
                               <div>
                                 <p className="text-xs font-semibold text-white/80">
-                                  {language === 'ar' ? 'الحفاظ على النمط الرئيسي' : 'Maintain Master Style'}
+                                  {language === 'ar' ? 'Ø§Ù„Ø­ÙØ§Ø¸ Ø¹Ù„Ù‰ Ø§Ù„Ù†Ù…Ø· Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ' : 'Maintain Master Style'}
                                 </p>
                                 <p className="text-[10px] text-white/40">
-                                  {language === 'ar' ? 'يستخدم مرساة العلامة كمرجع أساسي' : 'Uses brand anchor as primary style reference'}
+                                  {language === 'ar' ? 'ÙŠØ³ØªØ®Ø¯Ù… Ù…Ø±Ø³Ø§Ø© Ø§Ù„Ø¹Ù„Ø§Ù…Ø© ÙƒÙ…Ø±Ø¬Ø¹ Ø£Ø³Ø§Ø³ÙŠ' : 'Uses brand anchor as primary style reference'}
                                 </p>
                               </div>
                             </label>
@@ -5250,7 +4535,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             <button onClick={() => { setCastingRegenModal(null); setCastingRegenNote(''); setCastingNewScenePrompt(''); setCastingRegenSceneAnchor(null); }}
                               className="flex-1 h-10 rounded-xl text-sm font-semibold transition-all active:scale-95"
                               style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.6)'}}>
-                              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                              {language === 'ar' ? 'Ø¥Ù„ØºØ§Ø¡' : 'Cancel'}
                             </button>
                             <button
                               onClick={() => handleCastingRegenScene(
@@ -5264,9 +4549,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                               className="flex-1 h-10 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
                               style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>
                               {isRegenningScene ? (
-                                <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'جاري التوليد...' : 'Generating...'}</span></>
+                                <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªÙˆÙ„ÙŠØ¯...' : 'Generating...'}</span></>
                               ) : (
-                                <><RefreshCw className="h-4 w-4" /><span>{(castingRegenModal.mode || 'regen') === 'new' ? (language === 'ar' ? 'توليد مشهد جديد' : 'Generate New Scene') : (language === 'ar' ? 'إعادة توليد المشهد' : 'Regenerate Scene')}</span></>
+                                <><RefreshCw className="h-4 w-4" /><span>{(castingRegenModal.mode || 'regen') === 'new' ? (language === 'ar' ? 'ØªÙˆÙ„ÙŠØ¯ Ù…Ø´Ù‡Ø¯ Ø¬Ø¯ÙŠØ¯' : 'Generate New Scene') : (language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ù…Ø´Ù‡Ø¯' : 'Regenerate Scene')}</span></>
                               )}
                             </button>
                           </div>
@@ -5274,14 +4559,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       </div>
                     )}
 
-                    {/* Sticky footer — APPROVE & FILM */}
+                    {/* Sticky footer â€” APPROVE & FILM */}
                     <div className="cinema-sticky-footer px-4 py-3 flex gap-3">
                       <button
                         onClick={handleCinemaReset}
                         className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97]"
                         style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
                       >
-                        {language === 'ar' ? 'من البداية' : 'Reset'}
+                        {language === 'ar' ? 'Ù…Ù† Ø§Ù„Ø¨Ø¯Ø§ÙŠØ©' : 'Reset'}
                       </button>
                       <button
                         onClick={handleFilm}
@@ -5291,7 +4576,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       >
                         <div className="flex items-center justify-center gap-2">
                           <Film className="h-4 w-4" />
-                          <span>{language === 'ar' ? 'يبدأ الإنتاج تلقائياً' : 'PRODUCTION STARTS AUTOMATICALLY'}</span>
+                          <span>{language === 'ar' ? 'ÙŠØ¨Ø¯Ø£ Ø§Ù„Ø¥Ù†ØªØ§Ø¬ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹' : 'PRODUCTION STARTS AUTOMATICALLY'}</span>
                         </div>
                       </button>
                     </div>
@@ -5314,37 +4599,37 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       <div className="text-center space-y-1 pt-2">
                         {hasError ? (
                           <h3 className="text-base font-bold" style={{color:'#f87171'}}>
-                            {language === 'ar' ? '⚠️ فشل الإنتاج — اضغط إعادة المحاولة' : '⚠️ Production failed — tap Retry'}
+                            {language === 'ar' ? 'âš ï¸ ÙØ´Ù„ Ø§Ù„Ø¥Ù†ØªØ§Ø¬ â€” Ø§Ø¶ØºØ· Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©' : 'âš ï¸ Production failed â€” tap Retry'}
                           </h3>
                         ) : autoStitchQueued ? (
                           <h3 className="text-lg font-bold text-white">
-                            {language === 'ar' ? '🎬 جاري تجهيز الفيلم النهائي...' : '🎬 Preparing your final film...'}
+                            {language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ ØªØ¬Ù‡ÙŠØ² Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ...' : 'ðŸŽ¬ Preparing your final film...'}
                           </h3>
                         ) : allClipsDone && !isStitching ? (
                           <h3 className="text-lg font-bold text-white">
-                            {language === 'ar' ? '🎬 راجع مقاطعك' : '🎬 Review Your Clips'}
+                            {language === 'ar' ? 'ðŸŽ¬ Ø±Ø§Ø¬Ø¹ Ù…Ù‚Ø§Ø·Ø¹Ùƒ' : 'ðŸŽ¬ Review Your Clips'}
                           </h3>
                         ) : isStitching ? (
                           <h3 className="text-lg font-bold text-white">
-                            {language === 'ar' ? '🎬 جاري إنهاء الفيلم...' : '🎬 Finalizing your film...'}
+                            {language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ Ø¥Ù†Ù‡Ø§Ø¡ Ø§Ù„ÙÙŠÙ„Ù…...' : 'ðŸŽ¬ Finalizing your film...'}
                           </h3>
                         ) : (
                           <h3 className="text-lg font-bold text-white">
-                            {language === 'ar' ? '🎬 جاري إنتاج فيلمك...' : '🎬 Producing your film...'}
+                            {language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ Ø¥Ù†ØªØ§Ø¬ ÙÙŠÙ„Ù…Ùƒ...' : 'ðŸŽ¬ Producing your film...'}
                           </h3>
                         )}
                         <p className="text-xs text-white/50">
                           {autoStitchQueued
-                            ? (language === 'ar' ? 'كل المقاطع جاهزة • سيبدأ إنشاء الفيلم الآن تلقائياً' : 'All clips are ready • your final film is starting automatically')
+                            ? (language === 'ar' ? 'ÙƒÙ„ Ø§Ù„Ù…Ù‚Ø§Ø·Ø¹ Ø¬Ø§Ù‡Ø²Ø© â€¢ Ø³ÙŠØ¨Ø¯Ø£ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ø¢Ù† ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹' : 'All clips are ready â€¢ your final film is starting automatically')
                             : allClipsDone && !isStitching
-                            ? (language === 'ar' ? 'بدّل المقاطع إن أردت • ثم اضغط إنشاء الفيلم النهائي' : 'Swap clips if needed • then tap Create Final Film')
+                            ? (language === 'ar' ? 'Ø¨Ø¯Ù‘Ù„ Ø§Ù„Ù…Ù‚Ø§Ø·Ø¹ Ø¥Ù† Ø£Ø±Ø¯Øª â€¢ Ø«Ù… Ø§Ø¶ØºØ· Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ' : 'Swap clips if needed â€¢ then tap Create Final Film')
                             : isStitching
                             ? (language === 'ar'
-                              ? `${stitchPercent}% • تقدم الفيلم النهائي`
-                              : `${stitchPercent}% • Final film progress`)
+                              ? `${stitchPercent}% â€¢ ØªÙ‚Ø¯Ù… Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ`
+                              : `${stitchPercent}% â€¢ Final film progress`)
                             : (language === 'ar'
-                              ? `${animationPercent}% • ${doneCount}/${cinemaSceneCount} جاهز • ${renderingCount} قيد التحريك • ${queuedCount} في الانتظار • ${totalAdDuration}ث إجمالياً`
-                              : `${animationPercent}% • ${doneCount}/${cinemaSceneCount} ready • ${renderingCount} rendering • ${queuedCount} queued • ${totalAdDuration}s total`)}
+                              ? `${animationPercent}% â€¢ ${doneCount}/${cinemaSceneCount} Ø¬Ø§Ù‡Ø² â€¢ ${renderingCount} Ù‚ÙŠØ¯ Ø§Ù„ØªØ­Ø±ÙŠÙƒ â€¢ ${queuedCount} ÙÙŠ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø± â€¢ ${totalAdDuration}Ø« Ø¥Ø¬Ù…Ø§Ù„ÙŠØ§Ù‹`
+                              : `${animationPercent}% â€¢ ${doneCount}/${cinemaSceneCount} ready â€¢ ${renderingCount} rendering â€¢ ${queuedCount} queued â€¢ ${totalAdDuration}s total`)}
                         </p>
                       </div>
 
@@ -5356,11 +4641,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                       )}
 
-                      {/* Animated pulse bar — only during generation or stitching */}
+                      {/* Animated pulse bar â€” only during generation or stitching */}
                       {!hasError && !allClipsDone && !isStitching && (
                         <div className="space-y-2 px-1">
                           <div className="flex items-center justify-between text-[10px] font-semibold text-white/50">
-                            <span>{language === 'ar' ? 'تقدم إنتاج المشاهد' : 'Scene production progress'}</span>
+                            <span>{language === 'ar' ? 'ØªÙ‚Ø¯Ù… Ø¥Ù†ØªØ§Ø¬ Ø§Ù„Ù…Ø´Ø§Ù‡Ø¯' : 'Scene production progress'}</span>
                             <span>{animationPercent}%</span>
                           </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
@@ -5374,7 +4659,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       {isStitching && (
                         <div className="space-y-2 px-1">
                           <div className="flex items-center justify-between text-[10px] font-semibold text-white/50">
-                            <span>{language === 'ar' ? 'تقدم الفيلم النهائي' : 'Final film progress'}</span>
+                            <span>{language === 'ar' ? 'ØªÙ‚Ø¯Ù… Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ' : 'Final film progress'}</span>
                             <span>{stitchPercent}%</span>
                           </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
@@ -5386,7 +4671,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                       )}
 
-                      {/* ── Clips ready: show VIDEO previews with tap-to-swap ── */}
+                      {/* â”€â”€ Clips ready: show VIDEO previews with tap-to-swap â”€â”€ */}
                       {allClipsDone && !isStitching ? (
                         <div className="flex gap-2 px-1 overflow-x-auto pb-2" style={{scrollSnapType:'x mandatory'}}>
                           {clipOrder.map((origIdx, pos) => {
@@ -5410,7 +4695,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       return n;
                                     });
                                     setSwapClipIdx(null);
-                                    toast.success(language === 'ar' ? 'تم التبديل!' : 'Swapped!');
+                                    toast.success(language === 'ar' ? 'ØªÙ… Ø§Ù„ØªØ¨Ø¯ÙŠÙ„!' : 'Swapped!');
                                   }
                                 }}
                                 className="relative rounded-xl overflow-hidden flex-shrink-0 cursor-pointer transition-all"
@@ -5443,7 +4728,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                     style={{background:'rgba(0,0,0,0.3)'}}>
                                     <span className="text-xs font-bold px-2 py-1 rounded-lg"
                                       style={{background:'hsl(210,100%,65%)',color:'#fff'}}>
-                                      {language === 'ar' ? 'اختر مقطع للتبديل' : 'Tap another to swap'}
+                                      {language === 'ar' ? 'Ø§Ø®ØªØ± Ù…Ù‚Ø·Ø¹ Ù„Ù„ØªØ¨Ø¯ÙŠÙ„' : 'Tap another to swap'}
                                     </span>
                                   </div>
                                 )}
@@ -5452,7 +4737,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           })}
                         </div>
                       ) : (
-                        /* ── Still generating: show keyframe thumbnails with progress ── */
+                        /* â”€â”€ Still generating: show keyframe thumbnails with progress â”€â”€ */
                         <div className="grid grid-cols-2 gap-3 px-1">
                           {sceneImages.slice(0, cinemaSceneCount).map((img, idx) => {
                             const sceneState = animProgress[idx];
@@ -5471,25 +4756,25 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 <div className="absolute inset-0 flex items-center justify-center"
                                   style={{background: sceneDone ? 'rgba(0,0,0,0.15)' : img ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.6)'}}>
                                   {sceneDone ? (
-                                    <span className="text-green-400 text-lg font-bold">✓</span>
+                                    <span className="text-green-400 text-lg font-bold">âœ“</span>
                                   ) : sceneErrored ? (
-                                    <span className="text-red-400 text-lg font-bold">×</span>
+                                    <span className="text-red-400 text-lg font-bold">Ã—</span>
                                   ) : !hasError ? (
                                     <Loader2 className={`h-4 w-4 ${sceneRendering ? 'animate-spin text-[hsl(210,100%,70%)]' : 'animate-pulse text-[#E2C7A8]/75'}`} />
                                   ) : null}
                                 </div>
                                 <span className="absolute top-1 left-1.5 text-[9px] font-bold" style={{color: sceneDone ? '#4ade80' : sceneRendering ? 'hsl(210,100%,70%)' : sceneErrored ? '#f87171' : '#E2C7A8'}}>
-                                  {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
+                                  {language === 'ar' ? `Ù…${idx+1}` : `Ch.${idx+1}`}
                                 </span>
                                 <span className="absolute bottom-1.5 left-1.5 right-1.5 px-2 py-1 rounded-md text-[10px] font-semibold text-center"
                                   style={{background: sceneDone ? 'rgba(34,197,94,0.16)' : sceneErrored ? 'rgba(248,113,113,0.16)' : sceneRendering ? 'rgba(59,130,246,0.16)' : 'rgba(226,199,168,0.14)', color: sceneDone ? '#86efac' : sceneErrored ? '#fca5a5' : sceneRendering ? '#93c5fd' : '#E2C7A8'}}>
                                   {sceneDone
-                                    ? (language === 'ar' ? 'جاهز' : 'Ready')
+                                    ? (language === 'ar' ? 'Ø¬Ø§Ù‡Ø²' : 'Ready')
                                     : sceneErrored
-                                    ? (language === 'ar' ? 'فشل' : 'Failed')
+                                    ? (language === 'ar' ? 'ÙØ´Ù„' : 'Failed')
                                     : sceneRendering
-                                    ? (language === 'ar' ? 'جارٍ التحريك' : 'Animating')
-                                    : (language === 'ar' ? 'في الانتظار' : 'Queued')}
+                                    ? (language === 'ar' ? 'Ø¬Ø§Ø±Ù Ø§Ù„ØªØ­Ø±ÙŠÙƒ' : 'Animating')
+                                    : (language === 'ar' ? 'ÙÙŠ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø±' : 'Queued')}
                                 </span>
                               </div>
                             );
@@ -5505,7 +4790,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           className="h-12 px-4 rounded-xl text-sm font-semibold text-white/60 flex-shrink-0 transition-all active:scale-[0.97] disabled:opacity-40"
                           style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}
                         >
-                          {language === 'ar' ? 'إعادة' : 'Reset'}
+                          {language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø©' : 'Reset'}
                         </button>
                         {hasError ? (
                           <button
@@ -5515,7 +4800,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             style={{background:'rgba(248,113,113,0.15)',border:'1px solid rgba(248,113,113,0.4)',color:'#f87171'}}
                           >
                             <RefreshCw className="h-4 w-4" />
-                            <span>{language === 'ar' ? 'إعادة المحاولة' : 'Retry Production'}</span>
+                            <span>{language === 'ar' ? 'Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©' : 'Retry Production'}</span>
                           </button>
                         ) : allClipsDone ? (
                           <button
@@ -5527,10 +4812,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             {isStitching ? (
                               <>
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>{language === 'ar' ? '🎬 جاري التجميع...' : '🎬 Assembling...'}</span>
+                                <span>{language === 'ar' ? 'ðŸŽ¬ Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ¬Ù…ÙŠØ¹...' : 'ðŸŽ¬ Assembling...'}</span>
                               </>
                             ) : (
-                              <span>{language === 'ar' ? '🎬 إنشاء الفيلم النهائي' : '🎬 Create Final Film'}</span>
+                              <span>{language === 'ar' ? 'ðŸŽ¬ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠÙ„Ù… Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ' : 'ðŸŽ¬ Create Final Film'}</span>
                             )}
                           </button>
                         ) : (
@@ -5539,7 +4824,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             style={{background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',color:'#fff'}}
                           >
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>{language === 'ar' ? 'جاري الإنتاج...' : 'Producing...'}</span>
+                            <span>{language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¥Ù†ØªØ§Ø¬...' : 'Producing...'}</span>
                           </div>
                         )}
                       </div>
@@ -5552,11 +4837,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     <div className="relative w-full max-w-2xl mx-auto px-4 flex flex-col gap-4">
                       <div className="text-center space-y-1">
                         <p className="text-[#E2C7A8] text-xs font-semibold uppercase tracking-widest opacity-80">
-                          {language === 'ar' ? 'وكتي إعلانات الفيديو' : 'Wakti Video Ads'}
+                          {language === 'ar' ? 'ÙˆÙƒØªÙŠ Ø¥Ø¹Ù„Ø§Ù†Ø§Øª Ø§Ù„ÙÙŠØ¯ÙŠÙˆ' : 'Wakti Video Ads'}
                         </p>
-                        <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
+                        <h2 className="text-2xl font-bold text-white">{language === 'ar' ? 'ðŸŽ¬ Ø§Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø£ÙˆÙ„' : 'ðŸŽ¬ The Premiere'}</h2>
                         <p className="text-xs text-white/40">
-                          {language === 'ar' ? `${cinemaSceneCount} مشاهد • ${sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}ث` : `${cinemaSceneCount} Scenes • ${sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}s`}
+                          {language === 'ar' ? `${cinemaSceneCount} Ù…Ø´Ø§Ù‡Ø¯ â€¢ ${sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}Ø«` : `${cinemaSceneCount} Scenes â€¢ ${sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}s`}
                         </p>
                       </div>
                       {/* Clip progress dots */}
@@ -5577,7 +4862,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           ))}
                         </div>
                       )}
-                      {/* Browser sequential player — clips play one after another */}
+                      {/* Browser sequential player â€” clips play one after another */}
                       <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
                         style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : cinemaFormat === '4:5' ? '4/5' : '9/16', maxHeight:'70vh'}}>
                         <video
@@ -5610,11 +4895,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           }}
                         >
                           {isCinemaSaving ? (
-                            <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}</span></>
+                            <><Loader2 className="h-4 w-4 animate-spin" /><span>{language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸...' : 'Saving...'}</span></>
                           ) : isCinemaSaved ? (
-                            <><span>✓</span><span>{language === 'ar' ? 'تم الحفظ' : 'Saved!'}</span></>
+                            <><span>âœ“</span><span>{language === 'ar' ? 'ØªÙ… Ø§Ù„Ø­ÙØ¸' : 'Saved!'}</span></>
                           ) : (
-                            <><Download className="h-4 w-4" /><span>{language === 'ar' ? 'حفظ في فيديوهاتي' : 'Save to My Videos'}</span></>
+                            <><Download className="h-4 w-4" /><span>{language === 'ar' ? 'Ø­ÙØ¸ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ' : 'Save to My Videos'}</span></>
                           )}
                         </button>
                         {/* Download */}
@@ -5625,7 +4910,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.85)'}}
                         >
                           <Download className="h-4 w-4" />
-                          <span>{language === 'ar' ? 'تنزيل' : 'DL'}</span>
+                          <span>{language === 'ar' ? 'ØªÙ†Ø²ÙŠÙ„' : 'DL'}</span>
                         </a>
                         {/* New film */}
                         <button
@@ -5634,7 +4919,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)'}}
                         >
                           <RefreshCw className="h-4 w-4" />
-                          <span className="hidden sm:inline">{language === 'ar' ? 'جديد' : 'New'}</span>
+                          <span className="hidden sm:inline">{language === 'ar' ? 'Ø¬Ø¯ÙŠØ¯' : 'New'}</span>
                         </button>
                       </div>
                     </div>
@@ -5653,10 +4938,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     <Lock className="h-8 w-8 text-red-400" />
                   </div>
                   <p className="text-white font-semibold text-center px-4">
-                    {language === 'ar' ? 'انتهت الفيديوهات الشهرية' : 'Monthly limit reached'}
+                    {language === 'ar' ? 'Ø§Ù†ØªÙ‡Øª Ø§Ù„ÙÙŠØ¯ÙŠÙˆÙ‡Ø§Øª Ø§Ù„Ø´Ù‡Ø±ÙŠØ©' : 'Monthly limit reached'}
                   </p>
                   <p className="text-white/60 text-xs text-center px-4">
-                    {language === 'ar' ? `استخدمت ${used}/${limit} فيديو هذا الشهر` : `Used ${used}/${limit} videos this month`}
+                    {language === 'ar' ? `Ø§Ø³ØªØ®Ø¯Ù…Øª ${used}/${limit} ÙÙŠØ¯ÙŠÙˆ Ù‡Ø°Ø§ Ø§Ù„Ø´Ù‡Ø±` : `Used ${used}/${limit} videos this month`}
                   </p>
                 </div>
               )}
@@ -5668,7 +4953,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 <div className="flex items-center gap-2 flex-wrap">
                   {needsArabicTranslation && (
                     <div className="flex items-center gap-1 text-[11px] font-semibold text-[#060541]">
-                      <span>{language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic'}</span>
+                      <span>{language === 'ar' ? 'Ø§Ø¶ØºØ· Ù„ØªØ±Ø¬Ù…Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©' : 'Click to translate Arabic'}</span>
                       {language === 'ar' ? (
                         <ArrowLeft className="h-3.5 w-3.5" />
                       ) : (
@@ -5699,12 +4984,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     }`}
                     title={
                       needsArabicTranslation
-                        ? (language === 'ar' ? 'اضغط لترجمة العربية' : 'Click to translate Arabic')
-                        : (language === 'ar' ? 'تعزيز الوصف بالذكاء الاصطناعي' : 'Amp: enhance prompt with AI')
+                        ? (language === 'ar' ? 'Ø§Ø¶ØºØ· Ù„ØªØ±Ø¬Ù…Ø© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©' : 'Click to translate Arabic')
+                        : (language === 'ar' ? 'ØªØ¹Ø²ÙŠØ² Ø§Ù„ÙˆØµÙ Ø¨Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ' : 'Amp: enhance prompt with AI')
                     }
                   >
                     <Wand2 className={`h-3.5 w-3.5 ${isAmping ? 'animate-spin' : ''}`} />
-                    <span>{isAmping ? (language === 'ar' ? 'جاري التعزيز...' : 'Amping...') : (language === 'ar' ? '✦ تعزيز' : '✦ Amp')}</span>
+                    <span>{isAmping ? (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ¹Ø²ÙŠØ²...' : 'Amping...') : (language === 'ar' ? 'âœ¦ ØªØ¹Ø²ÙŠØ²' : 'âœ¦ Amp')}</span>
                   </button>
                 </div>
                 <span className="text-[10px] text-muted-foreground/50">{prompt.length}/2500</span>
@@ -5718,10 +5003,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   placeholder={
                     generationMode === 'text_to_video'
                       ? (language === 'ar'
-                          ? 'صف المشهد والحركة بالتفصيل...\n\nمثال: أبواب تفتح واحدًا تلو الآخر لتكشف غرفًا مختلفة بداخلها أشخاص صغار يعيشون حياتهم...'
+                          ? 'ØµÙ Ø§Ù„Ù…Ø´Ù‡Ø¯ ÙˆØ§Ù„Ø­Ø±ÙƒØ© Ø¨Ø§Ù„ØªÙØµÙŠÙ„...\n\nÙ…Ø«Ø§Ù„: Ø£Ø¨ÙˆØ§Ø¨ ØªÙØªØ­ ÙˆØ§Ø­Ø¯Ù‹Ø§ ØªÙ„Ùˆ Ø§Ù„Ø¢Ø®Ø± Ù„ØªÙƒØ´Ù ØºØ±ÙÙ‹Ø§ Ù…Ø®ØªÙ„ÙØ© Ø¨Ø¯Ø§Ø®Ù„Ù‡Ø§ Ø£Ø´Ø®Ø§Øµ ØµØºØ§Ø± ÙŠØ¹ÙŠØ´ÙˆÙ† Ø­ÙŠØ§ØªÙ‡Ù…...'
                           : 'Describe the full scene and motion in detail...\n\ne.g., Doors open one by one to reveal different rooms with tiny people living inside...')
                       : (language === 'ar'
-                          ? 'صف الحركة المطلوبة...\n\nمثال: شخص يبتسم ويلوح بيده، قطة تحرك رأسها ببطء، سيارة تتحرك للأمام...'
+                          ? 'ØµÙ Ø§Ù„Ø­Ø±ÙƒØ© Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©...\n\nÙ…Ø«Ø§Ù„: Ø´Ø®Øµ ÙŠØ¨ØªØ³Ù… ÙˆÙŠÙ„ÙˆØ­ Ø¨ÙŠØ¯Ù‡ØŒ Ù‚Ø·Ø© ØªØ­Ø±Ùƒ Ø±Ø£Ø³Ù‡Ø§ Ø¨Ø¨Ø·Ø¡ØŒ Ø³ÙŠØ§Ø±Ø© ØªØªØ­Ø±Ùƒ Ù„Ù„Ø£Ù…Ø§Ù…...'
                           : 'Describe the motion you want...\n\ne.g., A person smiling and waving, a cat slowly moving its head, a car driving forward...')
                   }
                   className="min-h-[140px] h-full text-sm resize-none rounded-xl border-2 border-primary/20 focus:border-primary bg-background/50 backdrop-blur-sm transition-all placeholder:text-muted-foreground/60"
@@ -5742,8 +5027,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                       }`}
                     >
-                      <span className="text-[11px] opacity-80">▮</span>
-                      {language === 'ar' ? 'عمودي' : 'Portrait'}
+                      <span className="text-[11px] opacity-80">â–®</span>
+                      {language === 'ar' ? 'Ø¹Ù…ÙˆØ¯ÙŠ' : 'Portrait'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setAspectRatio('16:9')}
@@ -5754,8 +5039,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                       }`}
                     >
-                      <span className="text-[11px] opacity-80">▬</span>
-                      {language === 'ar' ? 'أفقي' : 'Landscape'}
+                      <span className="text-[11px] opacity-80">â–¬</span>
+                      {language === 'ar' ? 'Ø£ÙÙ‚ÙŠ' : 'Landscape'}
                     </button>
                   </div>
 
@@ -5898,12 +5183,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 {isGenerating ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>{generationStatus || (language === 'ar' ? 'جاري الإنشاء...' : 'Generating...')}</span>
+                    <span>{generationStatus || (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¥Ù†Ø´Ø§Ø¡...' : 'Generating...')}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <Wand2 className="h-5 w-5" />
-                    <span>{language === 'ar' ? 'إنشاء الفيديو ✨' : 'Generate Video ✨'}</span>
+                    <span>{language === 'ar' ? 'Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ âœ¨' : 'Generate Video âœ¨'}</span>
                   </div>
                 )}
               </Button>
@@ -5932,13 +5217,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 generationMode === 'image_to_video' ? (
                   !imagePreview && (
                     <p className="text-center text-xs text-muted-foreground">
-                      {language === 'ar' ? '← اختر صورة للبدء' : '← Select an image to start'}
+                      {language === 'ar' ? 'â† Ø§Ø®ØªØ± ØµÙˆØ±Ø© Ù„Ù„Ø¨Ø¯Ø¡' : 'â† Select an image to start'}
                     </p>
                   )
                 ) : (
                   !prompt.trim() && (
                     <p className="text-center text-xs text-muted-foreground">
-                      {language === 'ar' ? '← اكتب وصفاً للبدء' : '← Write a prompt to start'}
+                      {language === 'ar' ? 'â† Ø§ÙƒØªØ¨ ÙˆØµÙØ§Ù‹ Ù„Ù„Ø¨Ø¯Ø¡' : 'â† Write a prompt to start'}
                     </p>
                   )
                 )
@@ -5962,21 +5247,21 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 />
                 {/* Floating badge */}
                 <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-green-500 text-white text-xs font-bold shadow-lg animate-pulse">
-                  {language === 'ar' ? '🎉 جاهز!' : '🎉 Ready!'}
+                  {language === 'ar' ? 'ðŸŽ‰ Ø¬Ø§Ù‡Ø²!' : 'ðŸŽ‰ Ready!'}
                 </div>
               </div>
               
               {/* Action buttons - Mobile friendly, large touch targets */}
               <div className="p-4 space-y-3">
                 <p className="text-center text-sm font-medium text-green-600 dark:text-green-400">
-                  {language === 'ar' ? 'تم إنشاء الفيديو بنجاح!' : 'Video generated successfully!'}
+                  {language === 'ar' ? 'ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ÙÙŠØ¯ÙŠÙˆ Ø¨Ù†Ø¬Ø§Ø­!' : 'Video generated successfully!'}
                 </p>
                 <p className="text-center text-xs text-muted-foreground">
                   {isSaving
-                    ? (language === 'ar' ? 'جاري الحفظ تلقائياً في فيديوهاتي...' : 'Auto-saving to My Videos...')
+                    ? (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ...' : 'Auto-saving to My Videos...')
                     : isSaved
-                      ? (language === 'ar' ? 'تم الحفظ تلقائياً في فيديوهاتي.' : 'Auto-saved to My Videos.')
-                      : saveErrorMessage || (language === 'ar' ? 'إذا لزم الأمر يمكنك الضغط على زر الحفظ أدناه.' : 'If needed, you can still tap Save below.')}
+                      ? (language === 'ar' ? 'ØªÙ… Ø§Ù„Ø­ÙØ¸ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ ÙÙŠ ÙÙŠØ¯ÙŠÙˆÙ‡Ø§ØªÙŠ.' : 'Auto-saved to My Videos.')
+                      : saveErrorMessage || (language === 'ar' ? 'Ø¥Ø°Ø§ Ù„Ø²Ù… Ø§Ù„Ø£Ù…Ø± ÙŠÙ…ÙƒÙ†Ùƒ Ø§Ù„Ø¶ØºØ· Ø¹Ù„Ù‰ Ø²Ø± Ø§Ù„Ø­ÙØ¸ Ø£Ø¯Ù†Ø§Ù‡.' : 'If needed, you can still tap Save below.')}
                 </p>
                 
                 <div className="grid grid-cols-3 gap-2">
@@ -5998,10 +5283,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     )}
                     <span className="text-[10px] font-medium">
                       {isSaving
-                        ? (language === 'ar' ? 'جاري الحفظ' : 'Saving')
+                        ? (language === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸' : 'Saving')
                         : isSaved
-                          ? (language === 'ar' ? 'تم الحفظ' : 'Saved!')
-                          : (language === 'ar' ? 'حفظ' : 'Save')}
+                          ? (language === 'ar' ? 'ØªÙ… Ø§Ù„Ø­ÙØ¸' : 'Saved!')
+                          : (language === 'ar' ? 'Ø­ÙØ¸' : 'Save')}
                     </span>
                   </Button>
                   
@@ -6010,7 +5295,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     onClick={handleDownload}
                   >
                     <Download className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'ØªØ­Ù…ÙŠÙ„' : 'Download'}</span>
                   </Button>
                   
                   <Button 
@@ -6018,7 +5303,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     onClick={handleShare}
                   >
                     <Share2 className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">{language === 'ar' ? 'مشاركة' : 'Share'}</span>
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'Ù…Ø´Ø§Ø±ÙƒØ©' : 'Share'}</span>
                   </Button>
                 </div>
                 
@@ -6042,7 +5327,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   }}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'إنشاء فيديو جديد' : 'Create Another Video'}
+                  {language === 'ar' ? 'Ø¥Ù†Ø´Ø§Ø¡ ÙÙŠØ¯ÙŠÙˆ Ø¬Ø¯ÙŠØ¯' : 'Create Another Video'}
                 </Button>
               </div>
             </div>
@@ -6056,11 +5341,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] shadow-[0_0_6px_hsla(210,100%,65%,0.8)]" />
                   <span className="text-xs font-bold text-white/80 tracking-wide uppercase">
-                    {language === 'ar' ? 'آخر فيديو' : 'Latest Video'}
+                    {language === 'ar' ? 'Ø¢Ø®Ø± ÙÙŠØ¯ÙŠÙˆ' : 'Latest Video'}
                   </span>
                 </div>
                 <span className="text-[10px] text-muted-foreground bg-white/5 px-2 py-0.5 rounded-full">
-                  {language === 'ar' ? 'محفوظ' : 'Saved'}
+                  {language === 'ar' ? 'Ù…Ø­ÙÙˆØ¸' : 'Saved'}
                 </span>
               </div>
               <div className="relative bg-black">
@@ -6077,14 +5362,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     onClick={handleDownloadLatest}
                   >
                     <Download className="h-4 w-4" />
-                    {language === 'ar' ? 'تحميل' : 'Download'}
+                    {language === 'ar' ? 'ØªØ­Ù…ÙŠÙ„' : 'Download'}
                   </Button>
                   <Button
                     className="flex-1 h-10 gap-2 rounded-xl bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 hover:from-violet-500/30 hover:to-fuchsia-500/30 text-violet-300 border border-violet-500/20 text-xs font-semibold"
                     onClick={() => onSaveSuccess?.()}
                   >
                     <FolderOpen className="h-4 w-4" />
-                    {language === 'ar' ? 'المحفوظات' : 'My Videos'}
+                    {language === 'ar' ? 'Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø§Øª' : 'My Videos'}
                   </Button>
               </div>
             </div>
@@ -6107,13 +5392,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               <div className="flex items-center gap-2">
                 <GalleryHorizontalEnd className="h-5 w-5 text-orange-500" />
                 <h3 className="font-bold text-sm">
-                  {language === 'ar' ? 'اختر من صورك المحفوظة' : 'Pick from Saved Images'}
+                  {language === 'ar' ? 'Ø§Ø®ØªØ± Ù…Ù† ØµÙˆØ±Ùƒ Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø©' : 'Pick from Saved Images'}
                 </h3>
               </div>
               <button
                 onClick={() => setShowSavedPicker(false)}
-                title={language === 'ar' ? 'إغلاق' : 'Close'}
-                aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+                title={language === 'ar' ? 'Ø¥ØºÙ„Ø§Ù‚' : 'Close'}
+                aria-label={language === 'ar' ? 'Ø¥ØºÙ„Ø§Ù‚' : 'Close'}
                 className="p-1.5 rounded-full hover:bg-muted transition-colors"
               >
                 <X className="h-5 w-5" />
@@ -6130,10 +5415,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                 <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
                   <ImageIcon className="h-10 w-10 opacity-40" />
                   <p className="text-sm font-medium">
-                    {language === 'ar' ? 'لا توجد صور محفوظة بعد' : 'No saved images yet'}
+                    {language === 'ar' ? 'Ù„Ø§ ØªÙˆØ¬Ø¯ ØµÙˆØ± Ù…Ø­ÙÙˆØ¸Ø© Ø¨Ø¹Ø¯' : 'No saved images yet'}
                   </p>
                   <p className="text-xs">
-                    {language === 'ar' ? 'أنشئ صوراً في تبويب الصور أولاً' : 'Generate images in the Image tab first'}
+                    {language === 'ar' ? 'Ø£Ù†Ø´Ø¦ ØµÙˆØ±Ø§Ù‹ ÙÙŠ ØªØ¨ÙˆÙŠØ¨ Ø§Ù„ØµÙˆØ± Ø£ÙˆÙ„Ø§Ù‹' : 'Generate images in the Image tab first'}
                   </p>
                 </div>
               ) : (
@@ -6176,17 +5461,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         <AlertDialogContent className="max-w-md rounded-2xl border border-[hsl(210,100%,65%)]/30 bg-[hsl(222,20%,6%)] text-[hsl(0,0%,95%)] shadow-[0_4px_32px_hsla(0,0%,0%,0.7),0_0_40px_hsla(210,100%,65%,0.18)]">
           <AlertDialogHeader className="text-center sm:text-center">
             <AlertDialogTitle className="text-xl font-bold text-[hsl(0,0%,95%)]">
-              {language === 'ar' ? 'تم حظر هذا الطلب' : 'This request was blocked'}
+              {language === 'ar' ? 'ØªÙ… Ø­Ø¸Ø± Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨' : 'This request was blocked'}
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3 text-base leading-7 text-[hsl(0,0%,95%)]/85">
               <span className="block">
                 {language === 'ar'
-                  ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي.'
+                  ? 'ØªÙ… Ø­Ø¸Ø± Ù‡Ø°Ø§ Ø§Ù„Ø·Ù„Ø¨ ÙˆÙÙ‚ Ù‚ÙˆØ§Ø¹Ø¯ Ø§Ù„Ø£Ù…Ø§Ù† ÙÙŠ ÙˆÙƒØªÙŠ.'
                   : 'Wakti safety rules blocked this request.'}
               </span>
               <span className="block text-sm text-[hsl(210,30%,80%)]">
                 {language === 'ar'
-                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل حماية الأطفال ثم حاول مرة أخرى.'
+                  ? 'Ø¥Ø°Ø§ ÙƒØ§Ù†Øª Ø§Ù„ØµÙˆØ±Ø© ØªØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø·ÙÙ„ØŒ ÙØ¹Ù‘Ù„ Ø­Ù…Ø§ÙŠØ© Ø§Ù„Ø£Ø·ÙØ§Ù„ Ø«Ù… Ø­Ø§ÙˆÙ„ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰.'
                   : 'If the image contains a child, turn on Child protection and try again.'}
               </span>
             </AlertDialogDescription>
@@ -6197,8 +5482,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               className="min-w-40 rounded-xl bg-[hsl(210,100%,65%)] text-[hsl(222,20%,6%)] hover:bg-[hsl(210,100%,60%)] focus-visible:ring-[hsl(210,100%,65%)]"
             >
               {isKidsContentMode
-                ? (language === 'ar' ? 'حسنًا' : 'OK')
-                : (language === 'ar' ? 'تفعيل أمان الأطفال' : 'Enable Child Safety')}
+                ? (language === 'ar' ? 'Ø­Ø³Ù†Ù‹Ø§' : 'OK')
+                : (language === 'ar' ? 'ØªÙØ¹ÙŠÙ„ Ø£Ù…Ø§Ù† Ø§Ù„Ø£Ø·ÙØ§Ù„' : 'Enable Child Safety')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
