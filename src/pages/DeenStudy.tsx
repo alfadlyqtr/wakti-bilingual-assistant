@@ -970,7 +970,7 @@ export default function DeenStudy() {
                   onPointerLeave={handleStartCardPressEnd}
                   disabled={startingSession}
                   className="w-full rounded-2xl p-4 text-left active:scale-[0.99] transition-all disabled:opacity-60"
-                  style={{ background: dark ? "hsla(25,95%,60%,0.07)" : "hsla(25,85%,45%,0.10)", border: "1px solid hsla(25,95%,60%,0.20)" }}
+                  style={{ background: dark ? "hsla(25,95%,60%,0.07)" : "hsla(25,85%,45%,0.10)", border: "1px solid hsla(25,95%,60%,0.20)", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
                   dir={isAr ? "rtl" : "ltr"}
                 >
                   <div className="flex items-center justify-between gap-3">
