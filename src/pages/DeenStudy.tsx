@@ -412,11 +412,27 @@ export default function DeenStudy() {
     }
     if (plan && playerMode === "learn") {
       if (!alreadyMemorized) {
+        let reachedDailyGoalNow = false;
         setDailyPlanProgressByPlan((prev) => {
-          const next = { ...prev, [plan.id]: (prev[plan.id] ?? 0) + 1 };
+          const previousPlanCount = prev[plan.id] ?? 0;
+          const nextPlanCount = previousPlanCount + 1;
+          if (plan.dailyGoal > 0 && previousPlanCount < plan.dailyGoal && nextPlanCount >= plan.dailyGoal) {
+            reachedDailyGoalNow = true;
+          }
+          const next = { ...prev, [plan.id]: nextPlanCount };
           saveDailyPlanProgress(next);
           return next;
         });
+        if (reachedDailyGoalNow) {
+          toast.success(
+            isAr ? "🎉 ما شاء الله! تم تحقيق الهدف اليومي" : "🎉 MashaAllah! Daily goal reached",
+            {
+              position: "bottom-center",
+              duration: 3000,
+              style: { marginBottom: "calc(env(safe-area-inset-bottom, 0px) + 90px)" },
+            }
+          );
+        }
       }
       const nextCursor = getNextAyahCursor(sessionAyah.surah_number, sessionAyah.ayah_number);
       const updated: StudyPlan = nextCursor
@@ -864,7 +880,7 @@ export default function DeenStudy() {
               setShowReview(false);
               setSessionAyah(nextData);
               setPlayerMode("learn");
-              toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟", { duration: 900 });
+              toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟", { duration: 700 });
             } else {
               toast.error(isAr ? "تعذر تحميل الآية التالية" : "Could not load next ayah");
             }
