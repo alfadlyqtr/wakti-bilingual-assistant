@@ -763,13 +763,47 @@ Return 3 to 8 scenes, using only the number the idea needs. Every english_prompt
     }
 
     const geminiData = await geminiResponse.json();
-    const aiParts = Array.isArray(geminiData?.candidates?.[0]?.content?.parts)
-      ? geminiData.candidates[0].content.parts as Array<{ text?: string }>
+    const candidate = geminiData?.candidates?.[0];
+    const finishReason = candidate?.finishReason || 'UNKNOWN';
+    const promptFeedback = geminiData?.promptFeedback;
+    const aiParts = Array.isArray(candidate?.content?.parts)
+      ? candidate.content.parts as Array<{ text?: string }>
       : [];
-    const aiContent = aiParts.map((p) => p?.text || '').join('').trim();
+    let aiContent = aiParts.map((p) => p?.text || '').join('').trim();
 
     if (!aiContent) {
-      throw new Error('No content returned from Gemini');
+      console.error('[cinema-director] Gemini returned no content. finishReason:', finishReason, 'promptFeedback:', JSON.stringify(promptFeedback));
+
+      // If blocked by safety filter, surface a clear message
+      if (finishReason === 'SAFETY' || promptFeedback?.blockReason) {
+        throw new Error(`Content blocked by safety filter (${promptFeedback?.blockReason || finishReason}). Please rephrase your prompt.`);
+      }
+
+      // If hit MAX_TOKENS, retry once with a shorter system prompt
+      if (finishReason === 'MAX_TOKENS' || finishReason === 'UNKNOWN') {
+        console.log('[cinema-director] Retrying with shorter dynamic prompt...');
+        const retryResponse = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: dynamicSystemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 3000 },
+          }),
+        });
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          const retryParts = Array.isArray(retryData?.candidates?.[0]?.content?.parts)
+            ? retryData.candidates[0].content.parts as Array<{ text?: string }>
+            : [];
+          aiContent = retryParts.map((p) => p?.text || '').join('').trim();
+          console.log('[cinema-director] Retry content length:', aiContent.length, 'finishReason:', retryData?.candidates?.[0]?.finishReason);
+        }
+      }
+
+      if (!aiContent) {
+        throw new Error(`No content returned from Gemini (finishReason: ${finishReason})`);
+      }
     }
 
     // Parse the JSON response — Director now returns {subject_lock, scenes:[...]}
