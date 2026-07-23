@@ -45,6 +45,7 @@ type SurahViewAllRow =
 const STUDY_PLAN_KEY = "deen_study_plan_v2";
 const STUDY_DAILY_PROGRESS_KEY = "deen_study_daily_progress_v1";
 const VIEW_ALL_BATCH_SIZE = 6;
+const MAX_STUDY_PLANS = 5;
 
 const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
   { n:1,en:"Al-Fatiha",ar:"الفاتحة",ayahs:7 },{ n:2,en:"Al-Baqara",ar:"البقرة",ayahs:286 },
@@ -518,6 +519,10 @@ export default function DeenStudy() {
   }, [sessionAyah, memorization, isAr]);
 
   const activatePlan = (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number, customName?: string) => {
+    if (planStore.plans.length >= MAX_STUDY_PLANS) {
+      return;
+    }
+
     const newPlan: StudyPlan = {
       id: `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       type,
@@ -1495,12 +1500,16 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [selectedType, setSelectedType] = useState<PlanType | null>(activePlan?.type ?? null);
   const [dailyGoal, setDailyGoal] = useState(activePlan?.dailyGoal ?? 1);
+  const [otherGoalInput, setOtherGoalInput] = useState(() => {
+    const initialGoal = activePlan?.dailyGoal ?? 1;
+    return [1, 3, 5].includes(initialGoal) ? "" : String(initialGoal);
+  });
   const [surahSearch, setSurahSearch] = useState("");
   const [pickedSurah, setPickedSurah] = useState<typeof SURAH_LIST[0] | null>(
     activePlan?.startSurah ? (SURAH_LIST.find((s) => s.n === activePlan.startSurah) ?? null) : null
   );
   const [ayahMode, setAyahMode] = useState<"beginning" | "custom">("beginning");
-  const [customAyah, setCustomAyah] = useState(activePlan?.startAyah ?? 1);
+  const [customAyahInput, setCustomAyahInput] = useState(String(activePlan?.startAyah ?? 1));
   const [customName, setCustomName] = useState(activePlan?.customName ?? "");
 
   const filteredSurahs = surahSearch.trim()
@@ -1517,24 +1526,41 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
     { type: "custom", icon: Bookmark, titleEn: "Custom Plan", titleAr: "خطة مخصصة", descEn: "Pick any surah and ayah to start from", descAr: "اختر أي سورة وآية تبدأ منها", glow: "hsla(25,95%,60%" },
   ];
 
-  const resolvedAyah = ayahMode === "beginning" ? 1 : customAyah;
-  const canStart = selectedType === "custom" ? !!pickedSurah : !!selectedType;
+  const parsedCustomAyah = customAyahInput ? parseInt(customAyahInput, 10) : NaN;
+  const isCustomAyahTooHigh = ayahMode === "custom" && !!pickedSurah && !Number.isNaN(parsedCustomAyah) && parsedCustomAyah > pickedSurah.ayahs;
+  const resolvedAyah = ayahMode === "beginning"
+    ? 1
+    : Number.isNaN(parsedCustomAyah) || parsedCustomAyah < 1
+      ? 1
+      : parsedCustomAyah;
+  const reachedPlanLimit = savedPlans.length >= MAX_STUDY_PLANS;
+  const customGoalNumber = otherGoalInput ? Number(otherGoalInput) : null;
+  const isOtherGoalTooHigh = customGoalNumber !== null && customGoalNumber > 50;
+  const isOtherSelected = otherGoalInput.length > 0 || ![1, 3, 5].includes(dailyGoal);
+  const canStart = (selectedType === "custom" ? !!pickedSurah : !!selectedType) && !reachedPlanLimit && !isOtherGoalTooHigh && !isCustomAyahTooHigh;
 
   useEffect(() => {
     setSelectedType(activePlan?.type ?? null);
     setDailyGoal(activePlan?.dailyGoal ?? 1);
+    const nextGoal = activePlan?.dailyGoal ?? 1;
+    setOtherGoalInput([1, 3, 5].includes(nextGoal) ? "" : String(nextGoal));
     setPickedSurah(activePlan?.startSurah ? (SURAH_LIST.find((s) => s.n === activePlan.startSurah) ?? null) : null);
-    setCustomAyah(activePlan?.startAyah ?? 1);
+    setCustomAyahInput(String(activePlan?.startAyah ?? 1));
     setAyahMode((activePlan?.startAyah ?? 1) > 1 ? "custom" : "beginning");
     setCustomName(activePlan?.customName ?? "");
     setShowCustomEditor(false);
   }, [activePlan]);
 
   const handleStart = () => {
+    if (reachedPlanLimit) return;
+    if (isCustomAyahTooHigh) return;
     if (!selectedType) return;
     if (selectedType === "custom") {
       if (!pickedSurah) return;
-      onActivate(selectedType, dailyGoal, pickedSurah.n, resolvedAyah, customName);
+      const startAyah = ayahMode === "custom"
+        ? (Number.isNaN(parsedCustomAyah) || parsedCustomAyah < 1 ? 1 : parsedCustomAyah)
+        : 1;
+      onActivate(selectedType, dailyGoal, pickedSurah.n, startAyah, customName);
     } else {
       const defaults: Record<PlanType, { surah: number; ayah: number }> = {
         beginner: { surah: 1, ayah: 1 },
@@ -1685,7 +1711,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
               {filteredSurahs.map((s) => {
                 const picked = pickedSurah?.n === s.n;
                 return (
-                  <button key={s.n} onClick={() => { setPickedSurah(s); setCustomAyah(1); setAyahMode("beginning"); setSurahSearch(""); }}
+                  <button key={s.n} onClick={() => { setPickedSurah(s); setCustomAyahInput("1"); setAyahMode("beginning"); setSurahSearch(""); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:scale-[0.99] transition-all"
                     style={{ background: picked ? (dark ? "hsla(25,95%,60%,0.12)" : "hsla(25,85%,45%,0.12)") : "transparent" }}
                     dir={isAr ? "rtl" : "ltr"}
@@ -1732,19 +1758,26 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
                 </button>
               </div>
               {ayahMode === "custom" && (
-                <input
-                  type="number"
-                  min={1} max={pickedSurah.ayahs}
-                  value={customAyah}
-                  aria-label={isAr ? "رقم الآية" : "Ayah number"}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= pickedSurah.ayahs) setCustomAyah(v);
-                  }}
-                  className="w-full py-2.5 px-3 rounded-xl text-sm font-bold text-center outline-none"
-                  style={{ background: inputBg, color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }}
-                  placeholder={`1 – ${pickedSurah.ayahs}`}
-                />
+                <>
+                  <input
+                    type="number"
+                    min={1} max={pickedSurah.ayahs}
+                    value={customAyahInput}
+                    aria-label={isAr ? "رقم الآية" : "Ayah number"}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 3);
+                      setCustomAyahInput(digitsOnly);
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl text-sm font-bold text-center outline-none"
+                    style={{ background: inputBg, color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }}
+                    placeholder={`1 – ${pickedSurah.ayahs}`}
+                  />
+                  {isCustomAyahTooHigh && (
+                    <p className="text-[10px]" style={{ color: "#ef4444" }}>
+                      {isAr ? "هذه الآية غير موجودة في السورة" : "Ayah not in this surah"}
+                    </p>
+                  )}
+                </>
               )}
               <p className="text-[10px]" style={{ color: accentText }}>
                 {isAr
@@ -1761,7 +1794,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
         <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>{isAr ? "كم آية يومياً؟" : "How many ayahs per day?"}</p>
         <div className="flex gap-2">
           {[1, 3, 5].map((n) => (
-            <button key={n} onClick={() => setDailyGoal(n)}
+            <button key={n} onClick={() => { setDailyGoal(n); setOtherGoalInput(""); }}
               className="flex-1 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
               style={dailyGoal === n
                 ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
@@ -1771,21 +1804,30 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
           ))}
           <input
             type="number" min={1} max={50}
-            value={![1, 3, 5].includes(dailyGoal) ? dailyGoal : ""}
+            value={otherGoalInput}
             placeholder={isAr ? "عدد" : "Other"}
             aria-label={isAr ? "عدد مخصص" : "Custom daily goal"}
             onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
+              const raw = e.target.value;
+              const digitsOnly = raw.replace(/\D/g, "").slice(0, 3);
+              setOtherGoalInput(digitsOnly);
+              if (!digitsOnly) return;
+              const v = parseInt(digitsOnly, 10);
               if (!isNaN(v) && v >= 1 && v <= 50) setDailyGoal(v);
             }}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold text-center transition-all outline-none"
             style={
-              ![1, 3, 5].includes(dailyGoal)
+              isOtherSelected
                 ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
                 : { background: surfBg, color: textSec, border: `1px solid ${surfBdr}` }
             }
           />
         </div>
+        {isOtherGoalTooHigh && (
+          <p className="text-[10px] mt-1" style={{ color: "#ef4444" }}>
+            {isAr ? "الحد الأقصى 50" : "Maximum is 50"}
+          </p>
+        )}
         <p className="text-[10px] mt-1.5" style={{ color: textSec }}>
           {isAr ? `الهدف: ${dailyGoal} آية يومياً` : `Goal: ${dailyGoal} ayah${dailyGoal !== 1 ? "s" : ""} / day`}
         </p>
@@ -1797,7 +1839,9 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
         className="w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
         style={{ background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }}
       >
-        {isAr ? "احفظ هذه الخطة" : "Save this plan"}
+        {reachedPlanLimit
+          ? (isAr ? "وصلت للحد الأقصى" : "Max plans reached")
+          : (isAr ? "احفظ هذه الخطة" : "Save this plan")}
       </button>
     </div>
   );
