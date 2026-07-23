@@ -830,8 +830,8 @@ export default function DeenStudy() {
                     </div>
                     <p className="text-[10px] mt-1" style={{ color: textSec, textAlign: isAr ? "right" : "left" }}>
                       {isAr
-                        ? `${plainSurahName(savedPlan.startSurah ?? savedPlan.currentSurah, true)} • آية ${savedPlan.startAyah ?? savedPlan.currentAyah} • هدف ${savedPlan.dailyGoal}`
-                        : `${plainSurahName(savedPlan.startSurah ?? savedPlan.currentSurah, false)} • Ayah ${savedPlan.startAyah ?? savedPlan.currentAyah} • Goal ${savedPlan.dailyGoal}`}
+                        ? `${plainSurahName(savedPlan.currentSurah, true)} • آية ${savedPlan.currentAyah} • الهدف: ${savedPlan.dailyGoal}/يوم`
+                        : `${plainSurahName(savedPlan.currentSurah, false)} • Ayah ${savedPlan.currentAyah} • Goal: ${savedPlan.dailyGoal}/day`}
                     </p>
                   </button>
                 );
@@ -1509,7 +1509,10 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
     activePlan?.startSurah ? (SURAH_LIST.find((s) => s.n === activePlan.startSurah) ?? null) : null
   );
   const [ayahMode, setAyahMode] = useState<"beginning" | "custom">("beginning");
-  const [customAyahInput, setCustomAyahInput] = useState(String(activePlan?.startAyah ?? 1));
+  const [customAyahInput, setCustomAyahInput] = useState(() => {
+    const initialAyah = activePlan?.startAyah ?? 1;
+    return initialAyah > 1 ? String(initialAyah) : "";
+  });
   const [customName, setCustomName] = useState(activePlan?.customName ?? "");
 
   const filteredSurahs = surahSearch.trim()
@@ -1545,7 +1548,8 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
     const nextGoal = activePlan?.dailyGoal ?? 1;
     setOtherGoalInput([1, 3, 5].includes(nextGoal) ? "" : String(nextGoal));
     setPickedSurah(activePlan?.startSurah ? (SURAH_LIST.find((s) => s.n === activePlan.startSurah) ?? null) : null);
-    setCustomAyahInput(String(activePlan?.startAyah ?? 1));
+    const nextAyah = activePlan?.startAyah ?? 1;
+    setCustomAyahInput(nextAyah > 1 ? String(nextAyah) : "");
     setAyahMode((activePlan?.startAyah ?? 1) > 1 ? "custom" : "beginning");
     setCustomName(activePlan?.customName ?? "");
     setShowCustomEditor(false);
@@ -1601,7 +1605,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
                             : `From ${plainSurahName(p.startSurah ?? p.currentSurah, false)}, Ayah ${p.startAyah ?? p.currentAyah}`}
                   </p>
                   <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
-                    {surahName(p.currentSurah, isAr)} — {isAr ? "آية" : "Ayah"} {p.currentAyah}
+                    {plainSurahName(p.currentSurah, isAr)} — {isAr ? "آية" : "Ayah"} {p.currentAyah} • <span className="font-semibold">{isAr ? `الهدف: ${p.dailyGoal}/يوم` : `Goal: ${p.dailyGoal}/day`}</span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1711,7 +1715,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
               {filteredSurahs.map((s) => {
                 const picked = pickedSurah?.n === s.n;
                 return (
-                  <button key={s.n} onClick={() => { setPickedSurah(s); setCustomAyahInput("1"); setAyahMode("beginning"); setSurahSearch(""); }}
+                  <button key={s.n} onClick={() => { setPickedSurah(s); setCustomAyahInput(""); setAyahMode("beginning"); setSurahSearch(""); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:scale-[0.99] transition-all"
                     style={{ background: picked ? (dark ? "hsla(25,95%,60%,0.12)" : "hsla(25,85%,45%,0.12)") : "transparent" }}
                     dir={isAr ? "rtl" : "ltr"}
@@ -1749,7 +1753,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
                     : { background: surfBg, color: textSec, border: `1px solid ${surfBdr}` }}>
                   {isAr ? "البداية (آية 1)" : "Beginning (Ayah 1)"}
                 </button>
-                <button onClick={() => setAyahMode("custom")}
+                <button onClick={() => { setAyahMode("custom"); setCustomAyahInput(""); }}
                   className="flex-1 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all"
                   style={ayahMode === "custom"
                     ? { background: dark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.14)", color: accentText, border: "1px solid hsla(25,95%,60%,0.28)" }
