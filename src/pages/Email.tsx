@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useEmailConnections, ImapConnectionHealth } from '@/hooks/useEmailConnections';
+import { useEmailConnections, ImapConnection, ImapConnectionConfig, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { EmailConnectionModal } from '@/components/email/EmailConnectionModal';
 import { AppleLogo } from '@/components/calendar/AppleLogo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +40,7 @@ export default function Email() {
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [connectionModalPreset, setConnectionModalPreset] = useState<'icloud' | null>(null);
+  const [editingConnection, setEditingConnection] = useState<ImapConnection | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [signatureHtmlDraft, setSignatureHtmlDraft] = useState(storedSignatureSettings.html);
   const [signaturePrompt, setSignaturePrompt] = useState(storedSignatureSettings.prompt);
@@ -95,25 +96,41 @@ export default function Email() {
     setPendingOperatorPreset(operatorPreset);
   }, [operatorPreset]);
 
-  const handleConnectionSave = useCallback(async (config: {
-    provider: string;
-    display_name: string;
-    email_address: string;
-    smtp_host: string;
-    smtp_port: number;
-    smtp_secure: boolean;
-    username: string;
-    password: string;
-    imap_host?: string;
-    imap_port?: number;
-    imap_secure?: boolean;
-  }) => {
-    const result = await emailConn.imap.add(config);
-    if (result.success && connectionModalPreset === 'icloud') {
+  const handleConnectionSave = useCallback(async (config: ImapConnectionConfig) => {
+    const result = editingConnection
+      ? await emailConn.imap.update(editingConnection.id, config)
+      : await emailConn.imap.add(config);
+    if (result.success && (connectionModalPreset === 'icloud' || editingConnection?.provider === 'icloud')) {
       setPendingAppleMailboxOpen(true);
     }
     return result;
-  }, [connectionModalPreset, emailConn.imap]);
+  }, [connectionModalPreset, editingConnection, emailConn.imap]);
+
+  const openNewConnectionModal = useCallback(() => {
+    setEditingConnection(null);
+    setConnectionModalPreset(null);
+    setShowConnectionModal(true);
+  }, []);
+
+  const openIcloudConnectionModal = useCallback(() => {
+    setEditingConnection(null);
+    setConnectionModalPreset('icloud');
+    setShowConnectionModal(true);
+  }, []);
+
+  const openEditConnectionModal = useCallback((connection: ImapConnection) => {
+    setEditingConnection(connection);
+    setConnectionModalPreset(connection.provider === 'icloud' ? 'icloud' : null);
+    setShowConnectionModal(true);
+  }, []);
+
+  const handleConnectionModalChange = useCallback((open: boolean) => {
+    setShowConnectionModal(open);
+    if (!open) {
+      setConnectionModalPreset(null);
+      setEditingConnection(null);
+    }
+  }, []);
 
   const handleOperatorPresetConsumed = () => {
     setPendingOperatorPreset(null);
@@ -218,6 +235,7 @@ export default function Email() {
     addCustomMail: language === 'ar' ? 'إضافة بريد مخصص' : 'Add Custom Mail',
     comingSoon: language === 'ar' ? 'قريبًا' : 'Coming soon',
     connectApple: language === 'ar' ? 'ربط Apple' : 'Connect Apple',
+    editConnection: language === 'ar' ? 'تعديل الإعدادات' : 'Edit settings',
     customAccount: language === 'ar' ? 'حساب مخصص' : 'Custom account',
     customMailAccounts: language === 'ar' ? 'حسابات البريد المخصص' : 'Custom Mail Accounts',
     savedStatus: language === 'ar' ? 'محفوظ' : 'Saved',
@@ -436,7 +454,7 @@ export default function Email() {
             </div>
             <div className="flex gap-2">
               <Button
-                onClick={() => setShowConnectionModal(true)}
+                onClick={openNewConnectionModal}
                 className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]"
               >
                 <Mail className="h-4 w-4" />
@@ -514,8 +532,7 @@ export default function Email() {
                     }
                     setActiveTab('apple');
                     if (!preferredAppleConnectionId) {
-                      setConnectionModalPreset('icloud');
-                      setShowConnectionModal(true);
+                      openIcloudConnectionModal();
                     }
                   }}
                   className={outlineButtonClass}
@@ -540,7 +557,7 @@ export default function Email() {
                     <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedCustomCount} {t.liveVerifiedCount}</Badge>
                   ) : null}
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setShowConnectionModal(true)} className={outlineButtonClass}>
+                <Button variant="outline" size="sm" onClick={openNewConnectionModal} className={outlineButtonClass}>
                   <Mail className="h-4 w-4" />
                   {t.addCustomMail}
                 </Button>
@@ -594,6 +611,9 @@ export default function Email() {
                         )}
                       </div>
                       <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" onClick={() => openEditConnectionModal(connection)} className={outlineButtonClass}>
+                          {t.editConnection}
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => toggleConnectionDetails(connection.id)} className={outlineButtonClass}>
                           {isExpanded ? t.hideDetails : t.viewDetails}
                         </Button>
@@ -770,10 +790,7 @@ export default function Email() {
             </div>
             <Button
               type="button"
-              onClick={() => {
-                setConnectionModalPreset('icloud');
-                setShowConnectionModal(true);
-              }}
+              onClick={openIcloudConnectionModal}
               className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]"
             >
               <AppleLogo size={14} className="text-current" />
@@ -883,13 +900,9 @@ export default function Email() {
 
         <EmailConnectionModal
           open={showConnectionModal}
-          onOpenChange={(open) => {
-            setShowConnectionModal(open);
-            if (!open) {
-              setConnectionModalPreset(null);
-            }
-          }}
+          onOpenChange={handleConnectionModalChange}
           presetProvider={connectionModalPreset}
+          initialValues={editingConnection}
           onSave={handleConnectionSave}
         />
       </div>

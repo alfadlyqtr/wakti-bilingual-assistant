@@ -13,10 +13,24 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { detectProviderSettings } from '@/hooks/useEmailConnections';
 import { Mail, Server, Save, Loader2, CheckCircle2, XCircle, Apple } from 'lucide-react';
 
+type EmailConnectionModalConfig = {
+  provider?: string;
+  display_name?: string | null;
+  email_address?: string | null;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_secure?: boolean | null;
+  username?: string | null;
+  imap_host?: string | null;
+  imap_port?: number | null;
+  imap_secure?: boolean | null;
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   presetProvider?: 'icloud' | null;
+  initialValues?: EmailConnectionModalConfig | null;
   onSave: (config: {
     provider: string;
     display_name: string;
@@ -32,10 +46,11 @@ interface Props {
   }) => Promise<{ success: boolean; error?: string }>;
 }
 
-export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, presetProvider = null, onSave }) => {
+export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, presetProvider = null, initialValues = null, onSave }) => {
   const { language } = useTheme();
   const isAr = language === 'ar';
   const isIcloudPreset = presetProvider === 'icloud';
+  const isEditing = Boolean(initialValues);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -54,17 +69,26 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
   const [success, setSuccess] = useState(false);
 
   const t = {
-    title: isIcloudPreset
-      ? (isAr ? 'ربط بريد iCloud' : 'Connect iCloud Mail')
-      : (isAr ? 'ربط حساب بريد إلكتروني' : 'Connect Email Account'),
-    subtitle: isIcloudPreset
-      ? (isAr ? 'استخدم بريد iCloud مع كلمة مرور تطبيق من حساب Apple.' : 'Use your iCloud Mail address with an Apple app-specific password.')
-      : (isAr ? 'أدخل بيانات حسابك لإرسال واستقبال البريد' : 'Enter your account details to send and receive email'),
+    title: isEditing
+      ? (isIcloudPreset
+        ? (isAr ? 'تعديل بريد iCloud' : 'Edit iCloud Mail')
+        : (isAr ? 'تعديل حساب البريد' : 'Edit Email Account'))
+      : (isIcloudPreset
+        ? (isAr ? 'ربط بريد iCloud' : 'Connect iCloud Mail')
+        : (isAr ? 'ربط حساب بريد إلكتروني' : 'Connect Email Account')),
+    subtitle: isEditing
+      ? (isIcloudPreset
+        ? (isAr ? 'حدّث إعدادات iCloud ثم أعد التحقق مباشرة بكلمة مرور التطبيق.' : 'Update your iCloud settings, then reconnect live with your app-specific password.')
+        : (isAr ? 'حدّث الإعدادات ثم أعد التحقق مباشرة قبل حفظ الاتصال.' : 'Update the settings, then reconnect live before the connection is saved.'))
+      : (isIcloudPreset
+        ? (isAr ? 'استخدم بريد iCloud مع كلمة مرور تطبيق من حساب Apple.' : 'Use your iCloud Mail address with an Apple app-specific password.')
+        : (isAr ? 'أدخل بيانات حسابك لإرسال واستقبال البريد' : 'Enter your account details to send and receive email')),
     emailLabel: isIcloudPreset ? (isAr ? 'عنوان iCloud Mail' : 'iCloud Mail Address') : (isAr ? 'عنوان البريد الإلكتروني' : 'Email Address'),
     passwordLabel: isIcloudPreset ? (isAr ? 'كلمة مرور تطبيق Apple' : 'Apple App-Specific Password') : (isAr ? 'كلمة المرور / كلمة مرور التطبيق' : 'Password / App Password'),
     passwordHint: isAr
       ? 'للحسابات ذات المصادقة الثنائية، استخدم "كلمة مرور التطبيق" من إعدادات الأمان'
       : 'For 2FA accounts, use an "App Password" from your security settings',
+    passwordRequiredOnEdit: isAr ? 'أدخل كلمة المرور مرة أخرى الآن. لن يتم حفظ أي تعديل إلا بعد نجاح الاتصال الحقيقي.' : 'Enter the password again now. No edit will be saved unless the live connection succeeds.',
     nameLabel: isAr ? 'اسم العرض (اختياري)' : 'Display Name (optional)',
     autoDetect: isAr ? 'تم اكتشاف الإعدادات تلقائيًا' : 'Settings auto-detected',
     manual: isAr ? 'إعدادات الخادم اليدوية' : 'Manual Server Settings',
@@ -75,7 +99,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
     imapPort: isAr ? 'المنفذ' : 'Port',
     imapSecure: isAr ? 'IMAP SSL/TLS' : 'IMAP SSL/TLS',
     usernameLabel: isAr ? 'اسم المستخدم للدخول' : 'Login Username',
-    saveBtn: isAr ? 'حفظ وحفظ' : 'Save & Connect',
+    saveBtn: isEditing ? (isAr ? 'حفظ وإعادة الربط' : 'Save & Reconnect') : (isAr ? 'حفظ وربط' : 'Save & Connect'),
     cancel: isAr ? 'إلغاء' : 'Cancel',
     required: isAr ? 'مطلوب' : 'Required',
     providerLabel: isAr ? 'مزود البريد' : 'Email Provider',
@@ -95,20 +119,58 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
     icloudStepTwo: isAr ? 'افتح قسم Sign-In and Security ثم App-Specific Passwords.' : 'Open Sign-In and Security, then App-Specific Passwords.',
     icloudStepThree: isAr ? 'أنشئ كلمة مرور تطبيق جديدة والصقها هنا بدل كلمة مرور Apple العادية.' : 'Generate a new app-specific password and paste it here instead of your normal Apple password.',
     icloudServerNote: isAr ? 'تم تجهيز إعدادات iCloud تلقائيًا. يمكنك فتح الإعدادات المتقدمة فقط إذا احتجت.' : 'The iCloud server settings are already filled in for you. Open Advanced only if you need to review them.',
+    successMessage: isEditing ? (isAr ? 'تم حفظ الإعدادات وإعادة الربط بنجاح!' : 'Settings saved and reconnected successfully!') : (isAr ? 'تم الاتصال بنجاح!' : 'Connected successfully!'),
   };
 
   useEffect(() => {
-    if (!open || !isIcloudPreset) return;
-    setDetectedProvider('icloud');
-    setDisplayName((current) => current || 'iCloud');
-    setSmtpHost('smtp.mail.me.com');
+    if (!open) return;
+
+    setError('');
+    setSuccess(false);
+    setPassword('');
+
+    if (initialValues) {
+      setDetectedProvider(initialValues.provider?.trim() || null);
+      setEmail(initialValues.email_address?.trim() || '');
+      setDisplayName(initialValues.display_name?.trim() || '');
+      setSmtpHost(initialValues.smtp_host?.trim() || '');
+      setSmtpPort(initialValues.smtp_port ? String(initialValues.smtp_port) : '587');
+      setSmtpSecure(initialValues.smtp_secure === true);
+      setImapHost(initialValues.imap_host?.trim() || '');
+      setImapPort(initialValues.imap_port ? String(initialValues.imap_port) : '993');
+      setImapSecure(initialValues.imap_secure !== false);
+      setUsername(initialValues.username?.trim() || initialValues.email_address?.trim() || '');
+      setShowAdvanced(true);
+      return;
+    }
+
+    if (isIcloudPreset) {
+      setDetectedProvider('icloud');
+      setEmail('');
+      setDisplayName('iCloud');
+      setSmtpHost('smtp.mail.me.com');
+      setSmtpPort('587');
+      setSmtpSecure(false);
+      setImapHost('imap.mail.me.com');
+      setImapPort('993');
+      setImapSecure(true);
+      setUsername('');
+      setShowAdvanced(false);
+      return;
+    }
+
+    setDetectedProvider(null);
+    setEmail('');
+    setDisplayName('');
+    setSmtpHost('');
     setSmtpPort('587');
     setSmtpSecure(false);
-    setImapHost('imap.mail.me.com');
+    setImapHost('');
     setImapPort('993');
     setImapSecure(true);
+    setUsername('');
     setShowAdvanced(false);
-  }, [isIcloudPreset, open]);
+  }, [initialValues, isIcloudPreset, open]);
 
   // Auto-detect when email changes
   useEffect(() => {
@@ -126,16 +188,18 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
     const settings = detectProviderSettings(email);
     if (settings) {
       setDetectedProvider(settings.provider);
-      setSmtpHost(settings.smtp_host);
-      setSmtpPort(String(settings.smtp_port));
-      setSmtpSecure(settings.smtp_secure);
-      setImapHost(settings.imap_host);
-      setImapPort(String(settings.imap_port));
-      setImapSecure(settings.imap_secure);
+      if (!initialValues) {
+        setSmtpHost(settings.smtp_host);
+        setSmtpPort(String(settings.smtp_port));
+        setSmtpSecure(settings.smtp_secure);
+        setImapHost(settings.imap_host);
+        setImapPort(String(settings.imap_port));
+        setImapSecure(settings.imap_secure);
+      }
       if (!username) setUsername(email);
       if (!displayName) setDisplayName(settings.provider.charAt(0).toUpperCase() + settings.provider.slice(1));
     }
-  }, [email, isIcloudPreset, username, displayName]);
+  }, [email, initialValues, isIcloudPreset, username, displayName]);
 
   const handleSave = useCallback(async () => {
     setError('');
@@ -148,8 +212,8 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
 
     setSaving(true);
     const result = await onSave({
-      provider: detectedProvider || 'custom',
-      display_name: displayName.trim() || detectedProvider || 'Custom',
+      provider: detectedProvider || initialValues?.provider || 'custom',
+      display_name: displayName.trim() || detectedProvider || initialValues?.provider || 'Custom',
       email_address: email.trim(),
       smtp_host: smtpHost.trim(),
       smtp_port: parseInt(smtpPort, 10) || 587,
@@ -167,17 +231,12 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
       setTimeout(() => {
         onOpenChange(false);
         setSuccess(false);
-        setEmail('');
         setPassword('');
-        setDisplayName('');
-        setSmtpHost('');
-        setImapHost('');
-        setUsername('');
       }, 1200);
     } else {
       setError(result.error || (isAr ? 'فشل الحفظ' : 'Save failed'));
     }
-  }, [email, password, smtpHost, smtpPort, smtpSecure, imapHost, imapPort, imapSecure, username, displayName, detectedProvider, onSave, onOpenChange, isAr]);
+  }, [email, password, smtpHost, smtpPort, smtpSecure, imapHost, imapPort, imapSecure, username, displayName, detectedProvider, initialValues, onSave, onOpenChange, isAr]);
 
   const providerDisplayName = detectedProvider
     ? detectedProvider.charAt(0).toUpperCase() + detectedProvider.slice(1)
@@ -249,6 +308,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
               className={lightFieldClass}
             />
             <p className="text-xs text-muted-foreground">{t.passwordHint}</p>
+            {isEditing ? <p className="text-xs text-muted-foreground">{t.passwordRequiredOnEdit}</p> : null}
           </div>
 
           {/* Display Name */}
@@ -367,7 +427,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
           {success && (
             <div className="flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 px-3 py-2 text-sm text-green-600 dark:text-green-400">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              {isAr ? 'تم الاتصال بنجاح!' : 'Connected successfully!'}
+              {t.successMessage}
             </div>
           )}
 

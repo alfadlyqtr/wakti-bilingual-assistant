@@ -45,8 +45,8 @@ import {
   Save,
   AlertCircle,
   Pencil,
+  PencilRuler,
   Sparkles,
-  Zap,
   ArrowRight,
   Palette,
   Mic,
@@ -75,6 +75,7 @@ import {
 } from 'lucide-react';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
+import DesignerWorkspace, { type DesignerStartMode } from '@/components/studio/DesignerWorkspace';
 import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import QRCodeCreator from '@/components/studio/QRCodeCreator';
 import PoemReader from '@/components/studio/PoemReader';
@@ -1030,9 +1031,10 @@ function GeneratingWidget({ isAr }: { isAr: boolean }) {
 
 export default function MusicStudio() {
   const { language } = useTheme();
-  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image' | 'qrcode'>(() => {
+  const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image' | 'qrcode' | 'designer'>(() => {
     try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'music' : 'studio'; } catch { return 'studio'; }
   });
+  const [designerStartMode, setDesignerStartMode] = useState<DesignerStartMode | null>(null);
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor' | 'voices'>(() => {
     try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'editor' : 'compose'; } catch { return 'compose'; }
   });
@@ -1081,6 +1083,11 @@ export default function MusicStudio() {
     };
   }, []);
 
+  useEffect(() => {
+    const activeTab = topTabsRef.current?.querySelector<HTMLButtonElement>(`[data-studio-tab="${mainTab}"]`);
+    activeTab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [mainTab]);
+
   const scrollTopTabsBy = (direction: 'left' | 'right') => {
     const node = topTabsRef.current;
     if (!node) return;
@@ -1118,7 +1125,7 @@ export default function MusicStudio() {
     }
 
     const requestedStudioTab = searchParams.get('studioTab');
-    if (requestedStudioTab === 'music' || requestedStudioTab === 'video' || requestedStudioTab === 'image' || requestedStudioTab === 'qrcode' || requestedStudioTab === 'studio') {
+    if (requestedStudioTab === 'music' || requestedStudioTab === 'video' || requestedStudioTab === 'image' || requestedStudioTab === 'qrcode' || requestedStudioTab === 'designer' || requestedStudioTab === 'studio') {
       setMainTab(requestedStudioTab);
     }
 
@@ -1279,7 +1286,6 @@ export default function MusicStudio() {
   }, [mainTab, authUser?.id]);
 
   const isArabic = language === 'ar';
-
   const studioCards: {
     key: 'music' | 'video' | 'image' | 'qrcode';
     icon: React.ReactNode;
@@ -1408,9 +1414,11 @@ export default function MusicStudio() {
             { key: 'video' as const, icon: <Video className="h-3.5 w-3.5" />, labelEn: 'Video', labelAr: 'الفيديو', activeGrad: 'from-orange-500 to-rose-500', activeShadow: 'shadow-[0_4px_14px_hsla(25,95%,60%,0.45)]' },
             { key: 'image' as const, icon: <ImageIcon className="h-3.5 w-3.5" />, labelEn: 'Image', labelAr: 'الصورة', activeGrad: 'from-emerald-500 to-teal-500', activeShadow: 'shadow-[0_4px_14px_hsla(160,80%,55%,0.45)]' },
             { key: 'qrcode' as const, icon: <QrCode className="h-3.5 w-3.5" />, labelEn: 'QR Code', labelAr: 'كود QR', activeGrad: 'from-violet-500 to-purple-600', activeShadow: 'shadow-[0_4px_14px_hsla(280,70%,65%,0.45)]' },
+            { key: 'designer' as const, icon: <PencilRuler className="h-3.5 w-3.5" />, labelEn: 'Designer', labelAr: 'المصمم', activeGrad: 'from-sky-500 to-indigo-600', activeShadow: 'shadow-[0_4px_14px_hsla(210,100%,65%,0.45)]' },
           ].map((tab) => (
             <button
               key={tab.key}
+              data-studio-tab={tab.key}
               onClick={() => setMainTab(tab.key)}
               className={`flex items-center justify-center gap-1.5 px-4 md:px-6 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all duration-200 active:scale-[0.93] whitespace-nowrap flex-shrink-0 min-w-max ${
                 mainTab === tab.key
@@ -1427,7 +1435,7 @@ export default function MusicStudio() {
 
       {/* ─── Studio Landing Hub ─── */}
       {mainTab === 'studio' && (
-        <div className="relative space-y-8 py-4 md:py-8">
+        <div className="relative space-y-4 pt-0 pb-2 md:space-y-5 md:pt-1 md:pb-4">
 
           {/* Ambient radial glow background */}
           <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl">
@@ -1565,13 +1573,37 @@ export default function MusicStudio() {
             ))}
           </div>
 
-          {/* Bottom tagline */}
-          <div className="flex items-center justify-center gap-2 pt-1">
-            <Zap className="h-3.5 w-3.5 text-amber-500" />
-            <p className="text-[11px] text-muted-foreground/70 font-medium tracking-wide uppercase">
-              {isArabic ? 'مدعوم بوقتي AI' : 'Powered by Wakti AI'}
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMainTab('designer')}
+            dir={isArabic ? 'rtl' : 'ltr'}
+            className="group relative w-full overflow-hidden rounded-3xl border border-sky-400/25 bg-gradient-to-br from-sky-900/35 via-blue-950/40 to-indigo-900/25 p-4 text-start shadow-[0_8px_40px_-4px_hsla(210,100%,65%,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/45 hover:shadow-[0_12px_32px_-8px_hsla(210,100%,65%,0.5)] active:scale-[0.98] dark:from-sky-950/55 dark:via-blue-950/50 dark:to-indigo-950/35 md:p-6"
+          >
+            <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(210,100%,65%,0.35) 0%, transparent 70%)' }} />
+            <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(210,100%,65%,0.22), transparent)' }} />
+            <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
+
+            <div className="relative flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div
+                  className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+                  style={{ background: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 60%, #1e40af 100%)', boxShadow: '0 0 22px hsla(210,100%,65%,0.7), 0 0 8px hsla(210,100%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)' }}
+                >
+                  <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)' }} />
+                  <PencilRuler className="relative h-6 w-6 text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-extrabold tracking-tight text-foreground md:text-xl">
+                    {isArabic ? 'المصمم' : 'Designer'}
+                  </h3>
+                  <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
+                    {isArabic ? 'صمّم المخططات والمساحات والغرف بأدوات رسم ذكية.' : 'Design floor plans, rooms, and spaces with smart drawing tools.'}
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className={`h-5 w-5 shrink-0 text-sky-700/70 transition-transform duration-200 dark:text-sky-200/75 ${isArabic ? 'rotate-180 group-hover:-translate-x-0.5' : 'group-hover:translate-x-0.5'}`} />
+            </div>
+          </button>
         </div>
       )}
 
@@ -1690,6 +1722,14 @@ export default function MusicStudio() {
       )}
 
       {mainTab === 'poem' && <PoemReader />}
+
+      {mainTab === 'designer' && (
+        <DesignerWorkspace
+          language={language}
+          mode={designerStartMode}
+          onModeChange={setDesignerStartMode}
+        />
+      )}
 
       {mainTab === 'qrcode' && <QRCodeCreator operatorExecution={operatorPayload?.execution} />}
 

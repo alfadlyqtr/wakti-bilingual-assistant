@@ -77,19 +77,24 @@ function detectMimeAndExt(bytes: Uint8Array, mimeHint?: string): { mime: string;
   return { mime: "image/jpeg", ext: "jpg" };
 }
 
-// Upload reference image to Supabase and return a signed URL valid for 15 min (enough for KIE to fetch)
-async function uploadReferenceImage(base64: string, mimeHint: string | undefined, userId: string): Promise<string> {
-  const bytes = decodeBase64ToUint8Array(base64);
+// STORAGE_BUCKET is PRIVATE, so every reference image MUST be handed to KIE as a signed
+// URL. getPublicUrl() on this bucket produces a link that returns an error to KIE, which
+// makes the task fail in ~2s with no usable reason. Both callers below share this helper
+// so that failure mode cannot come back.
+async function uploadReferenceBytes(bytes: Uint8Array, mimeHint: string | undefined, userId: string): Promise<string> {
   const { mime, ext } = detectMimeAndExt(bytes, mimeHint);
-  const path = `grok-i2i-input/${userId}/${Date.now()}.${ext}`;
+  const path = `grok-i2i-input/${userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, bytes, { contentType: mime, upsert: true });
   if (error) throw new Error(`Reference upload failed: ${error.message}`);
-  // Private bucket — use a 15-minute signed URL so KIE can download the reference image
   const { data: signed, error: signErr } = await supabase.storage
     .from(STORAGE_BUCKET)
-    .createSignedUrl(path, 15 * 60);
+    .createSignedUrl(path, 60 * 60);
   if (signErr || !signed?.signedUrl) throw new Error("Could not create signed URL for reference image");
   return signed.signedUrl;
+}
+
+async function uploadReferenceImage(base64: string, mimeHint: string | undefined, userId: string): Promise<string> {
+  return uploadReferenceBytes(decodeBase64ToUint8Array(base64), mimeHint, userId);
 }
 
 // Extract image URLs from KIE response
@@ -158,7 +163,7 @@ Deno.serve(async (req: Request) => {
         headers: { Authorization: `Bearer ${KIE_API_KEY}` },
       });
       const rawText = await resp.text();
-      console.log(`[grok-i2i] poll taskId=${taskId} HTTP:${resp.status} body:${rawText.slice(0, 600)}`);
+      console.log(`[grok-i2i] poll taskId=${taskId} HTTP:${resp.status} body:${rawText.slice(0, 1500)}`);
 
       if (!resp.ok) {
         return new Response(JSON.stringify({ success: false, status: "error", error: `KIE poll HTTP ${resp.status}` }), {
@@ -175,7 +180,20 @@ Deno.serve(async (req: Request) => {
       const isFailed = rawStatus === "failed" || rawStatus === "error" || rawStatus === "fail" || rawStatus === "3";
 
       if (isFailed) {
-        return new Response(JSON.stringify({ success: false, status: "failed", error: `KIE task failed: ${rawStatus}` }), {
+        // KIE reports the real cause in failMsg/failCode. Without these the frontend only
+        // ever saw "KIE task failed: fail", which hides whether it was a content refusal,
+        // an unreachable reference image, or a bad parameter.
+        const failMsg = String(j?.data?.failMsg || j?.data?.failureReason || j?.data?.errorMessage || "").trim();
+        const failCode = String(j?.data?.failCode ?? j?.data?.errorCode ?? "").trim();
+        console.error(`[grok-i2i] task ${taskId} failed code=${failCode} msg=${failMsg}`);
+        const detail = [failCode && `KIE ${failCode}`, failMsg].filter(Boolean).join(": ");
+        return new Response(JSON.stringify({
+          success: false,
+          status: "failed",
+          failCode,
+          failMsg,
+          error: detail || `KIE task failed: ${rawStatus}`,
+        }), {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -260,12 +278,7 @@ Deno.serve(async (req: Request) => {
         if (!res.ok) throw new Error(`Failed to fetch saved image: ${res.status}`);
         const buf = await res.arrayBuffer();
         const bytes = new Uint8Array(buf);
-        const { mime, ext } = detectMimeAndExt(bytes);
-        const path = `grok-i2i-input/${userId || "anon"}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-        const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, bytes, { contentType: mime, upsert: true });
-        if (error) throw new Error(`Storage upload error: ${error.message}`);
-        const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-        referencePublicUrl = data.publicUrl;
+        referencePublicUrl = await uploadReferenceBytes(bytes, undefined, userId || "anon");
       } else {
         const { base64, mimeHint } = stripDataUrlPrefix(rawImage);
         referencePublicUrl = await uploadReferenceImage(base64, mimeHint, userId || "anon");

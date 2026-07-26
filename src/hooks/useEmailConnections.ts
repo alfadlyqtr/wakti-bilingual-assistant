@@ -37,6 +37,20 @@ export type ImapConnection = {
   created_at: string;
 };
 
+export type ImapConnectionConfig = {
+  provider: string;
+  display_name: string;
+  email_address: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_secure: boolean;
+  username: string;
+  password: string;
+  imap_host?: string;
+  imap_port?: number;
+  imap_secure?: boolean;
+};
+
 export type EmailConnectionState = {
   gmail: GmailConnectionState;
   imapConnections: ImapConnection[];
@@ -140,19 +154,7 @@ export function useEmailConnections() {
     }
   }, [callImapApi]);
 
-  const validateInlineConfig = useCallback(async (config: {
-    provider: string;
-    display_name: string;
-    email_address: string;
-    smtp_host: string;
-    smtp_port: number;
-    smtp_secure: boolean;
-    username: string;
-    password: string;
-    imap_host?: string;
-    imap_port?: number;
-    imap_secure?: boolean;
-  }): Promise<ImapConnectionProof> => {
+  const validateInlineConfig = useCallback(async (config: ImapConnectionConfig): Promise<ImapConnectionProof> => {
     const data = await callImapApi('validate_connection', {
       config: {
         email_address: config.email_address,
@@ -233,19 +235,7 @@ export function useEmailConnections() {
     writeStoredImapHealth(imapHealth);
   }, [imapHealth]);
 
-  const addImapConnection = useCallback(async (config: {
-    provider: string;
-    display_name: string;
-    email_address: string;
-    smtp_host: string;
-    smtp_port: number;
-    smtp_secure: boolean;
-    username: string;
-    password: string;
-    imap_host?: string;
-    imap_port?: number;
-    imap_secure?: boolean;
-  }): Promise<{ success: boolean; error?: string }> => {
+  const addImapConnection = useCallback(async (config: ImapConnectionConfig): Promise<{ success: boolean; error?: string }> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -297,6 +287,55 @@ export function useEmailConnections() {
       return { success: false, error: msg };
     }
   }, [imapConnections.length, gmail.connection.connected, loadImapConnections, validateInlineConfig]);
+
+  const updateImapConnection = useCallback(async (id: string, config: ImapConnectionConfig): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return { success: false, error: 'Please log in first' };
+      }
+
+      const proof = await validateInlineConfig(config);
+
+      const { error } = await supabaseAny
+        .from('email_connections')
+        .update({
+          provider: config.provider,
+          display_name: config.display_name || config.provider,
+          email_address: config.email_address,
+          smtp_host: config.smtp_host,
+          smtp_port: config.smtp_port,
+          smtp_secure: config.smtp_secure,
+          username: config.username,
+          password_encrypted: config.password,
+          imap_host: config.imap_host || null,
+          imap_port: config.imap_port || null,
+          imap_secure: config.imap_secure ?? true,
+        })
+        .eq('id', id)
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+
+      setImapHealth(prev => ({
+        ...prev,
+        [id]: {
+          status: 'verified',
+          proof,
+          checkedAt: new Date().toISOString(),
+        },
+      }));
+
+      toast.success('Email settings saved and reconnected');
+      await loadImapConnections();
+      return { success: true };
+    } catch (err: any) {
+      console.error('[EmailConnections] Update failed:', err);
+      const msg = err.message || 'Failed to save email settings';
+      toast.error(msg);
+      return { success: false, error: msg };
+    }
+  }, [loadImapConnections, validateInlineConfig]);
 
   const removeImapConnection = useCallback(async (id: string): Promise<void> => {
     try {
@@ -407,6 +446,7 @@ export function useEmailConnections() {
       loading: imapLoading,
       health: imapHealth,
       add: addImapConnection,
+      update: updateImapConnection,
       remove: removeImapConnection,
       setPrimary: setPrimaryConnection,
       refresh: loadImapConnections,
