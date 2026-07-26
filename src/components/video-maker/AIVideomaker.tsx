@@ -2012,17 +2012,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
     const pollTask = makePollTask(artistCall);
 
-    // ── Build scene-slot map from reference image tags ──
+    // ── Build scene-slot map from reference images ──
+    // slotIdx 0 = Scene 1 (main reference image / brandAnchor), slotIdx 1 = Scene 2, etc.
+    // Tags ('character','logo','style','product') describe HOW to use the image, not WHICH scene.
+    // The scene assignment is purely positional: slot N maps to scene index N.
     const sceneSlotMap: Record<number, string> = {};
     cinemaReferenceImages.forEach((url, slotIdx) => {
       if (!url) return;
-      const tag = cinemaRefTags[slotIdx] || 'ref';
-      if (tag !== 'logo' && tag !== 'ref') {
-        const sceneNum = parseInt(tag.replace('scene', ''), 10);
-        if (!isNaN(sceneNum) && sceneNum >= 1 && sceneNum <= 6) {
-          sceneSlotMap[sceneNum - 1] = url;
-        }
-      }
+      sceneSlotMap[slotIdx] = url;
     });
 
     const effectiveTag = (brandAnchor ? anchorTag : 'style') as 'logo' | 'product' | 'style' | 'character';
