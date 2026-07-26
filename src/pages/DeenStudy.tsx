@@ -38,6 +38,12 @@ interface LocalHafsScriptRow {
   aya_text?: string;
 }
 
+interface SessionJumpSuggestion {
+  surah: number;
+  ayah: number;
+  actionLabel: string;
+}
+
 type SurahViewAllRow =
   | { type: "gap"; startAyah: number; endAyah: number }
   | { type: "ayah"; ayahNumber: number };
@@ -291,6 +297,7 @@ export default function DeenStudy() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
   const [dailyPlanProgressByPlan, setDailyPlanProgressByPlan] = useState<Record<string, number>>(() => readDailyPlanProgress());
+  const [jumpingSessionAyah, setJumpingSessionAyah] = useState(false);
   const [viewAllSurahNumber, setViewAllSurahNumber] = useState<number | null>(null);
   const [viewAllRows, setViewAllRows] = useState<SurahViewAllRow[]>([]);
   const [viewAllVisibleAyahCount, setViewAllVisibleAyahCount] = useState(0);
@@ -665,6 +672,10 @@ export default function DeenStudy() {
   }, []);
 
   const memorizedItems = memorization.filter((m) => m.status === "memorized");
+  const memorizedAyahKeySet = useMemo(
+    () => new Set(memorizedItems.map((m) => `${m.surah_number}:${m.ayah_number}`)),
+    [memorizedItems]
+  );
   const memorizedCount = memorizedItems.length;
   const memorizedPercent = ((memorizedCount / TOTAL_QURAN_AYAHS) * 100).toFixed(1);
   const learntTodayItems = useMemo(() => {
@@ -730,6 +741,85 @@ export default function DeenStudy() {
       .sort((a, b) => a.surahNumber - b.surahNumber);
   }, [memorizedItems]);
 
+  const sessionJumpSuggestion = useMemo<SessionJumpSuggestion | null>(() => {
+    if (!sessionAyah || playerMode !== "learn") return null;
+    const currentSurahMeta = SURAH_LIST.find((s) => s.n === sessionAyah.surah_number);
+    if (!currentSurahMeta) return null;
+
+    const currentAyahKey = `${sessionAyah.surah_number}:${sessionAyah.ayah_number}`;
+    if (!memorizedAyahKeySet.has(currentAyahKey)) return null;
+
+    for (let ayahNum = sessionAyah.ayah_number + 1; ayahNum <= currentSurahMeta.ayahs; ayahNum += 1) {
+      if (!memorizedAyahKeySet.has(`${currentSurahMeta.n}:${ayahNum}`)) {
+        return {
+          surah: currentSurahMeta.n,
+          ayah: ayahNum,
+          actionLabel: isAr ? `تخطي إلى آية ${ayahNum}` : `Skip to Ayah ${ayahNum}`,
+        };
+      }
+    }
+
+    for (const surahMeta of SURAH_LIST) {
+      if (surahMeta.n <= currentSurahMeta.n) continue;
+      let firstUnmemorizedAyah: number | null = null;
+      for (let ayahNum = 1; ayahNum <= surahMeta.ayahs; ayahNum += 1) {
+        if (!memorizedAyahKeySet.has(`${surahMeta.n}:${ayahNum}`)) {
+          firstUnmemorizedAyah = ayahNum;
+          break;
+        }
+      }
+      if (!firstUnmemorizedAyah) continue;
+
+      return {
+        surah: surahMeta.n,
+        ayah: 1,
+        actionLabel: isAr
+          ? `تخطي إلى سورة ${plainSurahName(surahMeta.n, true)}`
+          : `Skip to Surah ${plainSurahName(surahMeta.n, false)}`,
+      };
+    }
+
+    return null;
+  }, [sessionAyah, playerMode, memorizedAyahKeySet, isAr]);
+
+  const sessionAyahAlreadyMemorized = useMemo(() => {
+    if (!sessionAyah || playerMode !== "learn") return false;
+    return memorizedAyahKeySet.has(`${sessionAyah.surah_number}:${sessionAyah.ayah_number}`);
+  }, [sessionAyah, playerMode, memorizedAyahKeySet]);
+
+  const jumpToSuggestedSessionAyah = useCallback(async () => {
+    if (!sessionJumpSuggestion) {
+      toast.error(isAr ? "لا يوجد انتقال متاح" : "No jump target available");
+      return;
+    }
+
+    setJumpingSessionAyah(true);
+    const nextData = await fetchAyah(sessionJumpSuggestion.surah, sessionJumpSuggestion.ayah);
+    setJumpingSessionAyah(false);
+    if (!nextData) {
+      toast.error(isAr ? "تعذر تحميل الآية التالية" : "Could not load next ayah");
+      return;
+    }
+
+    if (plan) {
+      const updated: StudyPlan = {
+        ...plan,
+        currentSurah: sessionJumpSuggestion.surah,
+        currentAyah: sessionJumpSuggestion.ayah,
+      };
+      setPlanStore((prev) => {
+        const next: StudyPlanStore = {
+          ...prev,
+          plans: prev.plans.map((p) => (p.id === updated.id ? updated : p)),
+        };
+        savePlanStore(next);
+        return next;
+      });
+    }
+
+    setSessionAyah(nextData);
+  }, [sessionJumpSuggestion, isAr, plan]);
+
   const { streakDays, thisWeekCount } = useMemo(() => {
     const uniqueDayTimestamps = new Set<number>();
     const now = new Date();
@@ -789,6 +879,10 @@ export default function DeenStudy() {
           mode={playerMode}
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
+          alreadyMemorized={sessionAyahAlreadyMemorized}
+          jumpActionLabel={sessionJumpSuggestion?.actionLabel ?? null}
+          onJumpSuggestion={sessionJumpSuggestion ? jumpToSuggestedSessionAyah : undefined}
+          jumpingSuggestion={jumpingSessionAyah}
           onComplete={onPlayerComplete}
           onNotYet={onPlayerNotYet}
           onClose={() => setSessionAyah(null)}
@@ -1851,11 +1945,15 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = false, jumpActionLabel, onJumpSuggestion, jumpingSuggestion = false, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
+  alreadyMemorized?: boolean;
+  jumpActionLabel?: string | null;
+  onJumpSuggestion?: () => Promise<void>;
+  jumpingSuggestion?: boolean;
   onComplete: (result: "memorized") => Promise<void>;
   onNotYet: () => Promise<void>;
   onClose: () => void;
@@ -1978,6 +2076,17 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
 
   const isListen = phase === "listen";
   const shouldCenterAyahZone = !hidden && displayArabic.trim().length <= 120;
+  const jumpTargetLabel = useMemo(() => {
+    if (!jumpActionLabel) return null;
+    return isAr
+      ? jumpActionLabel.replace(/^تخطي إلى\s*/, "")
+      : jumpActionLabel.replace(/^Skip to\s*/i, "");
+  }, [jumpActionLabel, isAr]);
+  const stickyJumpText = jumpTargetLabel
+    ? (isAr
+      ? `تخطي إلى أول آية غير محفوظة (${jumpTargetLabel})`
+      : `Skip to the next unmemorized (${jumpTargetLabel})`)
+    : null;
 
   // ── Wakti brand tokens (no purple) ──
   const bg        = dark ? "#0c0f14" : "#fcfefd";
@@ -2003,7 +2112,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
     >
       {/* ── HEADER ── */}
       <div
-        className="flex-shrink-0 flex items-center gap-3 px-4 pb-3"
+        className="flex-shrink-0 px-4 pb-3"
         style={{
           paddingTop: "max(env(safe-area-inset-top, 0px) + 56px, 72px)",
           background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
@@ -2011,36 +2120,66 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
           borderBottom: `1px solid ${border}`,
         }}
       >
-        {/* Back */}
-        <button
-          onClick={onClose}
-          className="h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 active:scale-90 transition-all flex-shrink-0"
-          style={{ background: surface, border: `1px solid ${border}` }}
-          aria-label={isAr ? "رجوع" : "Back"}
-        >
-          <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
-          <span className="text-xs font-semibold" style={{ color: textPri }}>{isAr ? "رجوع" : "Back"}</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Back */}
+          <button
+            onClick={onClose}
+            className="h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 active:scale-90 transition-all flex-shrink-0"
+            style={{ background: surface, border: `1px solid ${border}` }}
+            aria-label={isAr ? "رجوع" : "Back"}
+          >
+            <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
+            <span className="text-xs font-semibold" style={{ color: textPri }}>{isAr ? "رجوع" : "Back"}</span>
+          </button>
 
-        {/* Title */}
-        <div className="flex-1 min-w-0 text-center">
-          <p className="text-sm font-bold truncate" style={{ color: textPri }}>
-            {isAr ? (surahInfo?.ar ?? `سورة ${ayah.surah_number}`) : (surahInfo?.en ?? `Surah ${ayah.surah_number}`)}
-          </p>
-          <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
-            {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
-            {surahInfo && ` · ${surahInfo.ayahs} ${isAr ? "آية" : "ayahs"}`}
-          </p>
+          {/* Title */}
+          <div className="flex-1 min-w-0 text-center">
+            <p className="text-sm font-bold truncate" style={{ color: textPri }}>
+              {isAr ? (surahInfo?.ar ?? `سورة ${ayah.surah_number}`) : (surahInfo?.en ?? `Surah ${ayah.surah_number}`)}
+            </p>
+            <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
+              {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
+              {surahInfo && ` · ${surahInfo.ayahs} ${isAr ? "آية" : "ayahs"}`}
+            </p>
+          </div>
+
+          {/* Phase tag */}
+          <div className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-bold"
+            style={isListen
+              ? { background: blueAlpha(0.14), color: blue, border: `1px solid ${blueAlpha(0.30)}` }
+              : { background: greenAlpha(0.14), color: green, border: `1px solid ${greenAlpha(0.30)}` }}>
+            {isListen ? (isAr ? "استماع" : "Listen") : (isAr ? "اختبار" : "Recall")}
+          </div>
         </div>
 
-        {/* Phase tag */}
-        <div className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-bold"
-          style={isListen
-            ? { background: blueAlpha(0.14), color: blue, border: `1px solid ${blueAlpha(0.30)}` }
-            : { background: greenAlpha(0.14), color: green, border: `1px solid ${greenAlpha(0.30)}` }}>
-          {isListen ? (isAr ? "استماع" : "Listen") : (isAr ? "اختبار" : "Recall")}
-        </div>
       </div>
+
+      {stickyJumpText && onJumpSuggestion && (
+        <div className="flex-shrink-0 px-4 pt-2 pb-2">
+          <button
+            onClick={() => void onJumpSuggestion()}
+            disabled={jumpingSuggestion}
+            className="w-full h-10 px-3 rounded-xl text-[11px] font-medium active:scale-[0.99] transition-all disabled:opacity-60"
+            style={{
+              background: dark
+                ? "linear-gradient(180deg, hsla(142,76%,55%,0.12) 0%, hsla(222,20%,10%,0.96) 55%, hsla(222,20%,9%,0.98) 100%)"
+                : "linear-gradient(180deg, hsla(142,76%,45%,0.15) 0%, hsla(180,4%,100%,0.95) 55%, hsla(180,4%,99%,0.98) 100%)",
+              border: dark ? "1px solid hsla(142,76%,55%,0.48)" : "1px solid hsla(142,76%,45%,0.45)",
+              color: dark ? "#e5e7eb" : "#111827",
+              boxShadow: dark
+                ? "0 12px 24px hsla(0,0%,0%,0.40), 0 4px 10px hsla(142,76%,55%,0.20), inset 0 1px 0 hsla(142,76%,70%,0.38)"
+                : "0 10px 20px hsla(243,84%,14%,0.12), 0 4px 10px hsla(142,76%,45%,0.18), inset 0 1px 0 hsla(142,76%,35%,0.28)",
+              transform: "translateY(-2px)",
+            }}
+            title={stickyJumpText}
+          >
+            <span className="inline-flex w-full items-center justify-between gap-1.5 truncate">
+              <span className="truncate">{jumpingSuggestion ? (isAr ? "جارٍ الانتقال..." : "Jumping...") : stickyJumpText}</span>
+              <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" style={{ color: green, transform: isAr ? "rotate(180deg)" : undefined }} />
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* ── AYAH ZONE ── */}
       <div className={`flex-1 flex flex-col px-5 py-5 overflow-y-auto gap-4 ${shouldCenterAyahZone ? "justify-center" : "justify-start"}`}>
@@ -2055,16 +2194,31 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
 
         {/* Ayah card */}
         <div
-          className="w-full rounded-2xl px-5 py-7 text-center"
+          className="relative w-full rounded-2xl px-5 py-7 text-center"
           style={{
             background: surface,
-            border: `1px solid ${isListen ? blueAlpha(0.18) : greenAlpha(0.18)}`,
+            border: `1px solid ${alreadyMemorized ? greenAlpha(0.42) : isListen ? blueAlpha(0.18) : greenAlpha(0.18)}`,
             boxShadow: hidden ? "none"
-              : isListen
-                ? `0 4px 32px ${blueAlpha(0.10)}`
-                : `0 4px 32px ${greenAlpha(0.10)}`,
+              : alreadyMemorized
+                ? `0 4px 32px ${greenAlpha(0.14)}`
+                : isListen
+                  ? `0 4px 32px ${blueAlpha(0.10)}`
+                  : `0 4px 32px ${greenAlpha(0.10)}`,
           }}
         >
+          {alreadyMemorized && (
+            <div
+              className="absolute top-2 px-2 py-0.5 rounded-full text-[9px] font-semibold"
+              style={{
+                [isAr ? "left" : "right"]: "8px",
+                background: greenAlpha(0.14),
+                color: green,
+                border: `1px solid ${greenAlpha(0.32)}`,
+              }}
+            >
+              {isAr ? "محفوظة مسبقاً" : "Already memorized"}
+            </div>
+          )}
           {hidden ? (
             <div className="py-5 flex flex-col items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -2151,25 +2305,27 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
             </div>
 
             {/* Play/Pause */}
-            <button
-              onClick={togglePlay}
-              className="rounded-full flex items-center justify-center active:scale-90 transition-all"
-              style={{
-                width: "72px", height: "72px",
-                background: playing
-                  ? `linear-gradient(135deg, hsl(210,100%,58%) 0%, hsl(210,100%,48%) 100%)`
-                  : blueAlpha(0.14),
-                border: `2px solid ${blueAlpha(playing ? 0.8 : 0.35)}`,
-                boxShadow: playing
-                  ? `0 0 28px ${blueAlpha(0.45)}, 0 4px 16px ${blueAlpha(0.25)}`
-                  : `0 0 12px ${blueAlpha(0.12)}`,
-              }}
-              aria-label={playing ? (isAr ? "إيقاف" : "Pause") : (isAr ? "تشغيل" : "Play")}
-            >
-              {playing
-                ? <Pause className="w-7 h-7 text-white" />
-                : <Play className="w-7 h-7" style={{ color: blue, marginLeft: "4px" }} />}
-            </button>
+            <div className="w-full flex items-center justify-center" dir="ltr">
+              <button
+                onClick={togglePlay}
+                className="rounded-full flex items-center justify-center active:scale-90 transition-all"
+                style={{
+                  width: "72px", height: "72px",
+                  background: playing
+                    ? `linear-gradient(135deg, hsl(210,100%,58%) 0%, hsl(210,100%,48%) 100%)`
+                    : blueAlpha(0.14),
+                  border: `2px solid ${blueAlpha(playing ? 0.8 : 0.35)}`,
+                  boxShadow: playing
+                    ? `0 0 28px ${blueAlpha(0.45)}, 0 4px 16px ${blueAlpha(0.25)}`
+                    : `0 0 12px ${blueAlpha(0.12)}`,
+                }}
+                aria-label={playing ? (isAr ? "إيقاف" : "Pause") : (isAr ? "تشغيل" : "Play")}
+              >
+                {playing
+                  ? <Pause className="w-7 h-7 text-white" />
+                  : <Play className="w-7 h-7" style={{ color: blue, marginLeft: "4px" }} />}
+              </button>
+            </div>
 
             {/* Progress */}
             {duration > 0 && (
