@@ -5,14 +5,19 @@ import {
   ChevronDown,
   DoorOpen,
   Grid3x3,
+  ImagePlus,
   LayoutTemplate,
+  Lock,
+  LockOpen,
   Maximize2,
   MessageCircle,
   MousePointer2,
   PencilRuler,
   Redo2,
+  RotateCw,
   Ruler,
   Save,
+  Sofa,
   ScanLine,
   Scissors,
   Send,
@@ -48,6 +53,8 @@ import {
   type DesignerFormField,
 } from './designerFollowUp';
 import { describeEditCommand, parseDesignerEditCommand, type DesignerEditCommand } from './designerEditCommands';
+import { FurniturePalette, FurnitureShapes, type PlacedItem } from './LayoutFurniture';
+import { furnitureById, type FurnitureSymbol } from './floorPlanFurniture';
 import DesignerFollowUpDialog from './DesignerFollowUpDialog';
 import RedesignRoomStudio from './RedesignRoomStudio';
 import FloorPlanStudio from './FloorPlanStudio';
@@ -93,6 +100,29 @@ export interface Aperture {
 type LayoutSnapshot = {
   walls: Wall[];
   apertures: Aperture[];
+  /** Placed furniture. Part of the snapshot so undo and redo cover it like everything else. */
+  items: PlacedItem[];
+};
+
+/**
+ * An uploaded plan shown underneath the grid so the user can trace over it by hand.
+ *
+ * ⛔ This is a REFERENCE IMAGE, not an auto-trace. Nothing reads it, nothing converts it, and no
+ * model ever sees it — it is there so a person can draw their own walls on top of their own plan.
+ * It is never included in what gets saved or sent for rendering.
+ */
+type TraceUnderlay = {
+  dataUrl: string;
+  name: string;
+  /** Top-left corner in canvas pixels. */
+  x: number;
+  y: number;
+  /** Rendered width in canvas pixels; the height follows the image's own aspect ratio. */
+  width: number;
+  height: number;
+  opacity: number;
+  /** Locked underlays ignore drags, so tracing over one cannot nudge it out of alignment. */
+  locked: boolean;
 };
 
 type DrawTool = 'select' | 'wall' | 'room' | 'curve' | 'break' | 'door' | 'window' | 'beam';
@@ -130,6 +160,22 @@ type ApertureInteraction = {
   originalApertures: Aperture[];
   draftAperture: Aperture;
   hasMoved: boolean;
+};
+
+type ItemInteraction = {
+  pointerId: number;
+  itemId: string;
+  originalItems: PlacedItem[];
+  offsetX: number;
+  offsetY: number;
+  draftItems: PlacedItem[];
+  hasMoved: boolean;
+};
+
+type UnderlayInteraction = {
+  pointerId: number;
+  offsetX: number;
+  offsetY: number;
 };
 
 type CanvasPanInteraction = {
@@ -240,6 +286,10 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const [isLayoutKitOpen, setIsLayoutKitOpen] = useState(true);
   const [curveEndPoint, setCurveEndPoint] = useState<Point | null>(null);
   const [snapGuide, setSnapGuide] = useState<SnapGuide | null>(null);
+  const [items, setItems] = useState<PlacedItem[]>([]);
+  const [underlay, setUnderlay] = useState<TraceUnderlay | null>(null);
+  const [isFurnitureOpen, setIsFurnitureOpen] = useState(false);
+  const [isTraceOpen, setIsTraceOpen] = useState(false);
   const [assetNames, setAssetNames] = useState<Record<DesignerStartMode, string[]>>({
     redesign: [],
     trace: [],
@@ -268,6 +318,9 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const apertureInteractionRef = useRef<ApertureInteraction | null>(null);
   const canvasPanRef = useRef<CanvasPanInteraction | null>(null);
   const wallBreakInteractionRef = useRef<WallBreakInteraction | null>(null);
+  const itemInteractionRef = useRef<ItemInteraction | null>(null);
+  const underlayInteractionRef = useRef<UnderlayInteraction | null>(null);
+  const underlayInputRef = useRef<HTMLInputElement | null>(null);
   const currentAssets = assetNames[activeMode];
   const GRID_GAP = 20;
   const CONNECTOR_SNAP_DISTANCE = 48;
@@ -816,16 +869,155 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
     });
   };
 
-  const commitLayout = (nextWalls: Wall[], nextApertures: Aperture[]) => {
+  /**
+   * The single place a layout change becomes undoable.
+   *
+   * `nextItems` defaults to the furniture already on the board, so the many callers that only touch
+   * walls or openings did not have to change when furniture arrived.
+   */
+  const commitLayout = (nextWalls: Wall[], nextApertures: Aperture[], nextItems: PlacedItem[] = items) => {
     const snapshot: LayoutSnapshot = {
       walls: nextWalls.map(cloneWall),
       apertures: nextApertures.map((aperture) => ({ ...aperture })),
+      items: nextItems.map((item) => ({ ...item })),
     };
     const nextHistory = [...history.slice(0, historyIndex + 1), snapshot];
     setWalls(snapshot.walls);
     setApertures(snapshot.apertures);
+    setItems(snapshot.items);
     setHistory(nextHistory);
     setHistoryIndex(nextHistory.length - 1);
+  };
+
+  // ---------------------------------------------------------------- furniture
+
+  /**
+   * Drops a piece of furniture into the middle of what the user is currently looking at.
+   *
+   * Sizing comes from the symbol's real-world metres multiplied by the board's own scale, so a king
+   * bed lands two metres wide on the grid rather than an arbitrary number of pixels.
+   */
+  const addFurniture = (symbol: FurnitureSymbol) => {
+    const viewport = canvasViewportRef.current;
+    const centre = viewport
+      ? {
+        x: (viewport.scrollLeft + viewport.clientWidth / 2) / zoom,
+        y: (viewport.scrollTop + viewport.clientHeight / 2) / zoom,
+      }
+      : { x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2 };
+
+    const item: PlacedItem = {
+      id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      symbolId: symbol.id,
+      x: Math.round(Math.min(CANVAS_SIZE, Math.max(0, centre.x))),
+      y: Math.round(Math.min(CANVAS_SIZE, Math.max(0, centre.y))),
+      rotation: 0,
+      width: symbol.widthM * scalePixelsPerUnit,
+      depth: symbol.depthM * scalePixelsPerUnit,
+    };
+    commitLayout(walls, apertures, [...items, item]);
+    setSelectedTool('select');
+    setSelectedElementId(item.id);
+  };
+
+  const rotateSelectedFurniture = (degrees: number) => {
+    const target = items.find((item) => item.id === selectedElementId);
+    if (!target) return;
+    commitLayout(walls, apertures, items.map((item) => (
+      item.id === target.id ? { ...item, rotation: (item.rotation + degrees + 360) % 360 } : item
+    )));
+  };
+
+  const handleFurniturePointerDown = (event: React.PointerEvent<SVGGElement>, item: PlacedItem) => {
+    // Without this the canvas would start panning underneath the drag.
+    event.stopPropagation();
+    event.preventDefault();
+    const point = getCanvasCoordinates(event);
+    setSelectedTool('select');
+    setSelectedElementId(item.id);
+    setLayoutFeedback('none');
+    itemInteractionRef.current = {
+      pointerId: event.pointerId,
+      itemId: item.id,
+      originalItems: items.map((entry) => ({ ...entry })),
+      offsetX: point.x - item.x,
+      offsetY: point.y - item.y,
+      draftItems: items.map((entry) => ({ ...entry })),
+      hasMoved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  // ---------------------------------------------------------------- trace underlay
+
+  const handleUnderlaySelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      setLayoutFeedback('none');
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.readAsDataURL(file);
+    }).catch(() => '');
+    if (!dataUrl) return;
+
+    // Measure it so the underlay keeps the plan's real proportions, then fit it to most of the
+    // board. A plan squashed to a square is useless to trace over.
+    const size = await new Promise<{ w: number; h: number }>((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve({ w: image.naturalWidth || 1, h: image.naturalHeight || 1 });
+      image.onerror = () => resolve({ w: 1, h: 1 });
+      image.src = dataUrl;
+    });
+
+    const fitted = CANVAS_SIZE * 0.8;
+    const width = size.w >= size.h ? fitted : fitted * (size.w / size.h);
+    const height = size.w >= size.h ? fitted * (size.h / size.w) : fitted;
+    setUnderlay({
+      dataUrl,
+      name: file.name,
+      x: (CANVAS_SIZE - width) / 2,
+      y: (CANVAS_SIZE - height) / 2,
+      width,
+      height,
+      opacity: 0.45,
+      locked: false,
+    });
+    setIsTraceOpen(true);
+  };
+
+  /** Resizes the underlay about its own centre, so scaling never walks it off the board. */
+  const scaleUnderlay = (factor: number) => {
+    setUnderlay((current) => {
+      if (!current) return current;
+      const width = Math.min(CANVAS_SIZE * 3, Math.max(CANVAS_SIZE * 0.1, current.width * factor));
+      const height = width * (current.height / current.width);
+      return {
+        ...current,
+        width,
+        height,
+        x: current.x + (current.width - width) / 2,
+        y: current.y + (current.height - height) / 2,
+      };
+    });
+  };
+
+  const handleUnderlayPointerDown = (event: React.PointerEvent<SVGImageElement>) => {
+    if (!underlay || underlay.locked || selectedTool !== 'select') return;
+    event.stopPropagation();
+    event.preventDefault();
+    const point = getCanvasCoordinates(event);
+    underlayInteractionRef.current = {
+      pointerId: event.pointerId,
+      offsetX: point.x - underlay.x,
+      offsetY: point.y - underlay.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const applyDesignerBrief = (brief: DesignerBrief) => {
@@ -887,7 +1079,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
 
     switch (command.kind) {
       case 'clear-plan': {
-        commitLayout([], []);
+        commitLayout([], [], []);
         setRoomLabels([]);
         setEditingLabelId(null);
         setSelectedElementId(null);
@@ -896,9 +1088,10 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
       case 'undo': {
         if (historyIndex < 0) return { didApply: false };
         const nextIndex = historyIndex - 1;
-        const snapshot = nextIndex >= 0 ? history[nextIndex] : { walls: [], apertures: [] };
+        const snapshot: LayoutSnapshot = nextIndex >= 0 ? history[nextIndex] : { walls: [], apertures: [], items: [] };
         setWalls(snapshot.walls.map(cloneWall));
         setApertures(snapshot.apertures.map((aperture) => ({ ...aperture })));
+        setItems((snapshot.items || []).map((item) => ({ ...item })));
         setHistoryIndex(nextIndex);
         setSelectedElementId(null);
         return { didApply: true };
@@ -1271,7 +1464,9 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
     setLayoutFeedback('none');
   };
 
-  const handleWallPointerDown = (event: React.PointerEvent<SVGLineElement>, wall: Wall) => {
+  // Typed to SVGElement because walls render as <path>, not <line>. It was declared as SVGLineElement
+  // and every call site was quietly a type error.
+  const handleWallPointerDown = (event: React.PointerEvent<SVGElement>, wall: Wall) => {
     startWallInteraction(event, wall, 'move');
   };
 
@@ -1475,6 +1670,33 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
       return;
     }
 
+    // Furniture and the underlay are checked first: both are dragged directly and neither needs
+    // any of the wall snapping below.
+    const itemInteraction = itemInteractionRef.current;
+    if (itemInteraction && itemInteraction.pointerId === event.pointerId) {
+      const point = getCanvasCoordinates(event);
+      const nextX = Math.min(CANVAS_SIZE, Math.max(0, point.x - itemInteraction.offsetX));
+      const nextY = Math.min(CANVAS_SIZE, Math.max(0, point.y - itemInteraction.offsetY));
+      const draftItems = itemInteraction.originalItems.map((entry) => (
+        entry.id === itemInteraction.itemId ? { ...entry, x: nextX, y: nextY } : entry
+      ));
+      itemInteraction.draftItems = draftItems;
+      itemInteraction.hasMoved = true;
+      setItems(draftItems);
+      return;
+    }
+
+    const underlayInteraction = underlayInteractionRef.current;
+    if (underlayInteraction && underlayInteraction.pointerId === event.pointerId) {
+      const point = getCanvasCoordinates(event);
+      setUnderlay((current) => (current ? {
+        ...current,
+        x: point.x - underlayInteraction.offsetX,
+        y: point.y - underlayInteraction.offsetY,
+      } : current));
+      return;
+    }
+
     const wallBreakInteraction = wallBreakInteractionRef.current;
     if (wallBreakInteraction && wallBreakInteraction.pointerId === event.pointerId) {
       const originalWall = wallBreakInteraction.originalWalls.find((wall) => wall.id === wallBreakInteraction.wallId);
@@ -1555,6 +1777,20 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   };
 
   const handleCanvasPointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
+    const itemInteraction = itemInteractionRef.current;
+    if (itemInteraction && itemInteraction.pointerId === event.pointerId) {
+      itemInteractionRef.current = null;
+      // Only a real move earns a history entry; a plain tap just selects.
+      if (itemInteraction.hasMoved) commitLayout(walls, apertures, itemInteraction.draftItems);
+      return;
+    }
+
+    const underlayInteraction = underlayInteractionRef.current;
+    if (underlayInteraction && underlayInteraction.pointerId === event.pointerId) {
+      underlayInteractionRef.current = null;
+      return;
+    }
+
     const canvasPan = canvasPanRef.current;
     if (canvasPan && canvasPan.pointerId === event.pointerId) {
       canvasPanRef.current = null;
@@ -1688,6 +1924,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const applySnapshot = (snapshot: LayoutSnapshot) => {
     setWalls(snapshot.walls.map(cloneWall));
     setApertures(snapshot.apertures.map((aperture) => ({ ...aperture })));
+    setItems((snapshot.items || []).map((item) => ({ ...item })));
     setSelectedElementId(null);
     resetDrawing();
   };
@@ -1695,7 +1932,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const handleUndo = () => {
     if (historyIndex < 0) return;
     const nextIndex = historyIndex - 1;
-    applySnapshot(nextIndex >= 0 ? history[nextIndex] : { walls: [], apertures: [] });
+    applySnapshot(nextIndex >= 0 ? history[nextIndex] : { walls: [], apertures: [], items: [] });
     setHistoryIndex(nextIndex);
   };
 
@@ -1708,6 +1945,15 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
 
   const handleDeleteSelected = () => {
     if (!selectedElementId) return;
+
+    // Furniture is checked first and returns early, so the wall and opening logic below never has
+    // to know that furniture exists.
+    if (items.some((item) => item.id === selectedElementId)) {
+      commitLayout(walls, apertures, items.filter((item) => item.id !== selectedElementId));
+      setSelectedElementId(null);
+      return;
+    }
+
     const selectedWall = walls.find((wall) => wall.id === selectedElementId);
     const nextWalls = selectedWall
       ? walls.filter((wall) => wall.id !== selectedWall.id)
@@ -2009,14 +2255,13 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
         ) : (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.85fr)] lg:gap-4">
             <section className={`${cardClass} relative min-h-[390px] overflow-hidden p-3 md:p-4`}>
+              {/* This whole branch is the Draw Layout tab. Redesign and Furnish Floor Plan return
+                  their own components above, so there is no mode check to make down here. */}
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  {activeMode === 'trace' && <ScanLine className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-200" />}
-                  {activeMode === 'draw' && <Grid3x3 className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-200" />}
+                  <Grid3x3 className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-200" />
                   <span className={`truncate text-sm font-bold ${headingClass}`}>
-                    {activeMode === 'trace'
-                      ? (isArabic ? 'لوحة المخطط' : 'Floor Plan Board')
-                      : (isArabic ? 'لوحة الرسم' : 'Layout Canvas')}
+                    {isArabic ? 'لوحة الرسم' : 'Layout Canvas'}
                   </span>
                 </div>
                 <span className="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-1 text-[10px] font-bold text-sky-800 dark:text-sky-200">
@@ -2024,28 +2269,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                 </span>
               </div>
 
-              {activeMode === 'trace' && (
-                <div className="relative min-h-[330px] overflow-hidden rounded-xl border border-dashed border-[#9ccff7] bg-[#eef7ff] p-4 dark:border-sky-300/30 dark:bg-[#081429]" style={{ backgroundImage: 'linear-gradient(hsla(210,100%,65%,0.12) 1px, transparent 1px), linear-gradient(90deg, hsla(210,100%,65%,0.12) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
-                  <div className="absolute left-[17%] top-[22%] h-[54%] w-[62%] rounded-sm border-[3px] border-sky-300/75 shadow-[0_0_18px_hsla(210,100%,65%,0.32)]" />
-                  <div className="absolute left-[17%] top-[50%] h-[3px] w-[62%] bg-sky-300/75" />
-                  <div className="absolute left-[48%] top-[22%] h-[54%] w-[3px] bg-sky-300/75" />
-                  <div className="absolute left-[27%] top-[48%] h-9 w-9 rounded-bl-full border-b-[3px] border-l-[3px] border-sky-300/75" />
-                  <div className="absolute bottom-4 start-4 max-w-[calc(100%-9rem)] rounded-lg border border-[#c9dff5] bg-white/95 px-3 py-2 text-start shadow-md dark:border-sky-300/20 dark:bg-[#0c1730]/90">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-[#075985] dark:text-sky-200">{isArabic ? 'معاينة' : 'Preview'}</div>
-                    <div className={`mt-0.5 text-xs ${mutedClass}`}>{isArabic ? 'سيظهر المخطط الذي ترفعه هنا' : 'Your uploaded plan will appear here'}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-4 end-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-3 py-2.5 text-xs font-bold text-white shadow-[0_4px_14px_hsla(210,100%,65%,0.45)] transition-all hover:brightness-110 active:scale-95"
-                  >
-                    <Upload className="h-4 w-4" />
-                    {isArabic ? 'رفع مخطط' : 'Upload Plan'}
-                  </button>
-                </div>
-              )}
-
-              {activeMode === 'draw' && (
+              {(
                 <div className="space-y-3">
                   <div
                     ref={canvasViewportRef}
@@ -2077,8 +2301,28 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                         </filter>
                       </defs>
                       <rect width={CANVAS_SIZE} height={CANVAS_SIZE} className="fill-[#f8fcff] dark:fill-[#040912]" />
-                      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill="url(#designer-layout-grid)" />
-                      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill="url(#designer-layout-major-grid)" />
+
+                      {/*
+                        The uploaded plan sits UNDER the grid and under everything drawn, so the
+                        user's own walls always read clearly on top of it while they trace.
+                      */}
+                      {underlay && (
+                        <image
+                          href={underlay.dataUrl}
+                          x={underlay.x}
+                          y={underlay.y}
+                          width={underlay.width}
+                          height={underlay.height}
+                          opacity={underlay.opacity}
+                          preserveAspectRatio="xMidYMid meet"
+                          style={{ cursor: underlay.locked ? 'default' : 'move' }}
+                          pointerEvents={underlay.locked || selectedTool !== 'select' ? 'none' : 'auto'}
+                          onPointerDown={handleUnderlayPointerDown}
+                        />
+                      )}
+
+                      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill="url(#designer-layout-grid)" pointerEvents="none" />
+                      <rect width={CANVAS_SIZE} height={CANVAS_SIZE} fill="url(#designer-layout-major-grid)" pointerEvents="none" />
 
                       {walls.map((wall) => {
                         const isSelected = selectedElementId === wall.id;
@@ -2372,6 +2616,58 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                         );
                       })()}
 
+                      {/*
+                        Furniture draws above the walls so a sofa against a wall is not hidden by
+                        it. Each piece is its own <g> with its own pointer handler, which is what
+                        lets it be dragged without the canvas panning underneath.
+                      */}
+                      {items.map((item) => {
+                        const symbol = furnitureById(item.symbolId);
+                        if (!symbol) return null;
+                        const isSelected = selectedElementId === item.id;
+                        return (
+                          <g
+                            key={item.id}
+                            transform={`translate(${item.x} ${item.y}) rotate(${item.rotation})`}
+                            className={isSelected ? 'text-sky-600 dark:text-sky-300' : 'text-[#25415f] dark:text-sky-100/80'}
+                            style={{ cursor: 'move' }}
+                            onPointerDown={(event) => handleFurniturePointerDown(event, item)}
+                          >
+                            {isSelected && (
+                              <rect
+                                x={-item.width / 2 - 4}
+                                y={-item.depth / 2 - 4}
+                                width={item.width + 8}
+                                height={item.depth + 8}
+                                rx={6}
+                                fill="none"
+                                className="stroke-sky-400/80"
+                                strokeWidth={2}
+                                strokeDasharray="6 4"
+                                pointerEvents="none"
+                              />
+                            )}
+                            {/* An invisible slab guarantees a finger-sized target on thin symbols. */}
+                            <rect
+                              x={-item.width / 2}
+                              y={-item.depth / 2}
+                              width={item.width}
+                              height={item.depth}
+                              fill="transparent"
+                            />
+                            <g
+                              stroke="currentColor"
+                              strokeWidth={1.6}
+                              fill="none"
+                              strokeLinejoin="round"
+                              pointerEvents="none"
+                            >
+                              <FurnitureShapes shapes={symbol.shapes} width={item.width} depth={item.depth} />
+                            </g>
+                          </g>
+                        );
+                      })}
+
                       {roomLabels.map((label) => {
                         const isSelected = selectedElementId === label.roomId;
                         return (
@@ -2457,35 +2753,213 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                     </div>
                   )}
 
+                  {/* Rotate and remove for the piece of furniture currently selected. */}
+                  {items.some((item) => item.id === selectedElementId) && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 rounded-xl border border-sky-300/40 bg-sky-50/70 px-2 py-2 dark:border-sky-300/20 dark:bg-sky-500/10">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wide text-[#075985] dark:text-sky-200">
+                        {isArabic ? 'العنصر المحدد' : 'Selected piece'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => rotateSelectedFurniture(-45)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[10px] font-bold text-[#40506a] transition active:scale-95 dark:bg-white/10 dark:text-foreground/80"
+                      >
+                        <RotateCw className="h-3.5 w-3.5 -scale-x-100" />
+                        45°
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rotateSelectedFurniture(45)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[10px] font-bold text-[#40506a] transition active:scale-95 dark:bg-white/10 dark:text-foreground/80"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                        45°
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rotateSelectedFurniture(90)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[10px] font-bold text-[#40506a] transition active:scale-95 dark:bg-white/10 dark:text-foreground/80"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                        90°
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteSelected}
+                        className="inline-flex items-center gap-1 rounded-lg bg-rose-500/15 px-2 py-1.5 text-[10px] font-bold text-rose-600 transition active:scale-95 dark:text-rose-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {isArabic ? 'حذف' : 'Remove'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── Trace a plan ── */}
+                  <div className="overflow-hidden rounded-2xl border border-[#c9dff5] bg-[#f7fbff]/80 dark:border-sky-300/20 dark:bg-black/[0.16]">
+                    <button
+                      type="button"
+                      aria-expanded={isTraceOpen}
+                      onClick={() => setIsTraceOpen((current) => !current)}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start transition hover:bg-sky-50/70 dark:hover:bg-white/[0.06]"
+                    >
+                      <span className="flex items-center gap-2">
+                        <ImagePlus className="h-4 w-4 text-sky-700 dark:text-sky-200" />
+                        <span>
+                          <span className={`block text-xs font-bold ${headingClass}`}>{isArabic ? 'تتبّع مخطط' : 'Trace a plan'}</span>
+                          <span className="block text-[10px] font-semibold text-muted-foreground">
+                            {isArabic ? 'ارفع مخططك وارسم فوقه' : 'Upload your plan and draw over it'}
+                          </span>
+                        </span>
+                      </span>
+                      <ChevronDown className={`h-4 w-4 text-sky-700 transition-transform duration-200 dark:text-sky-200 ${isTraceOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isTraceOpen && (
+                      <div className="space-y-2.5 border-t border-[#d9e7f5] px-3 py-3 dark:border-sky-300/15">
+                        <input
+                          ref={underlayInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleUnderlaySelected}
+                        />
+
+                        {!underlay ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => underlayInputRef.current?.click()}
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-3 py-2.5 text-xs font-bold text-white shadow-[0_4px_14px_hsla(210,100%,65%,0.45)] transition-all hover:brightness-110 active:scale-95"
+                            >
+                              <Upload className="h-4 w-4" />
+                              {isArabic ? 'رفع مخطط للتتبّع' : 'Upload a plan to trace'}
+                            </button>
+                            <p className={`text-[10px] leading-relaxed ${mutedClass}`}>
+                              {isArabic
+                                ? 'يظهر المخطط باهتاً تحت الشبكة. حرّكه وكبّره حتى يناسب المقياس، ثبّته، ثم ارسم الجدران فوقه بنفسك.'
+                                : 'Your plan appears faded under the grid. Move and resize it until the scale looks right, lock it, then draw your own walls straight over it.'}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`min-w-0 flex-1 truncate text-[11px] font-bold ${headingClass}`}>{underlay.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setUnderlay(null)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-rose-500/15 px-2 py-1 text-[10px] font-bold text-rose-600 transition active:scale-95 dark:text-rose-300"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                {isArabic ? 'إزالة' : 'Remove'}
+                              </button>
+                            </div>
+
+                            <label className="block">
+                              <span className="mb-1 flex items-center justify-between text-[10px] font-bold text-[#40506a] dark:text-foreground/70">
+                                <span>{isArabic ? 'وضوح المخطط' : 'Plan visibility'}</span>
+                                <span>{Math.round(underlay.opacity * 100)}%</span>
+                              </span>
+                              <input
+                                type="range"
+                                min={5}
+                                max={100}
+                                value={Math.round(underlay.opacity * 100)}
+                                onChange={(event) => {
+                                  const next = Number(event.target.value) / 100;
+                                  setUnderlay((current) => (current ? { ...current, opacity: next } : current));
+                                }}
+                                className="w-full accent-sky-500"
+                              />
+                            </label>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-[#40506a] dark:text-foreground/70">{isArabic ? 'الحجم' : 'Size'}</span>
+                              <button
+                                type="button"
+                                onClick={() => scaleUnderlay(1 / 1.1)}
+                                className="inline-flex h-7 w-8 items-center justify-center rounded-lg bg-white text-[#40506a] transition active:scale-95 dark:bg-white/10 dark:text-foreground/80"
+                                aria-label={isArabic ? 'تصغير المخطط' : 'Shrink the plan'}
+                              >
+                                <ZoomOut className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => scaleUnderlay(1.1)}
+                                className="inline-flex h-7 w-8 items-center justify-center rounded-lg bg-white text-[#40506a] transition active:scale-95 dark:bg-white/10 dark:text-foreground/80"
+                                aria-label={isArabic ? 'تكبير المخطط' : 'Enlarge the plan'}
+                              >
+                                <ZoomIn className="h-3.5 w-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setUnderlay((current) => (current ? { ...current, locked: !current.locked } : current))}
+                                className={`ms-auto inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold transition active:scale-95 ${
+                                  underlay.locked
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                    : 'bg-white text-[#40506a] dark:bg-white/10 dark:text-foreground/80'
+                                }`}
+                              >
+                                {underlay.locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+                                {underlay.locked ? (isArabic ? 'مثبّت' : 'Locked') : (isArabic ? 'غير مثبّت' : 'Unlocked')}
+                              </button>
+                            </div>
+
+                            <p className={`text-[10px] leading-relaxed ${mutedClass}`}>
+                              {underlay.locked
+                                ? (isArabic
+                                  ? 'المخطط مثبّت. ارسم الجدران والأبواب والنوافذ فوقه بأدوات الرسم.'
+                                  : 'The plan is locked. Now draw your walls, doors and windows straight over it with the drawing tools.')
+                                : (isArabic
+                                  ? 'بأداة التحديد اسحب المخطط لتوضيعه، ثم اضغط تثبيت قبل الرسم.'
+                                  : 'With the Select tool, drag the plan to position it, then press Locked before you start drawing.')}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Add furniture ── */}
+                  <div className="overflow-hidden rounded-2xl border border-[#c9dff5] bg-[#f7fbff]/80 dark:border-sky-300/20 dark:bg-black/[0.16]">
+                    <button
+                      type="button"
+                      aria-expanded={isFurnitureOpen}
+                      onClick={() => setIsFurnitureOpen((current) => !current)}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start transition hover:bg-sky-50/70 dark:hover:bg-white/[0.06]"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Sofa className="h-4 w-4 text-sky-700 dark:text-sky-200" />
+                        <span>
+                          <span className={`block text-xs font-bold ${headingClass}`}>{isArabic ? 'إضافة أثاث' : 'Add furniture'}</span>
+                          <span className="block text-[10px] font-semibold text-muted-foreground">
+                            {items.length > 0
+                              ? (isArabic ? `${items.length} عنصر على اللوحة` : `${items.length} on the board`)
+                              : (isArabic ? 'اضغط أي قطعة لإضافتها' : 'Tap any piece to place it')}
+                          </span>
+                        </span>
+                      </span>
+                      <ChevronDown className={`h-4 w-4 text-sky-700 transition-transform duration-200 dark:text-sky-200 ${isFurnitureOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isFurnitureOpen && (
+                      <div className="space-y-2 border-t border-[#d9e7f5] px-3 py-3 dark:border-sky-300/15">
+                        <FurniturePalette isArabic={isArabic} onPick={addFurniture} />
+                        <p className={`text-[10px] leading-relaxed ${mutedClass}`}>
+                          {isArabic
+                            ? 'تُضاف القطعة في منتصف ما تراه بمقاسها الحقيقي. اسحبها لتحريكها، ثم استخدم أزرار التدوير أعلاه.'
+                            : 'Each piece lands in the middle of your view at its real-world size. Drag it to move it, then use the rotate buttons above.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   <p className={`px-1 text-center text-xs ${mutedClass}`}>
                     {isArabic ? 'لوحة قابلة للتمرير: ' : 'Scrollable board: '}{Math.round(zoom * 100)}% · {(CANVAS_SIZE / scalePixelsPerUnit).toFixed(1)} × {(CANVAS_SIZE / scalePixelsPerUnit).toFixed(1)} {scaleUnit} · {isArabic ? '20 بكسل = ' : '20 px = '}{(GRID_GAP / scalePixelsPerUnit).toFixed(2)} {scaleUnit}
                   </p>
                 </div>
               )}
 
-              {activeMode === 'trace' && (
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  hidden
-                  accept="image/*,.pdf"
-                  onChange={handleFilesSelected}
-                />
-              )}
-
-              {currentAssets.length > 0 && activeMode === 'trace' && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {currentAssets.map((assetName) => (
-                    <span key={assetName} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-sky-300/20 bg-sky-400/10 px-2.5 py-1.5 text-xs text-sky-800 dark:text-sky-100">
-                      <Check className="h-3.5 w-3.5 shrink-0" />
-                      <span className="max-w-[190px] truncate">{assetName}</span>
-                      <button type="button" onClick={() => removeAsset(assetName)} aria-label={isArabic ? 'إزالة الملف' : 'Remove file'} className="rounded p-0.5 hover:bg-white/15">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
             </section>
 
             <aside className="space-y-3 lg:space-y-4">
@@ -2495,40 +2969,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                   <h2 className="text-sm font-extrabold text-foreground">{isArabic ? 'متحكم المصمم' : 'Designer Controller'}</h2>
                 </div>
 
-                {activeMode === 'trace' && (
-                  <div className="mt-4 space-y-4">
-                    <label className="block text-start">
-                      <span className="text-xs font-bold text-foreground/85">{isArabic ? 'مقياس المخطط' : 'Plan scale'}</span>
-                      <select className={`${fieldClass} mt-1.5`} defaultValue="unknown">
-                        <option value="unknown">{isArabic ? 'غير معروف' : 'Unknown'}</option>
-                        <option value="metric">{isArabic ? 'متري' : 'Metric'}</option>
-                        <option value="imperial">{isArabic ? 'إمبراطوري' : 'Imperial'}</option>
-                      </select>
-                    </label>
-                    <div>
-                      <span className="text-xs font-bold text-foreground/85">{isArabic ? 'العناصر المراد تتبعها' : 'Trace elements'}</span>
-                      <div className="mt-2 grid grid-cols-3 gap-1.5">
-                        {traceItems.map((item) => {
-                          const isActive = selectedTraceItems.includes(item.value);
-                          return (
-                            <button
-                              key={item.value}
-                              type="button"
-                              onClick={() => toggleTraceItem(item.value)}
-                              className={`min-h-[38px] rounded-lg border px-1.5 py-1.5 text-[10px] font-bold transition-all ${
-                                isActive ? 'border-sky-300/45 bg-sky-400/20 text-sky-800 dark:text-sky-100' : 'border-[#d9e7f5] bg-[#f7fbff] text-[#40506a] hover:bg-sky-50 dark:border-sky-300/15 dark:bg-black/[0.1] dark:text-foreground/70 dark:hover:bg-white/[0.08]'
-                              }`}
-                            >
-                              {isArabic ? item.ar : item.en}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeMode === 'draw' && (
+                {(
                   <div className="mt-4 overflow-hidden rounded-2xl border border-[#c9dff5] bg-[#f7fbff]/80 dark:border-sky-300/20 dark:bg-black/[0.16]">
                     <button
                       type="button"

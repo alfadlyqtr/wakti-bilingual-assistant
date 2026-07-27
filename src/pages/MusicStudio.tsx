@@ -1286,8 +1286,12 @@ export default function MusicStudio() {
   }, [mainTab, authUser?.id]);
 
   const isArabic = language === 'ar';
+  // ⛔ ONE list drives all five cards, and every card is rendered by the SAME markup below.
+  // Each card used to have its own hand-written copy of that markup with its own padding, icon
+  // size and text size, which is why the owner saw Image taller than QR, Video smaller than both,
+  // Music "ridiculous" and Designer pushed off the bottom as a separate full-width banner.
   const studioCards: {
-    key: 'music' | 'video' | 'image' | 'qrcode';
+    key: 'music' | 'video' | 'image' | 'qrcode' | 'designer';
     icon: React.ReactNode;
     icon3dBg: string;
     icon3dGlow: string;
@@ -1299,14 +1303,13 @@ export default function MusicStudio() {
     cardBg: string;
     cardBorder: string;
     shadow: string;
-    prominent?: boolean;
-    bentoSpan?: string;
     accentGlowStyle: string;
-    badge?: { en: string; ar: string };
+    pulse: string;
+    badge?: { en: string; ar: string; className: string };
   }[] = [
     {
       key: 'music',
-      icon: <Music className="h-7 w-7" />,
+      icon: <Music className="h-6 w-6" />,
       icon3dBg: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 60%, #1e40af 100%)',
       icon3dGlow: '0 0 22px hsla(210,100%,65%,0.7), 0 0 8px hsla(210,100%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)',
@@ -1318,10 +1321,11 @@ export default function MusicStudio() {
       cardBorder: 'border border-sky-400/20 dark:border-sky-400/15',
       shadow: 'shadow-[0_8px_32px_-4px_hsla(210,100%,65%,0.18)]',
       accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(210,100%,65%,0.18), transparent)',
+      pulse: 'radial-gradient(circle, hsla(210,100%,65%,0.4) 0%, transparent 70%)',
     },
     {
       key: 'video',
-      icon: <Video className="h-8 w-8" />,
+      icon: <Video className="h-6 w-6" />,
       icon3dBg: 'linear-gradient(135deg, #fb923c 0%, #f43f5e 55%, #dc2626 100%)',
       icon3dGlow: '0 0 26px hsla(25,95%,60%,0.8), 0 0 10px hsla(350,90%,65%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.04) 100%)',
@@ -1332,14 +1336,13 @@ export default function MusicStudio() {
       cardBg: 'bg-gradient-to-br from-orange-900/35 via-rose-950/40 to-pink-900/25 dark:from-orange-950/55 dark:via-rose-950/50 dark:to-pink-950/35',
       cardBorder: 'border border-orange-400/25 dark:border-orange-400/20',
       shadow: 'shadow-[0_8px_40px_-4px_hsla(25,95%,60%,0.28)]',
-      prominent: true,
-      bentoSpan: 'md:col-span-1 md:row-span-2',
       accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(25,95%,60%,0.22), transparent)',
-      badge: { en: '🎬 Featured', ar: '🎬 مميز' },
+      pulse: 'radial-gradient(circle, hsla(25,95%,60%,0.35) 0%, transparent 70%)',
+      badge: { en: '🎬 Featured', ar: '🎬 مميز', className: 'bg-orange-500/20 text-orange-300 border-orange-400/30' },
     },
     {
       key: 'image',
-      icon: <Palette className="h-8 w-8" />,
+      icon: <Palette className="h-6 w-6" />,
       icon3dBg: 'linear-gradient(135deg, #34d399 0%, #0d9488 55%, #065f46 100%)',
       icon3dGlow: '0 0 26px hsla(160,80%,55%,0.8), 0 0 10px hsla(175,80%,50%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.04) 100%)',
@@ -1350,14 +1353,13 @@ export default function MusicStudio() {
       cardBg: 'bg-gradient-to-br from-emerald-900/35 via-teal-950/40 to-cyan-900/25 dark:from-emerald-950/55 dark:via-teal-950/50 dark:to-cyan-950/35',
       cardBorder: 'border border-emerald-400/25 dark:border-emerald-400/20',
       shadow: 'shadow-[0_8px_40px_-4px_hsla(160,80%,55%,0.28)]',
-      prominent: true,
-      bentoSpan: 'md:col-span-1 md:row-span-2',
       accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(160,80%,55%,0.22), transparent)',
-      badge: { en: '✨ Popular', ar: '✨ الأكثر استخداماً' },
+      pulse: 'radial-gradient(circle, hsla(160,80%,55%,0.35) 0%, transparent 70%)',
+      badge: { en: '✨ Popular', ar: '✨ الأكثر استخداماً', className: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' },
     },
     {
       key: 'qrcode',
-      icon: <QrCode className="h-7 w-7" />,
+      icon: <QrCode className="h-6 w-6" />,
       icon3dBg: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 55%, #4c1d95 100%)',
       icon3dGlow: '0 0 22px hsla(280,70%,65%,0.7), 0 0 8px hsla(280,80%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)',
@@ -1369,6 +1371,23 @@ export default function MusicStudio() {
       cardBorder: 'border border-violet-400/20 dark:border-violet-400/15',
       shadow: 'shadow-[0_8px_32px_-4px_hsla(280,70%,65%,0.18)]',
       accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(280,70%,65%,0.18), transparent)',
+      pulse: 'radial-gradient(circle, hsla(280,70%,65%,0.4) 0%, transparent 70%)',
+    },
+    {
+      key: 'designer',
+      icon: <PencilRuler className="h-6 w-6" />,
+      icon3dBg: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 60%, #1e40af 100%)',
+      icon3dGlow: '0 0 22px hsla(210,100%,65%,0.7), 0 0 8px hsla(210,100%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
+      icon3dInner: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)',
+      titleEn: 'Designer',
+      titleAr: 'المصمم',
+      descEn: 'Design floor plans, rooms, and spaces with smart drawing tools.',
+      descAr: 'صمّم المخططات والمساحات والغرف بأدوات رسم ذكية.',
+      cardBg: 'bg-gradient-to-br from-sky-900/35 via-blue-950/40 to-indigo-900/25 dark:from-sky-950/55 dark:via-blue-950/50 dark:to-indigo-950/35',
+      cardBorder: 'border border-sky-400/25 dark:border-sky-400/20',
+      shadow: 'shadow-[0_8px_40px_-4px_hsla(210,100%,65%,0.28)]',
+      accentGlowStyle: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(210,100%,65%,0.22), transparent)',
+      pulse: 'radial-gradient(circle, hsla(210,100%,65%,0.35) 0%, transparent 70%)',
     },
   ];
 
@@ -1377,10 +1396,16 @@ export default function MusicStudio() {
   const musicTrialLimit = mainTab === 'music' ? 1 : 0;
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
+    // ⛔ The landing hub must NOT scroll. `<main>` in AppLayout is already `flex-1 overflow-y-auto`,
+    // so `h-full` here is exactly the space between the header and the bottom of the screen — no
+    // magic pixel offsets to go stale. Only the landing tab is locked; every other tab still
+    // scrolls normally and keeps its bottom padding.
+    <div className={`mx-auto w-full max-w-6xl space-y-4 p-3 md:p-6 ${mainTab === 'studio' ? 'flex h-full flex-col overflow-hidden' : 'pb-20 md:pb-6'}`}>
       <TrialGateOverlay featureKey={musicTrialKey} limit={musicTrialLimit} featureLabel={{ en: 'Music', ar: 'الموسيقى' }} />
       {/* ─── Pressable Pill Tabs ─── */}
-      <div className="relative">
+      {/* shrink-0: on the landing tab this sits in a fixed-height flex column, and without it the
+          pills would be squashed instead of the card grid giving up the space. */}
+      <div className="relative shrink-0">
         {canScrollTabsLeft && (
           <button
             type="button"
@@ -1435,7 +1460,7 @@ export default function MusicStudio() {
 
       {/* ─── Studio Landing Hub ─── */}
       {mainTab === 'studio' && (
-        <div className="relative space-y-4 pt-0 pb-2 md:space-y-5 md:pt-1 md:pb-4">
+        <div className="relative flex min-h-0 flex-1 flex-col gap-3 md:gap-4">
 
           {/* Ambient radial glow background */}
           <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl">
@@ -1445,165 +1470,58 @@ export default function MusicStudio() {
             <div className="absolute bottom-[15%] right-[15%] w-[35%] h-[30%] rounded-full opacity-20 dark:opacity-15 blur-[70px]" style={{ background: 'radial-gradient(ellipse, hsla(25,95%,60%,1) 0%, transparent 70%)' }} />
           </div>
 
-          {/* Hero */}
-          <div className="text-center">
-            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[#060541] via-blue-600 to-sky-500 dark:from-white dark:via-sky-200 dark:to-blue-300 bg-clip-text text-transparent leading-tight">
+          {/* Hero — shrink-0 so the title never steals height from the cards */}
+          <div className="shrink-0 text-center">
+            <h1 className="bg-gradient-to-r from-[#060541] via-blue-600 to-sky-500 bg-clip-text text-2xl font-extrabold leading-tight tracking-tight text-transparent dark:from-white dark:via-sky-200 dark:to-blue-300 md:text-5xl">
               {isArabic ? 'استوديو وقتي الإبداعي' : 'Wakti Creative Studio'}
             </h1>
           </div>
 
-          {/* Bento Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 grid-rows-auto md:grid-rows-2 gap-3 md:gap-4">
-            {/* Music — small top-left */}
-            {studioCards.filter(c => c.key === 'music').map((card) => (
+          {/*
+            ⛔ ONE grid, one card markup, five equal cards. It fills the leftover height instead of
+            having a height of its own: `flex-1 min-h-0` here plus `minmax(0,1fr)` rows means the
+            cards divide up whatever space is left, so the page never scrolls and nothing is cut
+            off at the bottom on any screen size. Designer takes the full width of the last row.
+          */}
+          <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-[repeat(3,minmax(0,1fr))] gap-2.5 md:grid-cols-3 md:grid-rows-[repeat(2,minmax(0,1fr))] md:gap-4">
+            {studioCards.map((card) => (
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
+                className={`group relative flex min-h-0 flex-col overflow-hidden rounded-3xl p-3.5 text-left md:p-5 ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl transition-all duration-200 active:scale-[0.96] ${card.key === 'designer' ? 'col-span-2 md:col-span-2' : ''}`}
               >
-                {/* Soft radial pulse behind card */}
-                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-30 blur-2xl" style={{ background: 'radial-gradient(circle, hsla(210,100%,65%,0.4) 0%, transparent 70%)' }} />
-                {/* Shimmering glass border effect */}
-                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.3) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
+                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-35 blur-2xl" style={{ background: card.pulse }} />
                 <div className="pointer-events-none absolute inset-0" style={{ background: card.accentGlowStyle }} />
+                <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
+
+                {card.badge && (
+                  <span className={`absolute top-2.5 z-10 rounded-full border px-2 py-0.5 text-[9px] font-semibold backdrop-blur-sm md:top-4 md:px-2.5 md:py-1 md:text-[10px] ${isArabic ? 'left-2.5 md:left-4' : 'right-2.5 md:right-4'} ${card.badge.className}`}>
+                    {isArabic ? card.badge.ar : card.badge.en}
+                  </span>
+                )}
+
                 <div
-                  className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 relative"
+                  className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl md:h-12 md:w-12"
                   style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
                 >
                   <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
                   <span className="relative text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]">{card.icon}</span>
                 </div>
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-base font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
-                  <ArrowRight className={`h-4 w-4 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
-                </div>
-                <p className="text-[12px] text-muted-foreground/80 leading-relaxed line-clamp-2">{isArabic ? card.descAr : card.descEn}</p>
-              </button>
-            ))}
 
-            {/* Video */}
-            {studioCards.filter(c => c.key === 'video').map((card) => (
-              <button
-                key={card.key}
-                onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
-              >
-                {/* Soft radial pulse behind card — orange */}
-                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(25,95%,60%,0.35) 0%, transparent 70%)' }} />
-                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(25,95%,60%,0.22), transparent)' }} />
-                {card.badge && (
-                  <span className="absolute top-4 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 backdrop-blur-sm">
-                    {isArabic ? card.badge.ar : card.badge.en}
-                  </span>
-                )}
-                {/* Shimmering glass border effect */}
-                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
-                <div
-                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 relative"
-                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
-                >
-                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
-                  <span className="relative text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">{card.icon}</span>
+                <div className="relative mt-auto pt-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="truncate text-[15px] font-extrabold tracking-tight text-foreground md:text-lg">
+                      {isArabic ? card.titleAr : card.titleEn}
+                    </h3>
+                    <ArrowRight className={`h-4 w-4 shrink-0 text-muted-foreground/40 ${isArabic ? 'rotate-180' : ''}`} />
+                  </div>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground/80 md:text-[13px]">
+                    {isArabic ? card.descAr : card.descEn}
+                  </p>
                 </div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
-                  <ArrowRight className={`h-5 w-5 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
-                </div>
-                <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{isArabic ? card.descAr : card.descEn}</p>
-              </button>
-            ))}
-
-            {/* Image */}
-            {studioCards.filter(c => c.key === 'image').map((card) => (
-              <button
-                key={card.key}
-                onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
-              >
-                {/* Soft radial pulse behind card — emerald */}
-                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(160,80%,55%,0.35) 0%, transparent 70%)' }} />
-                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(160,80%,55%,0.22), transparent)' }} />
-                {card.badge && (
-                  <span className="absolute top-4 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-sm">
-                    {isArabic ? card.badge.ar : card.badge.en}
-                  </span>
-                )}
-                {/* Shimmering glass border effect */}
-                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
-                <div
-                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 relative"
-                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
-                >
-                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
-                  <span className="relative text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">{card.icon}</span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
-                  <ArrowRight className={`h-5 w-5 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
-                </div>
-                <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{isArabic ? card.descAr : card.descEn}</p>
-              </button>
-            ))}
-
-            {/* QR Code — small bottom-right */}
-            {studioCards.filter(c => c.key === 'qrcode').map((card) => (
-              <button
-                key={card.key}
-                onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-5 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
-              >
-                {/* Soft radial pulse behind card — violet */}
-                <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-30 blur-2xl" style={{ background: 'radial-gradient(circle, hsla(280,70%,65%,0.4) 0%, transparent 70%)' }} />
-                <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(280,70%,65%,0.18), transparent)' }} />
-                {/* Shimmering glass border effect */}
-                <div className="absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.3) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
-                <div
-                  className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 relative"
-                  style={{ background: card.icon3dBg, boxShadow: card.icon3dGlow }}
-                >
-                  <div className="absolute inset-0 rounded-2xl" style={{ background: card.icon3dInner }} />
-                  <span className="relative text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]">{card.icon}</span>
-                </div>
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-base font-extrabold text-foreground tracking-tight">{isArabic ? card.titleAr : card.titleEn}</h3>
-                  <ArrowRight className={`h-4 w-4 text-muted-foreground/40 shrink-0 ${isArabic ? 'rotate-180' : ''}`} />
-                </div>
-                <p className="text-[12px] text-muted-foreground/80 leading-relaxed line-clamp-2">{isArabic ? card.descAr : card.descEn}</p>
               </button>
             ))}
           </div>
-
-          <button
-            type="button"
-            onClick={() => setMainTab('designer')}
-            dir={isArabic ? 'rtl' : 'ltr'}
-            className="group relative w-full overflow-hidden rounded-3xl border border-sky-400/25 bg-gradient-to-br from-sky-900/35 via-blue-950/40 to-indigo-900/25 p-4 text-start shadow-[0_8px_40px_-4px_hsla(210,100%,65%,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/45 hover:shadow-[0_12px_32px_-8px_hsla(210,100%,65%,0.5)] active:scale-[0.98] dark:from-sky-950/55 dark:via-blue-950/50 dark:to-indigo-950/35 md:p-6"
-          >
-            <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(210,100%,65%,0.35) 0%, transparent 70%)' }} />
-            <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 120%, hsla(210,100%,65%,0.22), transparent)' }} />
-            <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/40 dark:border-white/30" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%, rgba(255,255,255,0.35) 100%)', mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)', maskComposite: 'xor', WebkitMaskComposite: 'xor', padding: '1px', opacity: 0.8 }} />
-
-            <div className="relative flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div
-                  className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
-                  style={{ background: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 60%, #1e40af 100%)', boxShadow: '0 0 22px hsla(210,100%,65%,0.7), 0 0 8px hsla(210,100%,75%,0.5), inset 0 1px 0 rgba(255,255,255,0.35)' }}
-                >
-                  <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 100%)' }} />
-                  <PencilRuler className="relative h-6 w-6 text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-lg font-extrabold tracking-tight text-foreground md:text-xl">
-                    {isArabic ? 'المصمم' : 'Designer'}
-                  </h3>
-                  <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
-                    {isArabic ? 'صمّم المخططات والمساحات والغرف بأدوات رسم ذكية.' : 'Design floor plans, rooms, and spaces with smart drawing tools.'}
-                  </p>
-                </div>
-              </div>
-              <ArrowRight className={`h-5 w-5 shrink-0 text-sky-700/70 transition-transform duration-200 dark:text-sky-200/75 ${isArabic ? 'rotate-180 group-hover:-translate-x-0.5' : 'group-hover:translate-x-0.5'}`} />
-            </div>
-          </button>
         </div>
       )}
 

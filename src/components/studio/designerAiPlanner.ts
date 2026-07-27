@@ -542,8 +542,18 @@ ${language === 'ar' ? 'القواعد:' : 'Rules:'}
 1. ${language === 'ar' ? 'أعد فقط JSON بين وسمي <designer-json> و </designer-json>.' : 'Return only JSON inside <designer-json> and </designer-json>.'}
 2. ${language === 'ar' ? 'لا تكتب شرحًا خارج JSON.' : 'Do not write explanation outside the JSON.'}
 3. ${language === 'ar' ? 'استخرج الغرف والعلاقات والافتراضات والأسئلة المهمة فقط.' : 'Extract rooms, relationships, assumptions, and only important follow-up questions.'}
-4. ${language === 'ar' ? 'إذا كان الطلب تعديلًا، حافظ على النية السابقة ما لم يغيّرها المستخدم.' : 'If the request is a revision, preserve earlier intent unless the user changed it.'}
-5. ${language === 'ar' ? 'لا تضف غرفًا كثيرة غير مطلوبة.' : 'Do not invent many extra rooms.'}
+4. ${language === 'ar'
+    ? 'الطلب هو الأمر. نفّذ ما طُلب بالضبط: نفس عدد الغرف، نفس الأسماء، نفس العلاقات التي ذكرها المستخدم.'
+    : 'THE REQUEST IS AN ORDER. Do exactly what it says: the same number of rooms, the same names, and the same relationships the user stated. If the user names a count, that count is final.'}
+5. ${language === 'ar'
+    ? 'إن كان هناك مخطط حالٍ أدناه فهو نقطة البداية. أعِد كل غرفة موجودة كما هي، وطبّق التغيير المطلوب فقط. لا تعد تسمية غرفة أو حذفها أو تغيير حجمها أو نقلها إن لم يذكرها المستخدم.'
+    : 'IF A CURRENT LAYOUT IS GIVEN BELOW, IT IS THE STARTING POINT, NOT A SUGGESTION. Return every room it already contains, unchanged, and apply only the change the user just asked for. Do not rename, delete, resize, re-zone or re-connect a room the user did not mention. A request to change one room changes that one room and nothing else.'}
+6. ${language === 'ar'
+    ? 'لا تضف أي غرفة لم يطلبها المستخدم، ولو ظننت أن المنزل يحتاجها.'
+    : 'Never add a room the user did not ask for, no matter how much you think the home needs one.'}
+7. ${language === 'ar'
+    ? 'لا تسأل عن شيء يمكنك افتراضه بشكل معقول. اسأل سؤالًا واحدًا فقط وفقط إن كان الطلب مستحيلًا بدونه، وسجّل الباقي في الافتراضات.'
+    : 'Do not ask about anything you can reasonably assume. Ask at most ONE question, and only when the request cannot be built without the answer — put everything else in "assumptions" and get on with it.'}
 
 ${language === 'ar' ? 'مخطط JSON المطلوب:' : 'Required JSON schema:'}
 ${schema}

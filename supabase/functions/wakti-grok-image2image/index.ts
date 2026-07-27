@@ -289,8 +289,16 @@ Deno.serve(async (req: Request) => {
 
     const finalPrompt = promptSafety?.normalizedPrompt ?? prompt;
     console.log(`[grok-i2i] submit prompt="${finalPrompt.slice(0, 100)}"`);
+    // ⛔ Every reference must be NAMED or it is wasted. This used to say "use @image1" no matter how
+    // many images were uploaded, so the extra photographs were paid for and then ignored. @image1 is
+    // the one that fixes the camera; the others exist purely so the model can see the parts of the
+    // room that @image1 cannot show it, which is what stops it inventing a different room each time.
+    const extraRefs = referencePublicUrls.slice(1).map((_, index) => `@image${index + 2}`).join(", ");
+    const referenceNote = referencePublicUrls.length > 1
+      ? `Use @image1 as the reference image that defines the camera position, the viewing direction and the framing. ${extraRefs} are additional photographs of the SAME room taken from other angles at the same time. Use them as the truth for the room's shape and proportions, the walls, the windows, the doors and the fixed fittings such as air-conditioning units, radiators and built-in joinery. Do NOT copy their camera angles, do not treat them as different rooms, and never combine the references into a collage or a split image.`
+      : `Use @image1 as the reference image.`;
     const promptWithRef = referencePublicUrls.length > 0
-      ? `${finalPrompt}\n\nUse @image1 as the reference image.`.trim()
+      ? `${finalPrompt}\n\n${referenceNote}`.trim()
       : finalPrompt;
 
     const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {

@@ -254,6 +254,12 @@ export type RedesignPromptContext = {
    * real-estate photography, which clears the filter without changing the design.
    */
   safeMode?: boolean;
+  /**
+   * How many photographs are attached to THIS render. More than one means the model can see the
+   * whole room rather than a single wall, so it is told plainly that they are all one room —
+   * otherwise it treats the extra angles as different rooms and averages them into a new one.
+   */
+  referenceCount?: number;
 };
 
 export const buildRedesignPrompt = (
@@ -288,6 +294,15 @@ export const buildRedesignPrompt = (
     view.isAerial
       ? 'CRITICAL — SAME ROOM, HIGHER CAMERA. The attached image is a real photograph of the actual room, and it is the ground truth for the architecture, the finishes and the furniture layout. Keep the exact room shape and proportions, the exact ceiling construction, and every window and every door precisely where it is. Keep the furniture where the photograph shows it. Never invent a different room. The one and only thing you must change about the camera is its height, exactly as described under CAMERA AND FRAMING below.'
       : 'CRITICAL — THIS IS A RESTYLE OF THE ATTACHED PHOTOGRAPH, NOT A NEW ROOM. The attached image is a real photograph of the actual room, and it is the ground truth for everything structural. Keep its camera position, viewing direction and framing. Keep the exact room shape and proportions, the exact ceiling height and the exact ceiling construction. Keep every window and every door precisely where it is, at the same size and the same shape. Never invent a different room, never move a wall, never add or remove an opening, never change the room outline. Only finishes, materials, colours, furniture design and decor may change.',
+    ...((context.referenceCount || 1) > 1
+      ? [
+        `ALL ${context.referenceCount} ATTACHED PHOTOGRAPHS ARE ONE SINGLE ROOM, photographed from different angles on the same day. They are not different rooms, not different properties and not options to choose between. The FIRST photograph fixes the camera for this image. The others are there so you can see the parts of this same room that the first one cannot show you — read the true wall positions, the room's width and depth, the ceiling, the windows, the doors and the fixed fittings from all of them together. Never average them into some new room, never output a collage, and never show a wall, window or door that appears in none of them.`,
+      ]
+      : []),
+    // ⛔ Named individually and blunt on purpose. "Keep the structure" was not enough: the owner
+    // watched the air-conditioning unit and the window slide around the room between renders,
+    // because the model treats a wall-mounted box as furniture unless it is told otherwise.
+    'THESE ITEMS DO NOT MOVE AND DO NOT DISAPPEAR: every window, every door, every air-conditioning unit or split unit, every radiator, every ceiling fan or light fitting position, every socket and switch, every column, beam, niche, arch, step and built-in wardrobe. Each one stays on the same wall, at the same height, at the same size, in the same position, and the same number of them appear in your image as in the photographs. You may change what they look like to match the chosen style, but you may not relocate one, resize one, delete one or add one. The room keeps its exact width, depth, proportions and ceiling height: a narrow room stays exactly that narrow.',
     ...(analysis
       ? [
         `SURVEY OF THIS EXACT ROOM (measured from every photograph the owner supplied — obey this over any guess):\n${analysis}`,

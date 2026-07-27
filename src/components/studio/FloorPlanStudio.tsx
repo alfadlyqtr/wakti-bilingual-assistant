@@ -825,7 +825,7 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
   const runRender = async (
     token: string,
     prompt: string,
-    reference: string,
+    references: string[],
     size: RenderSetup,
     onProgress?: (seconds: number) => void,
   ): Promise<string> => {
@@ -847,7 +847,7 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
 
     const submitted = await call({
       prompt,
-      referenceImages: [reference],
+      referenceImages: references,
       width: size.width,
       height: size.height,
       quality: size.quality,
@@ -878,7 +878,7 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
    */
   const renderWithRetry = async (
     token: string,
-    reference: string,
+    references: string[],
     size: RenderSetup,
     buildPrompt: (safeMode: boolean) => string,
     progressLabel?: string,
@@ -888,13 +888,13 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
       if (progressLabel) setStatusMessage(`${progressLabel} · ${formatElapsed(seconds, isArabic)}`);
     };
     try {
-      return await runRender(token, buildPrompt(false), reference, size, onProgress);
+      return await runRender(token, buildPrompt(false), references, size, onProgress);
     } catch (firstError) {
       const message = firstError instanceof Error ? firstError.message : String(firstError);
       const looksLikeRefusal = /431|refus|filter|policy|sensitive|blocked|moderation/i.test(message);
       if (!looksLikeRefusal) throw firstError;
       setStatusMessage(isArabic ? 'إعادة المحاولة بصياغة أخرى…' : 'Retrying with different wording…');
-      return await runRender(token, buildPrompt(true), reference, size, onProgress);
+      return await runRender(token, buildPrompt(true), references, size, onProgress);
     }
   };
 
@@ -928,7 +928,7 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
       setStatusMessage(isArabic ? 'نرسم منزلك بالكامل… قد يستغرق دقيقة' : 'Finishing your whole home… this can take a minute');
       const url = await renderWithRetry(
         token,
-        plan.dataUrl,
+        [plan.dataUrl],
         planSetup(),
         (safeMode) => buildFloorPlanPrompt(choices, { planBrief: brief, safeMode, rooms }),
         isArabic ? 'نرسم منزلك بالكامل' : 'Finishing your whole home',
@@ -961,11 +961,22 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
 
     try {
       const token = await getToken();
+      // ⛔ The render on screen goes FIRST, the blueprint second. Rendering an edit from the
+      // blueprint alone meant the model had never seen its own previous output, so "leave the rest
+      // alone" was impossible to obey and every room came back redesigned. Giving it the current
+      // image to copy is the only thing that makes a one-line change behave like a one-line change.
+      const editReferences = renderUrl ? [renderUrl, plan.dataUrl] : [plan.dataUrl];
       const url = await renderWithRetry(
         token,
-        plan.dataUrl,
+        editReferences,
         planSetup(),
-        (safeMode) => buildFloorPlanPrompt(choices, { planBrief, safeMode, editHistory: nextHistory, rooms: roomsForPrompt }),
+        (safeMode) => buildFloorPlanPrompt(choices, {
+          planBrief,
+          safeMode,
+          editHistory: nextHistory,
+          rooms: roomsForPrompt,
+          editFromCurrentRender: Boolean(renderUrl),
+        }),
         isArabic ? 'نطبّق التغيير' : 'Applying your change',
       );
       setRenderUrl(url);
@@ -995,9 +1006,12 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
     setStatusMessage(isArabic ? 'نتراجع عن آخر تغيير…' : 'Undoing the last change…');
     try {
       const token = await getToken();
+      // Undo renders from the blueprint ALONE, deliberately. The picture on screen still contains
+      // the change being undone, so handing it back as a reference to copy would preserve exactly
+      // the thing the user just asked to remove.
       const url = await renderWithRetry(
         token,
-        plan.dataUrl,
+        [plan.dataUrl],
         planSetup(),
         (safeMode) => buildFloorPlanPrompt(choices, { planBrief, safeMode, editHistory: nextHistory, rooms: roomsForPrompt }),
         isArabic ? 'نتراجع عن آخر تغيير' : 'Undoing the last change',
@@ -1035,7 +1049,7 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
       // A single room close-up is framed square regardless of the whole plan's proportions.
       const url = await renderWithRetry(
         token,
-        renderUrl,
+        [renderUrl],
         { width: 1024, height: 1024, quality: speed.quality },
         (safeMode) => buildRoomZoomPrompt(label.name, choices, {
           planBrief,

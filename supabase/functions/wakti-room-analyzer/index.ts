@@ -29,17 +29,19 @@ Rules:
 - A GENERIC SURVEY IS A FAILED SURVEY. If this room has anything dramatic or unusual about its
   architecture, that is the single most valuable thing you can report. Never smooth it into a plain box.
 
+FIRST LINE, BEFORE ANYTHING ELSE, output exactly:
+PHOTO ROLES: HALF1=<photo number>; HALF2=<photo number>; AERIAL=<photo number>
+Choose HALF1 as the photograph giving the best wide view of one half of the room. Choose HALF2 as the photograph that best shows the OPPOSITE half, looking in as close to the reverse direction from HALF1 as these photographs allow — it must be a different photograph from HALF1 whenever possible. Choose AERIAL as the photograph taken from the highest vantage point, the one showing the most floor area. Use the photo numbers exactly as they were given to you, counting from 1. This line is required and must come first.
+
+Then the survey under these headings:
+
 SHELL: overall shape and approximate dimensions in metres, ceiling height, and the ceiling construction described exactly as seen — for example plain flat plaster, exposed concrete slab, timber slats or battens, metal baffles, coffered, tray, cove, barrel-vaulted, sloped, north-light, or double-height. Do NOT write "flat" unless the ceiling really is one plain uninterrupted flat surface.
 OPENINGS: the exact number of windows and the exact number of doors, and for each one which wall it sits on, its approximate size, and its shape. Also state whether any glazing is vertical, inclined, raking or sloped, whether it runs floor to ceiling, and whether it is divided by visible mullions, diagonal bracing or structural trusses. This section is the most important one.
 SIGNATURE FEATURES: the two to five details that give this specific room its character and that MUST survive any redesign — for example a raking or sloped glass facade, a timber-slatted ceiling, exposed diagonal steel bracing, a curved or angled wall, a double-height void, an arched colonnade, a feature staircase, exposed services, or a dramatic view out. Name each one plainly and say where it is. If the room genuinely has no distinctive feature, write "none".
 FIXED FEATURES: anything structural that cannot move, such as arches, columns, beams, niches, built-in wardrobes, steps, level changes, radiators, air-conditioning units, TV recesses.
 EXISTING FINISHES: current wall, ceiling and floor materials and colours.
 FURNITURE LAYOUT: what furniture sits where, described relative to the walls and the openings.
-CAMERA HALVES: split the room into two halves along its longest axis. Name what is in HALF 1 and what is in HALF 2, so two opposite wide-angle shots can be framed from your description.
-
-Then, as the very last line of your answer and nothing else on that line, add exactly:
-PHOTO ROLES: HALF1=<photo number>; HALF2=<photo number>; AERIAL=<photo number>
-Choose HALF1 as the photograph giving the best wide view of one half of the room. Choose HALF2 as the photograph that best shows the OPPOSITE half, looking in as close to the reverse direction from HALF1 as these photographs allow — it must be a different photograph from HALF1 whenever possible. Choose AERIAL as the photograph taken from the highest vantage point, the one showing the most floor area. Use the photo numbers exactly as they were given to you, counting from 1.`;
+CAMERA HALVES: split the room into two halves along its longest axis. Name what is in HALF 1 and what is in HALF 2, so two opposite wide-angle shots can be framed from your description.`;
 
 // Reads the finishes back off the first approved render, so the remaining renders of the
 // same room can be locked to one palette instead of each reinterpreting the style choices.
@@ -467,10 +469,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // 8000, not the 1800 default. Eight detailed headings across six photos overran the old cap,
+    // and the sections that got cut were the LAST ones — FURNITURE LAYOUT and CAMERA HALVES — which
+    // is exactly why the owner saw the furniture and the AC unit move between renders.
     const raw = await callGemini(
       images,
       SYSTEM_PROMPT,
-      `These ${images.length} photographs are all of the SAME single room, given to you in order as PHOTO 1 through PHOTO ${images.length}. Survey that room and produce the description under the required headings, then assign the photo roles.`,
+      `These ${images.length} photographs are all of the SAME single room, given to you in order as PHOTO 1 through PHOTO ${images.length}. Output the PHOTO ROLES line first, then survey that room under the required headings.`,
+      8000,
     );
     if (!raw) throw new Error("Room analysis returned no text");
 

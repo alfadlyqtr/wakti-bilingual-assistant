@@ -52,6 +52,8 @@ const MIN_PHOTOS = 4;
 const MAX_PHOTOS = 6;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_EDGE_PIXELS = 1280;
+// The provider caps references at four, and the edge function slices to the same number.
+const MAX_REFERENCE_PHOTOS = 4;
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -270,18 +272,42 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
     }
   };
 
-  /** Picks the real uploaded photo that the survey chose as the best source for this view. */
-  const anchorPhotoFor = (viewKey: RedesignViewKey, anchors: PhotoAnchors): string => {
-    const requested = viewKey === 'halfA' ? anchors.half1 : viewKey === 'halfB' ? anchors.half2 : anchors.aerial;
-    const index = Math.min(Math.max(requested - 1, 0), photos.length - 1);
-    return photos[index].dataUrl;
+  /**
+   * The reference photographs for one view, best first.
+   *
+   * ⛔ EVERY view gets SEVERAL photos, never one. Sending a single photo per view is precisely why
+   * the three results looked like three different rooms: each render was an independent restyle of a
+   * different photograph, so nothing but prose connected them and the model re-invented the walls,
+   * the window and the air-conditioning unit every time. The view's own anchor stays FIRST because
+   * the first reference is what fixes the camera; the rest are the same room from other angles,
+   * which is how the real geometry survives into the image. The provider accepts at most four.
+   */
+  const referencesFor = (viewKey: RedesignViewKey, anchors: PhotoAnchors): string[] => {
+    const clamp = (oneBased: number) => Math.min(Math.max(oneBased - 1, 0), photos.length - 1);
+    const anchorIndex = clamp(
+      viewKey === 'halfA' ? anchors.half1 : viewKey === 'halfB' ? anchors.half2 : anchors.aerial,
+    );
+    // This view's anchor, then the other two anchors (between them they cover both halves and the
+    // widest view), then anything else the owner uploaded.
+    const preference = [
+      anchorIndex,
+      clamp(anchors.half1),
+      clamp(anchors.half2),
+      clamp(anchors.aerial),
+      ...photos.map((_, index) => index),
+    ];
+    const ordered: number[] = [];
+    preference.forEach((index) => {
+      if (!ordered.includes(index)) ordered.push(index);
+    });
+    return ordered.slice(0, MAX_REFERENCE_PHOTOS).map((index) => photos[index].dataUrl);
   };
 
   /** Submits one Grok image-to-image task and polls the edge function until it finishes. */
   const renderSingleView = async (
     viewKey: RedesignViewKey,
     token: string,
-    referenceImage: string,
+    referenceImages: string[],
     analysis: string,
     spec: string,
     safeMode: boolean,
@@ -292,8 +318,9 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
         roomAnalysis: analysis,
         designSpec: spec,
         safeMode,
+        referenceCount: referenceImages.length,
       }),
-      image_base64s: [referenceImage],
+      image_base64s: referenceImages,
       user_id: user?.id,
       aspect_ratio: view.aspectRatio,
       language,
@@ -339,17 +366,17 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   const renderWithRetry = async (
     viewKey: RedesignViewKey,
     token: string,
-    referenceImage: string,
+    referenceImages: string[],
     analysis: string,
     spec: string,
   ): Promise<string> => {
     try {
-      return await renderSingleView(viewKey, token, referenceImage, analysis, spec, false);
+      return await renderSingleView(viewKey, token, referenceImages, analysis, spec, false);
     } catch (firstError) {
       const message = firstError instanceof Error ? firstError.message : String(firstError);
       if (/trial|sign in|تسجيل الدخول|محاولاتك/i.test(message)) throw firstError;
       console.warn(`[redesign] ${viewKey} refused, retrying in safe mode:`, message);
-      return renderSingleView(viewKey, token, referenceImage, analysis, spec, true);
+      return renderSingleView(viewKey, token, referenceImages, analysis, spec, true);
     }
   };
 
@@ -381,9 +408,9 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       setPhotoAnchors(anchors);
       setIsSurveying(false);
 
-      // Every view is restyled from a REAL photo of the part of the room it shows, so the
-      // room, its openings and its layout are preserved by construction. Nothing is ever
-      // asked to imagine a viewpoint it cannot see.
+      // Every view is restyled from a REAL photo of the part of the room it shows, and carries the
+      // other angles alongside it, so the room, its openings and its layout are preserved by
+      // construction. Nothing is ever asked to imagine a viewpoint it cannot see.
       const failures: RedesignViewKey[] = [];
       const [firstView, ...restViews] = REDESIGN_VIEWS;
       let spec = '';
@@ -391,7 +418,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       setActiveViewKey(firstView.key);
       setPendingKeys([firstView.key]);
       try {
-        const url = await renderWithRetry(firstView.key, token, anchorPhotoFor(firstView.key, anchors), analysis, '');
+        const url = await renderWithRetry(firstView.key, token, referencesFor(firstView.key, anchors), analysis, '');
         setResults([{ key: firstView.key, url }]);
         // Read the finishes back off this render and lock them, so the other two match.
         setIsLockingSpec(true);
@@ -413,7 +440,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       setPendingKeys(restViews.map((view) => view.key));
       const settled = await Promise.allSettled(restViews.map(async (view) => {
         try {
-          const url = await renderWithRetry(view.key, token, anchorPhotoFor(view.key, anchors), analysis, spec);
+          const url = await renderWithRetry(view.key, token, referencesFor(view.key, anchors), analysis, spec);
           setResults((current) => [...current.filter((item) => item.key !== view.key), { key: view.key, url }]);
         } finally {
           setPendingKeys((current) => current.filter((key) => key !== view.key));
@@ -476,7 +503,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       const url = await renderWithRetry(
         viewKey,
         token,
-        anchorPhotoFor(viewKey, photoAnchors),
+        referencesFor(viewKey, photoAnchors),
         roomAnalysis,
         designSpec,
       );
