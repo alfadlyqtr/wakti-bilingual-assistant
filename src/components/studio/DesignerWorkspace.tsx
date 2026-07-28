@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Check,
+  Crosshair,
   ChevronDown,
   DoorOpen,
   Grid3x3,
@@ -318,6 +319,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const [roomLabels, setRoomLabels] = useState<DesignerRoomLabel[]>([]);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
+  const [straightOnly, setStraightOnly] = useState(false);
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [followUpFields, setFollowUpFields] = useState<DesignerFormField[]>([]);
   const [followUpAnswers, setFollowUpAnswers] = useState<DesignerFormAnswers>({});
@@ -345,7 +347,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const underlayInputRef = useRef<HTMLInputElement | null>(null);
   const currentAssets = assetNames[activeMode];
   const GRID_GAP = 20;
-  const CONNECTOR_SNAP_DISTANCE = 48;
+  const CONNECTOR_SNAP_DISTANCE = 18;
   const CORNER_JOIN_DISTANCE = 3;
   const CANVAS_SIZE = 1200;
 
@@ -931,6 +933,13 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
     const snappedCurrent = snapPoint(current);
     const horizontalDistance = Math.abs(current.y - start.y);
     const verticalDistance = Math.abs(current.x - start.x);
+
+    if (straightOnly) {
+      return horizontalDistance <= verticalDistance
+        ? { x: snappedCurrent.x, y: start.y }
+        : { x: start.x, y: snappedCurrent.y };
+    }
+
     const alignmentDistance = GRID_GAP * 0.35;
     if (horizontalDistance <= alignmentDistance && horizontalDistance <= verticalDistance) {
       return { x: snappedCurrent.x, y: start.y };
@@ -2473,9 +2482,34 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                     {isArabic ? 'لوحة الرسم' : 'Layout Canvas'}
                   </span>
                 </div>
-                <span className="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-1 text-[10px] font-bold text-sky-800 dark:text-sky-200">
-                  {isArabic ? 'مخطط' : 'Blueprint'}
-                </span>
+                {/* ⛔ Save lives HERE, in the always-visible card header, and NOT in the Layout Kit
+                    toolbar below. That toolbar sits inside a collapsed panel, so a Save button in it
+                    is invisible to someone who has just finished tracing a plan and wants to keep
+                    it. It replaced a decorative "Blueprint" badge that carried no information. */}
+                <button
+                  type="button"
+                  onClick={() => void saveLayout()}
+                  disabled={isSavingLayout || !walls.length}
+                  title={isArabic ? 'احفظ المخطط في المحفوظات' : 'Save layout to your designs'}
+                  className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-[11px] font-extrabold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    savedLayoutId
+                      ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-700 dark:text-emerald-200'
+                      : 'border-sky-300/45 bg-sky-400/20 text-sky-800 shadow-[0_0_12px_hsla(210,100%,65%,0.25)] hover:bg-sky-400/30 dark:text-sky-100'
+                  }`}
+                >
+                  {isSavingLayout
+                    ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                    : savedLayoutId
+                      ? <Check className="h-3.5 w-3.5 shrink-0" />
+                      : <Save className="h-3.5 w-3.5 shrink-0" />}
+                  <span className="whitespace-nowrap">
+                    {isSavingLayout
+                      ? (isArabic ? 'جاري الحفظ' : 'Saving')
+                      : savedLayoutId
+                        ? (isArabic ? 'محفوظ' : 'Saved')
+                        : (isArabic ? 'احفظ' : 'Save')}
+                  </span>
+                </button>
               </div>
 
               {(
@@ -3248,27 +3282,22 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                               <button type="button" title={isArabic ? 'إعادة' : 'Redo'} aria-label={isArabic ? 'إعادة' : 'Redo'} onClick={handleRedo} disabled={historyIndex + 1 >= history.length} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#40506a] transition hover:bg-sky-50 hover:text-[#075985] disabled:cursor-not-allowed disabled:opacity-35 dark:text-sky-100/70 dark:hover:bg-white/[0.1] dark:hover:text-white"><Redo2 className="h-4 w-4" /></button>
                               <button type="button" title={isArabic ? 'حذف المحدد' : 'Delete selected'} aria-label={isArabic ? 'حذف المحدد' : 'Delete selected'} onClick={handleDeleteSelected} disabled={!selectedElementId} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-35 dark:text-rose-300 dark:hover:bg-rose-400/10"><Trash2 className="h-4 w-4" /></button>
                             </div>
-                            {/* Save is deliberately the one labelled action in this bar. Before it
-                                existed a refresh destroyed the whole drawing, and an icon-only
-                                button is not discoverable enough for the thing that prevents that. */}
-                            <div className="flex gap-1 rounded-xl border border-[#c9dff5] bg-[#f7fbff] p-1 dark:border-sky-300/15 dark:bg-black/[0.22]">
-                              <button
-                                type="button"
-                                onClick={() => void saveLayout()}
-                                disabled={isSavingLayout || !walls.length}
-                                title={isArabic ? 'احفظ المخطط' : 'Save layout'}
-                                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-extrabold text-[#075985] transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-35 dark:text-sky-100 dark:hover:bg-white/[0.1]"
-                              >
-                                {isSavingLayout
-                                  ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                                  : savedLayoutId
-                                    ? <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                                    : <Save className="h-4 w-4 shrink-0" />}
-                                <span className="whitespace-nowrap">
-                                  {savedLayoutId ? (isArabic ? 'محفوظ' : 'Saved') : (isArabic ? 'احفظ' : 'Save')}
-                                </span>
-                              </button>
-                            </div>
+                            {(selectedTool === 'wall' || selectedTool === 'room' || selectedTool === 'curve') && (
+                              <div className="flex gap-1 rounded-xl border border-[#c9dff5] bg-[#f7fbff] p-1 dark:border-sky-300/15 dark:bg-black/[0.22]">
+                                <button
+                                  type="button"
+                                  title={isArabic ? 'خطوط مستقيمة فقط (أفقية / عمودية)' : 'Straight lines only (H / V)'}
+                                  aria-label={isArabic ? 'خطوط مستقيمة فقط' : 'Straight lines only'}
+                                  aria-pressed={straightOnly}
+                                  onClick={() => setStraightOnly((prev) => !prev)}
+                                  className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+                                    straightOnly ? 'bg-sky-500 text-white shadow-[0_0_14px_hsla(210,100%,65%,0.55)]' : 'text-[#40506a] hover:bg-sky-50 hover:text-[#075985] dark:text-sky-100/70 dark:hover:bg-white/[0.1] dark:hover:text-white'
+                                  }`}
+                                >
+                                  <Crosshair className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
