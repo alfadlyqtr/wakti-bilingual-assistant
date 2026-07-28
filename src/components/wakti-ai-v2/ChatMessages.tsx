@@ -522,6 +522,7 @@ interface ChatMessagesProps {
   isNewConversation: boolean;
   onUpdateMessage?: (messageId: string, content: string) => void;
   onReplyToMessage?: (messageId: string, content: string) => void;
+  onStudyFollowUp?: (prompt: string) => void;
   onScrollToLatest?: (behavior?: ScrollBehavior) => void;
   streamingMessageId?: string | null;
   streamingText?: string;
@@ -547,6 +548,7 @@ export function ChatMessages({
   isNewConversation,
   onUpdateMessage,
   onReplyToMessage,
+  onStudyFollowUp,
   onScrollToLatest,
   streamingMessageId,
   streamingText = '',
@@ -1939,7 +1941,13 @@ export function ChatMessages({
       };
       const extractStudyExplanation = (text: string): string => {
         if (!text) return '';
-        const withoutBox = text.replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '').trim();
+        const withoutBox = text
+          .replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '')
+          // Flashcards render as an interactive deck, so keep the raw block out of the prose.
+          // The second pattern covers a block still mid-stream (no closing tag yet).
+          .replace(/\[FLASHCARDS\][\s\S]*?\[\/FLASHCARDS\]\n?/gi, '')
+          .replace(/\[FLASHCARDS\][\s\S]*$/i, '')
+          .trim();
         if (!withoutBox) return '';
         const withoutAnswerLead = withoutBox.replace(/^\s*\*?\*?Answer:?\*?\*?[^\n]*\n+/i, '').trim();
         if (withoutAnswerLead) return withoutAnswerLead;
@@ -1958,6 +1966,8 @@ export function ChatMessages({
               explanation={extractStudyExplanation(content)}
               summaryBox={wolframMeta?.summaryBox}
               language={language}
+              onFollowUp={onStudyFollowUp}
+              rawContent={content}
             />
           )}
           {/* Render Facts Booster badge if present (subtle indicator for chat mode) */}

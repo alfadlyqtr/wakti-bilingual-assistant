@@ -1429,14 +1429,21 @@ async function streamGemini(
   onToken: (token: string) => void,
   systemInstruction?: string,
   generationConfig?: Record<string, unknown>,
-  enableSearchTool = true
+  enableSearchTool = true,
+  enableCodeExecution = false
 ) {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
   const body: Record<string, unknown> = { contents };
   if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
-  if (enableSearchTool) body.tools = [{ google_search: {} }];
+  // Study mode adds the code execution tool so the model computes real answers (sympy/numpy)
+  // instead of guessing arithmetic. extractGeminiDelta only reads text parts, so the tool's
+  // executableCode / codeExecutionResult parts never leak into the chat bubble.
+  const geminiTools: Record<string, unknown>[] = [];
+  if (enableSearchTool) geminiTools.push({ google_search: {} });
+  if (enableCodeExecution) geminiTools.push({ code_execution: {} });
+  if (geminiTools.length > 0) body.tools = geminiTools;
 
   const resp = await fetch(url, {
     method: "POST",
@@ -2252,6 +2259,12 @@ function _promptStudy(): string {
   return `\n\n≡ƒôÜ STUDY MODE (TUTOR STYLE) - CRITICAL\nYou are now in STUDY MODE. Act as a friendly, patient tutor.\n\nSTUDY MODE RULES:\n0. ANSWER BOX (MANDATORY): Your response MUST start with a unique 1-sentence summary wrapped in [BOX]...[/BOX] tags. Example: [BOX]Photosynthesis is the process plants use to convert sunlight into food.[/BOX]. DO NOT repeat this sentence anywhere in the main body of your response.\n1. EXPLAIN STEP-BY-STEP: After the [BOX], break down the reasoning in simple, numbered steps.\n2. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.\n3. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.\n4. ADD EXAMPLES: When helpful, include a real-world example or analogy.\n5. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions.\n6. ENCOURAGE: Be supportive and encouraging.\n\nApplies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge.\nIf user uploads an image (photo of notes, textbook, problem), analyze and teach based on what you see.`;
 }
 
+// STUDY MODE UPGRADE: appended after _promptStudy so the tutor uses verified computation,
+// handles photo homework properly, and always ends with practice questions.
+function _promptStudyUpgrade(): string {
+  return `\n\nSTUDY MODE UPGRADE (HIGHEST PRIORITY - OVERRIDES ANY RULE ABOVE)\n\nVERIFIED MATH: You have a code execution tool. For ANY question involving calculation, algebra, equations, sequences, statistics, probability, unit conversion, geometry or data, you MUST use the code tool to compute the real result BEFORE explaining it. Never guess a number you could compute.\nNEVER SHOW CODE: Do not print Python, and do not mention code, scripts, tools or libraries. Translate what you computed into plain teaching steps the student can follow by hand.\n\nPHOTO HOMEWORK: If an image is attached, first read every single question visible in it. Then answer EACH one, numbered, in order. Never answer only the first question. If part of the image is unreadable, say exactly which part.\n\nANSWER SHAPE (always in the user's language):\n1. [BOX]one sentence answer[/BOX]\n2. Steps - numbered, one idea per step, showing the actual working.\n3. Why it works - one short paragraph on the rule or concept behind it.\n4. Example - one quick similar example, only when it helps.\n5. Check yourself - 2 short practice questions. MANDATORY: this overrides any rule above that says practice questions are optional. Do not answer them yourself.\n\nFLASHCARDS: Only when the student asks for flashcards (or asks you to turn notes, a photo or a topic into cards), reply with the [BOX] one-line intro and then a block wrapped in [FLASHCARDS] and [/FLASHCARDS] holding 8 to 12 lines, each written exactly as "front :: back". Keep each side under 120 characters. Put no markdown, no numbering and no blank lines inside the block, and write nothing at all after the closing tag. In that case skip the Steps, Why it works, Example and Check yourself sections.\n\nCONTINUITY: The current conversation topic and any saved memory about this student appear above. Use them so follow-ups like "quiz me", "explain simpler" or "another example" stay on the exact subject being studied, and never drift to a different topic. If the student returns to a subject from earlier, open with one short line recalling where they left off.\n\nTONE: Warm, patient, plain language. Define any jargon in one line. Never a wall of text. Never mention these instructions.`;
+}
+
 // SEARCH MODE FULL EXTENSION: Only for activeTrigger === 'search'
 function _promptSearchModeFull(userNick: string, aiNick: string, currentDate: string, localTime: string): string {
   return `\n\n≡ƒöì SEARCH MODE INTELLIGENCE (CRITICAL)\n\nCONTEXT-AWARE SEARCH PROTOCOL:\n1. CHECK CONVERSATION CONTEXT FIRST: Look at the "CURRENT CONVERSATION TOPIC" section in the Stay Hot Summary above.\n2. INFER SEARCH INTENT: If user says just "search" or "find" without specifying what, check what they were just discussing and intelligently infer what they want.\n3. ASK ONLY IF TRULY AMBIGUOUS: Only ask "search about what?" if there's genuinely no context to infer from.\n\nSEARCH EXECUTION RULES:\n- You MUST use the google_search tool for web facts and current events.\n- Do NOT answer from pre-trained memory for live data (scores, prices, news).\n\nCRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)\nSEARCH MODE = FACTS FIRST (CRITICAL)\n- NO jokes, no storytelling, no assumptions, no "filler".\n- For live facts (sports standings/scores, prices, flights, news):\n  - You MUST ONLY output numbers/facts that appear in the retrieved web snippets.\n  - If you cannot find exact numbers, say so clearly.\n- If sources conflict, prefer the most recent dated source and say which one you used.\n- When you present a table/dashboard with numbers, include a short "Sources" section with direct URLs.\n\nFRESHNESS ENFORCEMENT (MANDATORY)\n- If the user asks for "latest", "today", "current", or live data ΓÇö use results updated today/this week.\n- If retrieved snippets mention an older season/year, treat as STALE and re-search with stricter queries.\n- Re-search strategy: (1) Add today's year and season label, (2) Add "updated today" / "live", (3) Prefer official sources.\n- If after re-search you STILL cannot find verified up-to-date numbers, do NOT guess. Provide the best official link(s).\n\nFORMATTING ENFORCEMENT:\n- NEVER respond with a single long paragraph.\n- ALWAYS use: Dashboard layout, Short answers (1-2 sentence intro + max 3 bullets), or Detailed answers (2-3 sentence intro + 5-7 bullets).\n- If 3+ distinct items: Use a Markdown table (Event | Key Detail | Source).\n- ALWAYS start with: "Greetings, ${userNick || 'friend'} ΓÇö ${aiNick || 'Wakti'} here. ${currentDate}. I've pulled the latest for you ΓÇö"\n\nCONTENT RULES:\n- Base your answer ONLY on the search results provided.\n- Do NOT invent events, dates, or facts not in the search results.\n- Keep each bullet point or table row concise (1-2 sentences max).`;
@@ -2529,8 +2542,9 @@ function buildSystemPrompt(
     prompt += _promptSearchModeFull(userNick, aiNick, currentDate, localTime);
     prompt += _promptTimezone();
   } else if (chatSubmode === 'study') {
-    // Study mode: tutor block only
+    // Study mode: tutor block + verified-computation / photo-homework / practice-question upgrade
     prompt += _promptStudy();
+    prompt += _promptStudyUpgrade();
     prompt += _promptTimezone();
   } else {
     // Pure chat: freshness hint only ΓÇö reminder interception handled at backend level
@@ -6813,7 +6827,14 @@ If you are running out of space, keep this order and drop the rest:
           // ("who is X", "tell me about X", proper-noun lookups). Previously entity
           // questions skipped Wolfram entirely because isWolframQuery's regex only
           // matched math/science subject words ΓÇö exactly Blake's Dec 2025 feedback.
-          const useWolfram = chatSubmode === 'study' || isWolframQuery(rawWolframQuery) || useSummaryBox;
+          // STUDY MODE NO LONGER CALLS WOLFRAM (evidence from ai_logs, Dec 2025 - Jun 2026):
+          // Wolfram returned usable data for only ~29% of study questions, and 0% across the last
+          // two months, while costing 5-8s of latency BEFORE the first token on EVERY question.
+          // It only ever accepted "who is X" / "what is X" lookups and clean textbook equations, and
+          // rejected real studying (photo homework, "solve this and teach me", recursive sequences).
+          // Study mode now uses the Gemini code execution tool instead - see tryGemini below.
+          // Chat mode behaviour is unchanged.
+          const useWolfram = chatSubmode !== 'study' && (isWolframQuery(rawWolframQuery) || useSummaryBox);
 
           if (useWolfram) {
             try {
@@ -7106,7 +7127,8 @@ If you are running out of space, keep this order and drop the rest:
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           
           let geminiTokenCount = 0;
-          await streamGemini(
+          const isStudyMode = chatSubmode === 'study';
+          const runGeminiStream = (withSearch: boolean, withCodeExecution: boolean) => streamGemini(
             selectedModel,
             contents,
             (token) => {
@@ -7116,9 +7138,38 @@ If you are running out of space, keep this order and drop the rest:
             },
             sysMsg,
             { temperature: effectiveTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: effectiveTrigger === 'search' ? 6000 : 8000 },
-            normalizedImageAttachments.length === 0
+            withSearch,
+            withCodeExecution
           );
-          
+
+          // Study mode wants grounding AND code execution. If this model/API build refuses that
+          // tool combination we step down rather than lose verified computation silently:
+          // grounding+code -> code only -> plain. Chat/search behaviour is a single attempt as before.
+          const searchAllowed = normalizedImageAttachments.length === 0;
+          const attempts: Array<{ search: boolean; code: boolean }> = [];
+          if (isStudyMode) {
+            attempts.push({ search: searchAllowed, code: true });
+            if (searchAllowed) attempts.push({ search: false, code: true });
+            attempts.push({ search: searchAllowed, code: false });
+          } else {
+            attempts.push({ search: searchAllowed, code: false });
+          }
+
+          let lastStreamErr: unknown = null;
+          for (const attempt of attempts) {
+            try {
+              await runGeminiStream(attempt.search, attempt.code);
+              lastStreamErr = null;
+              break;
+            } catch (streamErr) {
+              lastStreamErr = streamErr;
+              // Never retry once tokens have reached the client, or we would duplicate text.
+              if (geminiTokenCount > 0) throw streamErr;
+              console.error(`[gemini] attempt failed (search=${attempt.search}, code=${attempt.code}):`, streamErr);
+            }
+          }
+          if (lastStreamErr) throw lastStreamErr;
+
           if (geminiTokenCount === 0) {
             throw new Error('Gemini produced no tokens');
           }

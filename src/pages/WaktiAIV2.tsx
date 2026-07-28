@@ -221,6 +221,7 @@ const WaktiAIV2 = () => {
   const lastTriggerRef = useRef<string>('chat');
   const pendingHomescreenPayloadHandledRef = useRef<string | null>(null);
   const preparedHomescreenConversationRowRef = useRef<string | null>(null);
+  const appliedHomescreenSubmodeRef = useRef<string | null>(null);
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveInFlightRef = useRef<boolean>(false);
   const saveDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -1455,6 +1456,14 @@ const WaktiAIV2 = () => {
     }
   }, [authUser, chatSubmode, currentConversationId, getGuestBlockedMessage, isGuestBlockedAction, language, openGuestUpgradeDialog, sessionMessages, userProfile]);
 
+  // Study follow-up chips (Explain simpler / Step by step / Another example / Quiz me).
+  // Kept as a stable useCallback so StudyModeMessage's memo() is not defeated on every
+  // streaming re-render of this page.
+  const handleStudyFollowUp = useCallback((prompt: string) => {
+    if (isLoading) return;
+    handleSendMessage(prompt, 'chat', undefined, undefined, undefined, 'study');
+  }, [handleSendMessage, isLoading]);
+
   // Listen for search confirmation Yes/No card responses
   useEffect(() => {
     const handler = (e: Event) => {
@@ -1524,7 +1533,13 @@ const WaktiAIV2 = () => {
           localStorage.setItem('wakti_search_submode', pendingSearchSubmode);
         }
 
-        if (pendingSubmode) {
+        // Apply the homescreen submode handoff ONCE per navigation.
+        // This effect re-runs whenever handleSendMessage changes identity (it depends on
+        // chatSubmode), so re-applying routeState.pendingChatSubmode every run would instantly
+        // undo the mode the user just picked in the chat input (e.g. Study snapping back to Chat).
+        const submodeHandoffKey = `${pendingPayloadId || payloadKey}:${pendingSubmode || ''}`;
+        if (pendingSubmode && appliedHomescreenSubmodeRef.current !== submodeHandoffKey) {
+          appliedHomescreenSubmodeRef.current = submodeHandoffKey;
           setChatSubmode(pendingSubmode);
           localStorage.removeItem('wakti_chat_submode');
         }
@@ -1749,6 +1764,7 @@ const WaktiAIV2 = () => {
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
             onReplyToMessage={handleReplyToMessage}
+            onStudyFollowUp={handleStudyFollowUp}
             onScrollToLatest={scrollToLatest}
             streamingMessageId={streamingMessageId}
             streamingIsPlaceSearch={streamingIsPlaceSearch}

@@ -20,7 +20,25 @@ const KIE_API_KEY = (
   || ""
 ).trim();
 const STORAGE_BUCKET = "generated-files";
-const MODEL = "grok-imagine/image-to-image";
+// Two KIE models are served from this one function because their request shape is identical:
+//   { model, input: { prompt, image_urls, aspect_ratio } }
+// Only the reference-naming convention differs, which is handled at submit time.
+//
+//   grok-imagine/image-to-image → diffusion. Binds references with "@image1" tokens. 4 refs.
+//                                 Ignores camera instructions; has no real aspect_ratio support.
+//   nano-banana-2-lite          → Gemini 3.1 Flash-Lite Image. Reads plain instructions, honours
+//                                 aspect_ratio, 10 refs, ~4s per image, same 4-credit price.
+//
+// ⚠️ nano-banana-2-lite takes `image_urls` — NOT the `image_input` that plain nano-banana-2 uses.
+// Sending the wrong key silently produces a text-to-image render with no references at all.
+const MODEL_GROK = "grok-imagine/image-to-image";
+const MODEL_NANO_LITE = "nano-banana-2-lite";
+// Grok stays the default so existing callers that send no model keep their exact behaviour.
+const DEFAULT_MODEL = MODEL_GROK;
+const REFERENCE_CAPS: Record<string, number> = {
+  [MODEL_GROK]: 4,
+  [MODEL_NANO_LITE]: 10,
+};
 const KIE_CREATE_TASK_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 const NANO_BANANA_SUPPORTED_RATIOS = new Set([
@@ -42,6 +60,23 @@ const NANO_BANANA_SUPPORTED_RATIOS = new Set([
 ]);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+function resolveModel(rawValue: unknown): string {
+  const value = String(rawValue || "").trim();
+  return value === MODEL_NANO_LITE || value === MODEL_GROK ? value : DEFAULT_MODEL;
+}
+
+/**
+ * Grok cannot bind a reference to a sentence without its own "@imageN" token, so the roles have
+ * to be spelled out here. Nano Banana reads the references positionally straight from the
+ * caller's own prompt, so nothing is appended for it — the caller knows what each reference is
+ * for, and a generic note bolted on here would contradict it.
+ */
+function buildGrokReferenceNote(count: number): string {
+  if (count <= 1) return "Use @image1 as the reference image.";
+  const extras = Array.from({ length: count - 1 }, (_, index) => `@image${index + 2}`).join(", ");
+  return `Use @image1 as the reference image that defines the camera position, the viewing direction and the framing. ${extras} are additional photographs of the SAME room taken from other angles at the same time. Use them as the truth for the room's shape and proportions, the walls, the windows, the doors and the fixed fittings such as air-conditioning units, radiators and built-in joinery. Do NOT copy their camera angles, do not treat them as different rooms, and never combine the references into a collage or a split image.`;
+}
 
 function normalizeAspectRatio(rawValue: unknown): string {
   const value = String(rawValue || "auto").trim();
@@ -131,13 +166,17 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const startTime = Date.now();
+  // Declared out here so the catch block can report which model actually failed.
+  let activeModel = DEFAULT_MODEL;
 
   try {
     const body = await req.json().catch(() => ({}));
     const prompt: string = (body?.user_prompt || body?.prompt || "").toString().trim();
+    activeModel = resolveModel(body?.model);
+    const referenceCap = REFERENCE_CAPS[activeModel] ?? 4;
     const image_base64_raw: string = body?.image_base64 || "";
     const image_base64s: string[] = Array.isArray(body?.image_base64s)
-      ? body.image_base64s.filter((v: unknown) => typeof v === "string" && v.trim().length > 0).slice(0, 4) as string[]
+      ? body.image_base64s.filter((v: unknown) => typeof v === "string" && v.trim().length > 0).slice(0, referenceCap) as string[]
       : [];
     const userId: string = body?.user_id || "";
     const aspectRatio = normalizeAspectRatio(body?.aspect_ratio);
@@ -214,8 +253,8 @@ Deno.serve(async (req: Request) => {
         // Return KIE URLs directly — frontend saves the selected image when user picks one
         await logAIFromRequest(req, {
           functionName: "wakti-grok-image2image",
-          provider: "kie-grok",
-          model: MODEL,
+          provider: activeModel === MODEL_NANO_LITE ? "kie-nano-banana-2-lite" : "kie-grok",
+          model: activeModel,
           status: "success",
           durationMs: Date.now() - startTime,
         });
@@ -289,23 +328,18 @@ Deno.serve(async (req: Request) => {
 
     const finalPrompt = promptSafety?.normalizedPrompt ?? prompt;
     console.log(`[grok-i2i] submit prompt="${finalPrompt.slice(0, 100)}"`);
-    // ⛔ Every reference must be NAMED or it is wasted. This used to say "use @image1" no matter how
-    // many images were uploaded, so the extra photographs were paid for and then ignored. @image1 is
-    // the one that fixes the camera; the others exist purely so the model can see the parts of the
-    // room that @image1 cannot show it, which is what stops it inventing a different room each time.
-    const extraRefs = referencePublicUrls.slice(1).map((_, index) => `@image${index + 2}`).join(", ");
-    const referenceNote = referencePublicUrls.length > 1
-      ? `Use @image1 as the reference image that defines the camera position, the viewing direction and the framing. ${extraRefs} are additional photographs of the SAME room taken from other angles at the same time. Use them as the truth for the room's shape and proportions, the walls, the windows, the doors and the fixed fittings such as air-conditioning units, radiators and built-in joinery. Do NOT copy their camera angles, do not treat them as different rooms, and never combine the references into a collage or a split image.`
-      : `Use @image1 as the reference image.`;
-    const promptWithRef = referencePublicUrls.length > 0
-      ? `${finalPrompt}\n\n${referenceNote}`.trim()
+    // Grok only. See buildGrokReferenceNote: an unnamed reference is a reference Grok ignores,
+    // whereas Nano Banana takes its reference roles from the caller's own prompt.
+    const promptWithRef = activeModel === MODEL_GROK && referencePublicUrls.length > 0
+      ? `${finalPrompt}\n\n${buildGrokReferenceNote(referencePublicUrls.length)}`.trim()
       : finalPrompt;
+    console.log(`[grok-i2i] model=${activeModel} refs=${referencePublicUrls.length} ratio=${aspectRatio}`);
 
     const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
       method: "POST",
       headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: MODEL,
+        model: activeModel,
         ...(callBackUrl ? { callBackUrl } : {}),
         input: {
           prompt: promptWithRef,
@@ -333,8 +367,8 @@ Deno.serve(async (req: Request) => {
     console.error(`[grok-i2i] error:`, msg);
     await logAIFromRequest(req, {
       functionName: "wakti-grok-image2image",
-      provider: "kie-grok",
-      model: MODEL,
+      provider: activeModel === MODEL_NANO_LITE ? "kie-nano-banana-2-lite" : "kie-grok",
+      model: activeModel,
       status: "error",
       errorMessage: msg,
       durationMs: Date.now() - startTime,

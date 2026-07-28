@@ -1,9 +1,10 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { ChevronDown, ChevronUp, BookOpen, Calculator, Lightbulb } from 'lucide-react';
+import { ChevronDown, ChevronUp, BookOpen, Calculator, Lightbulb, Sparkles, ListOrdered, Repeat2, GraduationCap, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { StudyFlashcards, type Flashcard } from './StudyFlashcards';
 
 interface StudyModeMessageProps {
   answer: string;
@@ -12,6 +13,8 @@ interface StudyModeMessageProps {
   explanation?: string;
   summaryBox?: string;
   language: string;
+  onFollowUp?: (prompt: string) => void;
+  rawContent?: string;
 }
 
 const SUPERSCRIPT_MAP: Record<string, string> = {
@@ -111,16 +114,46 @@ function cleanupStudyMathText(value: string): string {
   return next.trim();
 }
 
+/**
+ * Parses the [FLASHCARDS] ... [/FLASHCARDS] block emitted by Study mode.
+ * Each line inside the block is "front :: back".
+ */
+function parseFlashcards(text: string): Flashcard[] {
+  if (!text) return [];
+  const block = text.match(/\[FLASHCARDS\]([\s\S]*?)\[\/FLASHCARDS\]/i);
+  if (!block) return [];
+
+  return block[1]
+    .split('\n')
+    // Only strip real list markers ("- ", "* ", "1. ", "2) ") so content like "2 + 2 :: 4" survives.
+    .map((line) => line.replace(/^\s*(?:[-*\u2022]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean)
+    .map((line) => {
+      const separator = line.indexOf('::');
+      if (separator < 0) return null;
+      const front = line.slice(0, separator).trim().replace(/^(?:Q|Front)\s*[:.]\s*/i, '');
+      const back = line.slice(separator + 2).trim().replace(/^(?:A|Back)\s*[:.]\s*/i, '');
+      if (!front || !back) return null;
+      return { front, back };
+    })
+    .filter((card): card is Flashcard => card !== null)
+    .slice(0, 30);
+}
+
 function StudyModeMessageImpl({
   answer,
   steps = [],
   inputInterpretation,
   explanation,
   summaryBox,
-  language
+  language,
+  onFollowUp,
+  rawContent
 }: StudyModeMessageProps) {
   const [showSteps, setShowSteps] = useState(false);
   const isArabic = language === 'ar';
+  // rawContent is a string, so memo() shallow equality still holds across streaming re-renders.
+  const flashcards = useMemo(() => parseFlashcards(rawContent || ''), [rawContent]);
   const answerText = typeof answer === 'string' ? cleanupStudyMathText(answer.trim()) : '';
   const explanationText = typeof explanation === 'string' ? cleanupStudyMathText(explanation.trim()) : '';
   const interpretationText = typeof inputInterpretation === 'string' ? cleanupStudyMathText(inputInterpretation.trim()) : '';
@@ -131,6 +164,44 @@ function StudyModeMessageImpl({
   const interpretationKey = normalizeText(interpretationText);
   const showAnswer = !!answerText && (!explanationKey || (answerKey !== explanationKey && !explanationKey.startsWith(answerKey)));
   const showInterpretation = !!interpretationText && interpretationKey !== answerKey && interpretationKey !== explanationKey;
+
+  const followUps = [
+    {
+      Icon: Sparkles,
+      label: isArabic ? 'اشرح أبسط' : 'Explain simpler',
+      prompt: isArabic
+        ? 'اشرح نفس الموضوع بلغة أبسط بكثير، كأنني في الثانية عشرة من عمري.'
+        : 'Explain that again in much simpler language, as if I am 12 years old.'
+    },
+    {
+      Icon: ListOrdered,
+      label: isArabic ? 'خطوة بخطوة' : 'Step by step',
+      prompt: isArabic
+        ? 'أرني الحل كاملاً خطوة بخطوة، خطوة واحدة في كل سطر، واشرح كل خطوة.'
+        : 'Show me the full working step by step, one step per line, and explain each step.'
+    },
+    {
+      Icon: Repeat2,
+      label: isArabic ? 'مثال آخر' : 'Another example',
+      prompt: isArabic
+        ? 'أعطني مثالاً محلولاً آخر على نفس الفكرة بأرقام مختلفة.'
+        : 'Give me one more worked example of the same idea, with different numbers.'
+    },
+    {
+      Icon: Layers,
+      label: isArabic ? 'بطاقات' : 'Flashcards',
+      prompt: isArabic
+        ? 'حوّل هذا الموضوع إلى بطاقات تعليمية.'
+        : 'Turn this into flashcards.'
+    },
+    {
+      Icon: GraduationCap,
+      label: isArabic ? 'اختبرني' : 'Quiz me',
+      prompt: isArabic
+        ? 'اختبرني في هذا الموضوع بخمسة أسئلة قصيرة، سؤالاً واحداً في كل مرة. انتظر إجابتي قبل السؤال التالي وأخبرني إن كانت صحيحة أم خطأ.'
+        : 'Quiz me on this topic with 5 short questions, one at a time. Wait for my answer before the next one, and tell me if I am right or wrong.'
+    }
+  ];
 
   return (
     <div className="space-y-3 my-2">
@@ -234,6 +305,10 @@ function StudyModeMessageImpl({
             </div>
           )}
 
+          {flashcards.length > 0 && (
+            <StudyFlashcards cards={flashcards} language={language} />
+          )}
+
           {summaryBox && (
             <div className="rounded-xl border border-amber-300/40 dark:border-amber-500/25 bg-amber-500/5 dark:bg-amber-500/10 p-4">
               <div className="mb-3 flex items-center gap-2">
@@ -305,6 +380,24 @@ function StudyModeMessageImpl({
             </div>
           )}
         </div>
+
+        {onFollowUp && (
+          <div className="border-t border-purple-200/60 dark:border-white/10 px-3 py-3">
+            <div className={`flex flex-wrap gap-2 ${isArabic ? 'justify-end' : ''}`}>
+              {followUps.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => onFollowUp(chip.prompt)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-purple-300/50 dark:border-purple-500/35 bg-purple-500/10 dark:bg-purple-500/15 px-3 py-1.5 text-xs font-medium text-purple-800 dark:text-purple-200 transition-all hover:bg-purple-500/20 dark:hover:bg-purple-500/25 active:scale-95"
+                >
+                  <chip.Icon className="h-3.5 w-3.5" />
+                  <span className="whitespace-nowrap">{chip.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

@@ -43,6 +43,7 @@ import {
   buildRedesignPrompt,
   resolveChoiceLabel,
   type RedesignChoices,
+  type RedesignRenderMode,
   type RedesignViewKey,
 } from './redesignRoomOptions';
 
@@ -52,9 +53,21 @@ const MIN_PHOTOS = 4;
 const MAX_PHOTOS = 6;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_EDGE_PIXELS = 1280;
-// The provider caps references at four, and the edge function slices to the same number.
-const MAX_REFERENCE_PHOTOS = 4;
-const POLL_INTERVAL_MS = 5000;
+/**
+ * Gemini 3.1 Flash-Lite Image, via the shared KIE edge function.
+ *
+ * Chosen over grok-imagine/image-to-image for this tab because it actually obeys a written camera
+ * instruction, honours aspect_ratio at all (grok-imagine has no such parameter, so every ratio ask
+ * was silently ignored), and accepts up to ten references — all at the same 4 credits per image and
+ * roughly a tenth of the latency. The edge function still defaults to Grok, so the general Image
+ * tab is untouched.
+ *
+ * Both views now ask for 'auto' rather than a fixed ratio, so a render keeps the shape of the
+ * owner's own photo instead of having its side edges invented to fill a landscape frame.
+ */
+const RENDER_MODEL = 'nano-banana-2-lite';
+// ~4s per image on this model, so a 5s first poll was usually pure dead time.
+const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
 type PhotoAsset = {
@@ -68,10 +81,32 @@ type RenderResult = {
   url: string;
 };
 
-/** Which uploaded photo (1-based) the survey picked as the best source for each view. */
-type PhotoAnchors = { half1: number; half2: number; aerial: number };
+/** One render's references, plus what those references MEAN. Built by buildRenderPlan. */
+type RenderPlan = { mode: RedesignRenderMode; references: string[] };
 
-const DEFAULT_ANCHORS: PhotoAnchors = { half1: 1, half2: 2, aerial: 1 };
+/**
+ * Which uploaded photo (1-based) the survey picked as the best source for each half.
+ * The survey also returns an AERIAL anchor; it is ignored, because that view was dropped.
+ */
+type PhotoAnchors = { half1: number; half2: number };
+
+const DEFAULT_ANCHORS: PhotoAnchors = { half1: 1, half2: 2 };
+
+/**
+ * The two eye-level views MUST be driven by different photographs.
+ *
+ * When the survey names the same photo for both halves — or quietly falls back to it — both
+ * renders shoot the same wall, and the owner gets "half 2 looks identical to half 1" with one
+ * whole end of their room never drawn at all.
+ */
+const normalizeAnchors = (raw: PhotoAnchors, photoCount: number): PhotoAnchors => {
+  const total = Math.max(photoCount, 1);
+  const clamp = (value: number) => Math.min(Math.max(Math.round(value) || 1, 1), total);
+  const half1 = clamp(raw.half1);
+  let half2 = clamp(raw.half2);
+  if (half2 === half1 && total > 1) half2 = (half1 % total) + 1;
+  return { half1, half2 };
+};
 
 type WizardStep = 1 | 2 | 3;
 type SectionKey = 'roomType' | 'style' | 'palette' | 'lighting' | 'flooring' | 'finish' | 'furniture' | 'structure';
@@ -136,13 +171,11 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   });
   const [isRendering, setIsRendering] = useState(false);
   const [isSurveying, setIsSurveying] = useState(false);
-  const [isLockingSpec, setIsLockingSpec] = useState(false);
   const [activeViewKey, setActiveViewKey] = useState<RedesignViewKey | null>(null);
   const [pendingKeys, setPendingKeys] = useState<RedesignViewKey[]>([]);
   const [failedKeys, setFailedKeys] = useState<RedesignViewKey[]>([]);
   const [roomAnalysis, setRoomAnalysis] = useState('');
   const [photoAnchors, setPhotoAnchors] = useState<PhotoAnchors>(DEFAULT_ANCHORS);
-  const [designSpec, setDesignSpec] = useState('');
   const [results, setResults] = useState<RenderResult[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -222,10 +255,12 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   };
 
   /**
-   * Reads every uploaded photo once. Returns a written survey of the room, plus which photo
-   * best suits each view. Grok image-to-image accepts only ONE reference image, so the survey
-   * is how the remaining photos reach it as text, and the anchors are how each view still gets
-   * driven by real pixels of the part of the room it is meant to show.
+   * Reads every uploaded photo once. Returns a written survey of the room, plus which photo best
+   * suits each view.
+   *
+   * Each render is deliberately given only ONE of the owner's photos, so the survey is how the
+   * remaining photos still reach the model — as measurements and counts it can read, rather than
+   * as extra pictures competing to define the camera.
    */
   const surveyRoom = async (token: string): Promise<{ analysis: string; anchors: PhotoAnchors }> => {
     try {
@@ -239,11 +274,10 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
         return { analysis: '', anchors: DEFAULT_ANCHORS };
       }
       const raw = json?.anchors;
-      const anchors: PhotoAnchors = {
+      const anchors = normalizeAnchors({
         half1: Number(raw?.half1) || DEFAULT_ANCHORS.half1,
         half2: Number(raw?.half2) || DEFAULT_ANCHORS.half2,
-        aerial: Number(raw?.aerial) || DEFAULT_ANCHORS.aerial,
-      };
+      }, photos.length);
       return { analysis: json.analysis.trim(), anchors };
     } catch {
       // The survey only improves accuracy, so never block the redesign on it.
@@ -252,75 +286,61 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   };
 
   /**
-   * Reads the finishes back off the first approved render. Every later render carries this
-   * text, so the whole set shares one palette instead of each view independently deciding
-   * what the chosen style and palette mean.
-   */
-  const lockDesignSpec = async (token: string, renderUrl: string): Promise<string> => {
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/wakti-room-analyzer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mode: 'spec', image_url: renderUrl }),
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok || !json?.success || typeof json?.spec !== 'string') return '';
-      return json.spec.trim();
-    } catch {
-      // Consistency is a bonus, never a blocker.
-      return '';
-    }
-  };
-
-  /**
-   * The reference photographs for one view, best first.
+   * The references for one render, and what each one MEANS.
    *
-   * ⛔ EVERY view gets SEVERAL photos, never one. Sending a single photo per view is precisely why
-   * the three results looked like three different rooms: each render was an independent restyle of a
-   * different photograph, so nothing but prose connected them and the model re-invented the walls,
-   * the window and the air-conditioning unit every time. The view's own anchor stays FIRST because
-   * the first reference is what fixes the camera; the rest are the same room from other angles,
-   * which is how the real geometry survives into the image. The provider accepts at most four.
+   * ⛔ Exactly ONE of the owner's photos per render, never several. In image-to-image the
+   * reference pictures overrule the written instructions, so four photos of one room out-voted
+   * the sentence naming which one set the camera, and every view collapsed onto the room's most
+   * dominant wall.
+   *
+   * Consistency instead comes from the CHAIN — half 2 receives half 1's actual render, so the
+   * design is pinned by pixels rather than by prose that can never say which sofa or which oak.
+   *
+   *   halfA → [owner's photo of half 1]                  invents the design
+   *   halfB → [owner's photo of half 2, halfA render]     same design, opposite camera
+   *
+   * ⛔ THE ORDER IN halfB IS LOAD-BEARING. This model anchors composition to the FIRST reference.
+   * With the approved render leading, half 2 inherited half 1's camera and both images showed the
+   * same end of the room. The owner's photo must lead so it sets the camera; the render follows as
+   * the design source only.
+   *
+   * Degrades safely: if half 1's render is missing, half 2 establishes from the owner's photo.
    */
-  const referencesFor = (viewKey: RedesignViewKey, anchors: PhotoAnchors): string[] => {
-    const clamp = (oneBased: number) => Math.min(Math.max(oneBased - 1, 0), photos.length - 1);
-    const anchorIndex = clamp(
-      viewKey === 'halfA' ? anchors.half1 : viewKey === 'halfB' ? anchors.half2 : anchors.aerial,
-    );
-    // This view's anchor, then the other two anchors (between them they cover both halves and the
-    // widest view), then anything else the owner uploaded.
-    const preference = [
-      anchorIndex,
-      clamp(anchors.half1),
-      clamp(anchors.half2),
-      clamp(anchors.aerial),
-      ...photos.map((_, index) => index),
-    ];
-    const ordered: number[] = [];
-    preference.forEach((index) => {
-      if (!ordered.includes(index)) ordered.push(index);
-    });
-    return ordered.slice(0, MAX_REFERENCE_PHOTOS).map((index) => photos[index].dataUrl);
+  const buildRenderPlan = (
+    viewKey: RedesignViewKey,
+    anchors: PhotoAnchors,
+    approved: RenderResult[],
+  ): RenderPlan => {
+    const photoAt = (oneBased: number) =>
+      photos[Math.min(Math.max(oneBased - 1, 0), photos.length - 1)].dataUrl;
+
+    if (viewKey === 'halfA') {
+      return { mode: 'establish', references: [photoAt(anchors.half1)] };
+    }
+
+    const design = approved.find((item) => item.key === 'halfA')?.url;
+    return design
+      ? { mode: 'match', references: [photoAt(anchors.half2), design] }
+      : { mode: 'establish', references: [photoAt(anchors.half2)] };
   };
 
-  /** Submits one Grok image-to-image task and polls the edge function until it finishes. */
+  /** Submits one image-to-image task and polls the edge function until it finishes. */
   const renderSingleView = async (
     viewKey: RedesignViewKey,
     token: string,
-    referenceImages: string[],
+    plan: RenderPlan,
     analysis: string,
-    spec: string,
     safeMode: boolean,
   ): Promise<string> => {
     const view = REDESIGN_VIEWS.find((item) => item.key === viewKey)!;
     const requestBody = {
+      model: RENDER_MODEL,
       user_prompt: buildRedesignPrompt(choices, viewKey, language, {
         roomAnalysis: analysis,
-        designSpec: spec,
         safeMode,
-        referenceCount: referenceImages.length,
+        renderMode: plan.mode,
       }),
-      image_base64s: referenceImages,
+      image_base64s: plan.references,
       user_id: user?.id,
       aspect_ratio: view.aspectRatio,
       language,
@@ -359,24 +379,23 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   };
 
   /**
-   * Renders one view, retrying once in safe mode. Grok's content filter refuses
-   * intermittently (Kie error 431) and charges nothing for a refusal, so a free
-   * retry with desensitised wording is the correct response rather than failing.
+   * Renders one view, retrying once in safe mode. The content filter refuses interiors
+   * intermittently (KIE error 431) and charges nothing for a refusal, so a free retry with
+   * desensitised wording is the correct response rather than failing.
    */
   const renderWithRetry = async (
     viewKey: RedesignViewKey,
     token: string,
-    referenceImages: string[],
+    plan: RenderPlan,
     analysis: string,
-    spec: string,
   ): Promise<string> => {
     try {
-      return await renderSingleView(viewKey, token, referenceImages, analysis, spec, false);
+      return await renderSingleView(viewKey, token, plan, analysis, false);
     } catch (firstError) {
       const message = firstError instanceof Error ? firstError.message : String(firstError);
       if (/trial|sign in|تسجيل الدخول|محاولاتك/i.test(message)) throw firstError;
       console.warn(`[redesign] ${viewKey} refused, retrying in safe mode:`, message);
-      return renderSingleView(viewKey, token, referenceImages, analysis, spec, true);
+      return renderSingleView(viewKey, token, plan, analysis, true);
     }
   };
 
@@ -393,7 +412,6 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
     setErrorMessage(null);
     setResults([]);
     setFailedKeys([]);
-    setDesignSpec('');
     setSavedProjectId(null);
     setActiveSlide(0);
     setIsSurveying(true);
@@ -408,61 +426,30 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       setPhotoAnchors(anchors);
       setIsSurveying(false);
 
-      // Every view is restyled from a REAL photo of the part of the room it shows, and carries the
-      // other angles alongside it, so the room, its openings and its layout are preserved by
-      // construction. Nothing is ever asked to imagine a viewpoint it cannot see.
+      // ⛔ STRICTLY SEQUENTIAL, and that is the whole point. halfB has to copy halfA's actual
+      // pixels, so it cannot start until halfA exists. Running them in parallel is what let the
+      // two drift into looking like different rooms.
       const failures: RedesignViewKey[] = [];
-      const [firstView, ...restViews] = REDESIGN_VIEWS;
-      let spec = '';
+      const approved: RenderResult[] = [];
 
-      setActiveViewKey(firstView.key);
-      setPendingKeys([firstView.key]);
-      try {
-        const url = await renderWithRetry(firstView.key, token, referencesFor(firstView.key, anchors), analysis, '');
-        setResults([{ key: firstView.key, url }]);
-        // Read the finishes back off this render and lock them, so the other two match.
-        setIsLockingSpec(true);
-        spec = await lockDesignSpec(token, url);
-        setDesignSpec(spec);
-      } catch (viewError) {
-        const message = viewError instanceof Error ? viewError.message : String(viewError);
-        if (/trial|sign in|تسجيل الدخول|محاولاتك/i.test(message)) throw viewError;
-        console.error(`[redesign] ${firstView.key} failed:`, message);
-        failures.push(firstView.key);
-        setFailedKeys((current) => [...current, firstView.key]);
-      } finally {
-        setIsLockingSpec(false);
-        setPendingKeys([]);
-      }
-
-      // The remaining views no longer depend on each other, so they run together.
-      setActiveViewKey(restViews[0].key);
-      setPendingKeys(restViews.map((view) => view.key));
-      const settled = await Promise.allSettled(restViews.map(async (view) => {
+      for (const view of REDESIGN_VIEWS) {
+        setActiveViewKey(view.key);
+        setPendingKeys([view.key]);
         try {
-          const url = await renderWithRetry(view.key, token, referencesFor(view.key, anchors), analysis, spec);
-          setResults((current) => [...current.filter((item) => item.key !== view.key), { key: view.key, url }]);
+          const plan = buildRenderPlan(view.key, anchors, approved);
+          const url = await renderWithRetry(view.key, token, plan, analysis);
+          approved.push({ key: view.key, url });
+          setResults([...approved]);
+        } catch (viewError) {
+          const message = viewError instanceof Error ? viewError.message : String(viewError);
+          if (/trial|sign in|تسجيل الدخول|محاولاتك/i.test(message)) throw viewError;
+          console.error(`[redesign] ${view.key} failed:`, message);
+          failures.push(view.key);
+          setFailedKeys((current) => [...current, view.key]);
         } finally {
-          setPendingKeys((current) => current.filter((key) => key !== view.key));
+          setPendingKeys([]);
         }
-      }));
-
-      const rejections: Array<{ key: RedesignViewKey; message: string }> = [];
-      settled.forEach((outcome, index) => {
-        if (outcome.status !== 'rejected') return;
-        const reason: unknown = outcome.reason;
-        rejections.push({
-          key: restViews[index].key,
-          message: reason instanceof Error ? reason.message : String(reason),
-        });
-      });
-      for (const rejection of rejections) {
-        console.error(`[redesign] ${rejection.key} failed:`, rejection.message);
-        failures.push(rejection.key);
-        setFailedKeys((current) => [...current, rejection.key]);
       }
-      const trialRejection = rejections.find((item) => /trial|sign in|تسجيل الدخول|محاولاتك/i.test(item.message));
-      if (trialRejection) throw new Error(trialRejection.message);
 
       if (failures.length === REDESIGN_VIEWS.length) {
         setErrorMessage(isArabic
@@ -481,7 +468,6 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       toast.error(message);
     } finally {
       setIsSurveying(false);
-      setIsLockingSpec(false);
       setActiveViewKey(null);
       setPendingKeys([]);
       setIsRendering(false);
@@ -500,13 +486,14 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       const token = session?.access_token;
       if (!token) throw new Error(isArabic ? 'يجب تسجيل الدخول' : 'You need to sign in first');
 
-      const url = await renderWithRetry(
+      // The view's own earlier attempt is excluded, so a retry never references the render it is
+      // replacing — but the OTHER finished renders are still used as its design lock.
+      const plan = buildRenderPlan(
         viewKey,
-        token,
-        referencesFor(viewKey, photoAnchors),
-        roomAnalysis,
-        designSpec,
+        photoAnchors,
+        results.filter((item) => item.key !== viewKey),
       );
+      const url = await renderWithRetry(viewKey, token, plan, roomAnalysis);
       setFailedKeys((current) => current.filter((key) => key !== viewKey));
       setResults((current) => [...current.filter((item) => item.key !== viewKey), { key: viewKey, url }]);
       toast.success(isArabic ? 'تمت إضافة الصورة' : 'That render is ready');
@@ -784,9 +771,9 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
               <span className="shrink-0 rounded-full border border-sky-300/25 bg-sky-400/10 px-2 py-1 text-[10px] font-bold text-sky-800 dark:text-sky-200">
                 {isSurveying
                   ? (isArabic ? 'قراءة الصور' : 'Reading photos')
-                  : isLockingSpec
-                    ? (isArabic ? 'تثبيت المواد' : 'Locking materials')
-                    : (isArabic ? `${Math.min(results.length + 1, 3)} من 3` : `${Math.min(results.length + 1, 3)} of 3`)}
+                  : (isArabic
+                    ? `${Math.min(results.length + 1, REDESIGN_VIEWS.length)} من ${REDESIGN_VIEWS.length}`
+                    : `${Math.min(results.length + 1, REDESIGN_VIEWS.length)} of ${REDESIGN_VIEWS.length}`)}
               </span>
             )}
           </div>
@@ -799,13 +786,13 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
                   ? (isArabic
                     ? `نقرأ صورك الـ${photos.length} لفهم شكل الغرفة والنوافذ والأبواب...`
                     : `Reading all ${photos.length} of your photos to understand the room, and picking the best photo for each shot...`)
-                  : isLockingSpec
+                  : activeViewKey === 'halfA'
                     ? (isArabic
-                      ? 'نسجل مواد وألوان الصورة الأولى لتطابقها الصورتان الأخريان تماما...'
-                      : 'Recording the materials and colours from the first image so the other two match it exactly...')
-                  : (isArabic
-                    ? 'نرسم الآن، وكل صورة مرسومة من صورك الحقيقية لتبقى الغرفة وتوزيعها كما هما. قد يستغرق هذا دقيقة أو دقيقتين.'
-                    : 'Rendering from your own photos, so the room and its layout stay exactly as they are. This can take a minute or two.')}
+                      ? 'نصمم النصف الأول من غرفتك. هذه الصورة هي التي ستتبعها الصورة الثانية.'
+                      : 'Designing the first half of your room. This image becomes the master that the second one must copy.')
+                    : (isArabic
+                      ? 'ننقل نفس التصميم بالضبط إلى النصف الآخر من الغرفة، من الاتجاه المعاكس...'
+                      : 'Carrying that exact design across to the other half of the room, looking the opposite way...')}
               </p>
             </div>
           )}
@@ -813,8 +800,8 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
           {results.length === 0 && !isRendering && (
             <p className="rounded-xl border border-dashed border-[#c9dff5] bg-white/70 px-3 py-3 text-xs leading-relaxed text-[#53627a] dark:border-sky-300/15 dark:bg-black/15 dark:text-muted-foreground">
               {isArabic
-                ? 'ستحصل على ٣ صور، كل واحدة مرسومة من إحدى صورك: نصف الغرفة الأول، ونصفها الثاني، ومنظر علوي للمساحة كاملة.'
-                : 'You will get 3 renders, each one restyled from one of your own photos: one half of the room, the other half, and a high view over the whole space.'}
+                ? 'ستحصل على صورتين: نصف الغرفة الأول، ثم نصفها الثاني من الاتجاه المعاكس بنفس التصميم تماما. الصورة الثانية تُبنى على الأولى لتكونا غرفة واحدة.'
+                : 'You will get 2 renders: one half of the room, then the opposite half in that exact same design. The second is built from the first, so both are the same room.'}
             </p>
           )}
 
@@ -852,10 +839,19 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
                         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-sky-600 dark:text-sky-300" />
                       ) : null}
                     </div>
-                    <div className={`flex ${view.aspectClass} items-center justify-center bg-[#eef7ff] dark:bg-black/40`}>
+                    {/* ⛔ No fixed aspect box around a FINISHED render. Renders are requested with
+                        aspect_ratio 'auto', so they come back shaped like the owner's own photo —
+                        portrait, for phone photos. Forcing those into a 16:9 box with object-cover
+                        sliced the ceiling and the floor straight off. The box shape is now only the
+                        placeholder used while the render does not exist yet. */}
+                    <div className={`flex items-center justify-center bg-[#eef7ff] dark:bg-black/40 ${result ? '' : view.aspectClass}`}>
                       {result ? (
-                        <button type="button" onClick={() => openPreview(view.key)} className="h-full w-full">
-                          <img src={result.url} alt={isArabic ? view.titleAr : view.titleEn} className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => openPreview(view.key)} className="w-full">
+                          <img
+                            src={result.url}
+                            alt={isArabic ? view.titleAr : view.titleEn}
+                            className="mx-auto max-h-[55vh] w-auto max-w-full"
+                          />
                         </button>
                       ) : hasFailed ? (
                         <div className="flex flex-col items-center gap-2 px-4 text-center">
@@ -1211,7 +1207,9 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
             <button type="button" onClick={handleGenerate} disabled={!readyToRender} className={primaryButtonClass}>
               {isRendering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {isRendering
-                ? (isArabic ? `جاري الرسم ${results.length + 1} من 3` : `Rendering ${results.length + 1} of 3`)
+                ? (isArabic
+                  ? `جاري الرسم ${Math.min(results.length + 1, REDESIGN_VIEWS.length)} من ${REDESIGN_VIEWS.length}`
+                  : `Rendering ${Math.min(results.length + 1, REDESIGN_VIEWS.length)} of ${REDESIGN_VIEWS.length}`)
                 : (isArabic ? 'أعد تصميم الغرفة' : 'Redesign my room')}
             </button>
           </div>
