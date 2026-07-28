@@ -50,6 +50,7 @@ type SurahViewAllRow =
 
 const STUDY_PLAN_KEY = "deen_study_plan_v2";
 const STUDY_DAILY_PROGRESS_KEY = "deen_study_daily_progress_v1";
+const STUDY_DAILY_LEARNT_AYAHS_KEY = "deen_study_daily_learnt_ayahs_v1";
 const VIEW_ALL_BATCH_SIZE = 6;
 const MAX_STUDY_PLANS = 5;
 
@@ -229,6 +230,24 @@ function saveDailyPlanProgress(byPlanId: Record<string, number>) {
   } catch {}
 }
 
+function readDailyLearntAyahKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(STUDY_DAILY_LEARNT_AYAHS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { date?: string; ayahKeys?: unknown };
+    if (!parsed || parsed.date !== todayKey() || !Array.isArray(parsed.ayahKeys)) return [];
+    return parsed.ayahKeys.filter((key): key is string => typeof key === "string");
+  } catch {
+    return [];
+  }
+}
+
+function saveDailyLearntAyahKeys(ayahKeys: string[]) {
+  try {
+    localStorage.setItem(STUDY_DAILY_LEARNT_AYAHS_KEY, JSON.stringify({ date: todayKey(), ayahKeys }));
+  } catch {}
+}
+
 function savePlanStore(store: StudyPlanStore) {
   try { localStorage.setItem(STUDY_PLAN_KEY, JSON.stringify(store)); } catch {}
 }
@@ -297,6 +316,7 @@ export default function DeenStudy() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
   const [dailyPlanProgressByPlan, setDailyPlanProgressByPlan] = useState<Record<string, number>>(() => readDailyPlanProgress());
+  const [dailyLearntAyahKeys, setDailyLearntAyahKeys] = useState<string[]>(() => readDailyLearntAyahKeys());
   const [jumpingSessionAyah, setJumpingSessionAyah] = useState(false);
   const [viewAllSurahNumber, setViewAllSurahNumber] = useState<number | null>(null);
   const [viewAllRows, setViewAllRows] = useState<SurahViewAllRow[]>([]);
@@ -324,6 +344,7 @@ export default function DeenStudy() {
   useEffect(() => {
     if (activeTab !== "today") return;
     setDailyPlanProgressByPlan(readDailyPlanProgress());
+    setDailyLearntAyahKeys(readDailyLearntAyahKeys());
   }, [activeTab, planStore.activePlanId]);
 
   useEffect(() => {
@@ -420,6 +441,14 @@ export default function DeenStudy() {
     }
     if (plan && playerMode === "learn") {
       if (!alreadyMemorized) {
+        const ayahKey = `${sessionAyah.surah_number}:${sessionAyah.ayah_number}`;
+        setDailyLearntAyahKeys((prev) => {
+          if (prev.includes(ayahKey)) return prev;
+          const next = [ayahKey, ...prev];
+          saveDailyLearntAyahKeys(next);
+          return next;
+        });
+
         let reachedDailyGoalNow = false;
         setDailyPlanProgressByPlan((prev) => {
           const previousPlanCount = prev[plan.id] ?? 0;
@@ -679,17 +708,14 @@ export default function DeenStudy() {
   const memorizedCount = memorizedItems.length;
   const memorizedPercent = ((memorizedCount / TOTAL_QURAN_AYAHS) * 100).toFixed(1);
   const learntTodayItems = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const endOfToday = startOfToday + (24 * 60 * 60 * 1000);
-
-    return memorizedItems.filter((item) => {
-      if (!item.updated_at) return false;
-      const updatedAt = new Date(item.updated_at).getTime();
-      if (Number.isNaN(updatedAt)) return false;
-      return updatedAt >= startOfToday && updatedAt < endOfToday;
+    const memorizedMap = new Map<string, any>();
+    memorizedItems.forEach((item) => {
+      memorizedMap.set(`${item.surah_number}:${item.ayah_number}`, item);
     });
-  }, [memorizedItems]);
+    return dailyLearntAyahKeys
+      .map((ayahKey) => memorizedMap.get(ayahKey))
+      .filter((item): item is any => !!item);
+  }, [memorizedItems, dailyLearntAyahKeys]);
 
   const viewAllMemorizedAyahNumbers = useMemo(
     () => viewAllRows.filter((row): row is { type: "ayah"; ayahNumber: number } => row.type === "ayah").map((row) => row.ayahNumber),
@@ -1037,7 +1063,7 @@ export default function DeenStudy() {
               <>
                 <div className="grid grid-cols-3 gap-2">
                   <StatCard
-                    value={memorizedTodayCount}
+                    value={learntTodayItems.length}
                     valueSuffix={isAr ? "آية" : "ayah"}
                     label={isAr ? "اليوم" : "Today"}
                     color="#60a5fa"
