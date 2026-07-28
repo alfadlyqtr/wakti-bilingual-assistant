@@ -65,11 +65,18 @@ ACCENT COLOURS: the exact accent colours present and which objects carry them.
 PLANTS AND DECOR: planter materials and colours, and the type of planting.
 LIGHTING MOOD: colour temperature and the direction the light comes from.`;
 
-// Reads a 2D architectural floor plan so it can be rebuilt as a furnished 3D dollhouse render.
+// Reads a 2D architectural floor plan so it can be rebuilt as a furnished top-down render.
 // The written brief is what reaches the image model as text; the ROOMS line is what lets the
 // app lay real, editable name labels over the finished render instead of trusting the image
-// model to spell room names correctly.
-const PLAN_SYSTEM_PROMPT = `You are an architect reading a 2D floor plan drawing. Your reading will be used to rebuild this exact floor plan as a furnished three-dimensional cutaway model, so precision about layout is everything.
+// model to spell room names correctly; the TOTALS line hands the renderer counts it is bad at
+// making for itself.
+//
+// ⛔ The opening line used to say the reading fed "a furnished three-dimensional cutaway model".
+// That was left over from a version we abandoned — the render is now strictly orthographic
+// top-down and the render brief says "No dollhouse cutaway" outright. A cutaway reader thinks
+// about vertical volume; a top-down reader thinks about plan position and counts, which is what
+// we actually need.
+const PLAN_SYSTEM_PROMPT = `You are an architect reading a 2D floor plan drawing. Your reading will be used to rebuild this exact plan as a furnished, photorealistic, true top-down view of the finished home — one that must lay perfectly over the drawing in front of you, wall for wall and opening for opening. Precision about position and about counts is therefore everything.
 
 Rules:
 - Report only what the drawing actually shows. Never invent rooms, walls or openings.
@@ -87,11 +94,16 @@ FIRST LINE, BEFORE ANYTHING ELSE, output exactly:
 ROOMS: <json array>
 The array holds one object per named room, in the form {"name":"KITCHEN","x":0.18,"y":0.22}. x and y are the centre of that room as a fraction of the whole image, x from 0 at the left edge to 1 at the right edge, y from 0 at the top edge to 1 at the bottom edge. Use the room name exactly as printed. Output valid JSON on that one line and nothing else on it. This line is required and must come first.
 
+SECOND LINE, output exactly:
+TOTALS: doors=<n>; cased openings=<n>; windows=<n>; staircases=<n>; rooms=<n>
+Give a real number for each, never a range and never a word like "several". A door is a gap in a wall with a thin leaf line, usually with a quarter-circle swing arc. A cased opening is a gap in a wall with NO leaf drawn — count those separately from doors. A window is a thin break in the wall thickness drawn as two or three parallel lines. A staircase is one continuous run of closely spaced parallel treads. These totals are handed straight to the renderer as the numbers it must match, so count them off the drawing carefully before writing this line.
+
 Then the written brief under these headings:
 
 FOOTPRINT: the overall shape of the building outline and its approximate overall dimensions. State plainly if the outline is not a simple rectangle — for example an L-shape, a U-shape, a re-entrant corner, or a splayed or angled corner.
 ROOM SCHEDULE: every enclosed space, one per line, in this form — NAME | approximate width x depth in metres | where it sits in the plan | what it is for. Use the room name exactly as printed on the drawing. If a space has no printed name, name it from its fittings and write (unlabelled).
-WALLS: which walls form the outer envelope and which are internal partitions. Note any curved or angled walls, and any wall that is only a low counter, screen or half-height divider.
+WALLS: first which walls form the outer envelope. Then every internal partition, one per line, each named by the two spaces it separates — for example "between MAJLIS and DINING". Note any curved or angled walls, and any wall that is only a low counter, screen or half-height divider.
+OPEN TO EACH OTHER: then list every pair of adjoining named spaces with NO wall drawn between them at all. Those pairs are one single continuous space, and the renderer must not invent a divider, screen or step between them. If every space on the drawing is fully enclosed, write "none".
 DOORS: every door — which rooms it connects, its approximate width, and which way it swings if the swing arc is drawn. Also list every cased opening or archway that has no door leaf.
 WINDOWS: every window and glazed panel — which wall it sits in, its approximate width, and whether it is a normal window, a full-height glazed panel, a sliding door or a corner window.
 VERTICAL AND STRUCTURE: every staircase, including which direction it rises and roughly how many treads are drawn; every column, pillar and pier; every beam or dropped soffit; every level change or step; and every shaft or duct.
@@ -372,7 +384,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // PLAN MODE — read a 2D floor plan so it can be rebuilt as a furnished 3D cutaway render.
+    // PLAN MODE — read a 2D floor plan so it can be rebuilt as a furnished top-down render.
     if (mode === "plan") {
       const inline = typeof body?.image_base64 === "string" ? toImageInput(body.image_base64) : null;
       const planUrl = typeof body?.image_url === "string" ? body.image_url.trim() : "";
@@ -384,13 +396,24 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // 8000, not 2600: a dense villa brief overran the old cap, the reply was cut off, and the
-      // user silently lost every room label and half the description the renderer depends on.
+      // ⛔ TWO SEPARATE TRAPS ARE BEING AVOIDED HERE. Do not simplify either of them away.
+      //
+      // 1. thinkingBudget is NOT optional. It defaults to 0, and this is the one call whose whole
+      //    job is reading walls, doors, windows and staircases off a dense drawing — precisely the
+      //    case the comment on callGemini says benefits from reasoning. The tracer we ABANDONED was
+      //    given 4096 while this live reader silently ran with none, so counts and openings were
+      //    being judged at a glance.
+      // 2. Thinking tokens are spent OUT OF maxOutputTokens. At the old 8000 cap, a 4096 budget
+      //    would leave under 4000 for the brief itself and the reply would be cut off mid-way —
+      //    recreating the exact truncation this call was already fixed for once, where the user
+      //    silently lost every room label while the request still logged success. 14000 = room for
+      //    the thinking, the full brief, and headroom, since the budget can overflow slightly.
       const rawPlan = await callGemini(
         [reference],
         PLAN_SYSTEM_PROMPT,
-        "Read this floor plan drawing. Output the ROOMS line first, then the brief under the required headings.",
-        8000,
+        "Read this floor plan drawing. Output the ROOMS line first, then the TOTALS line, then the brief under the required headings. Count the doors, cased openings, windows and staircases carefully — those totals are handed straight to the renderer as the numbers it must match.",
+        14000,
+        { thinkingBudget: 4096 },
       );
       if (!rawPlan) throw new Error("Plan reading returned no text");
 

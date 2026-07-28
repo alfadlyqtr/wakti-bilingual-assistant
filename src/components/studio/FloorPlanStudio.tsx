@@ -28,6 +28,7 @@ import {
   FLOOR_PLAN_FURNITURE_MODES,
   FLOOR_PLAN_ROWS,
   FLOOR_PLAN_STYLES,
+  FLOOR_PLAN_UPLOAD_KINDS,
   PER_ROOM_ROWS,
   FLOOR_PLAN_SCOPES,
   ROOM_PURPOSES,
@@ -719,6 +720,9 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
       setRoomOverrides({});
       setRoomGroups([]);
       setPlanBrief('');
+      // The new drawing may well be a different kind of thing — a suite where the last was a whole
+      // floor — and silently keeping the old answer would mis-describe it. Make them pick again.
+      setChoices((current) => ({ ...current, uploadKind: null }));
     } catch {
       toast.error(isArabic ? 'تعذّر قراءة الملف' : 'Could not read that file');
     } finally {
@@ -1246,6 +1250,41 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
             </button>
           )}
 
+          {/* ⛔ Required, and asked before anything else. A master-suite plan read as a house of
+              separate rooms turned a 6m x 6m dressing room into a lounge with a dining table, and
+              MASTER LIVING into a family living room. Nothing on a drawing states whether it is a
+              whole home or one suite inside one, and the model cannot infer it reliably. */}
+          <div className="mt-4">
+            <span className="text-xs font-extrabold text-foreground/85">
+              {isArabic ? 'ما الذي رفعته؟' : 'What did you upload?'}
+            </span>
+            <div className="mt-2 grid grid-cols-1 gap-2">
+              {FLOOR_PLAN_UPLOAD_KINDS.map((kind) => {
+                const isActive = choices.uploadKind === kind.id;
+                return (
+                  <button
+                    key={kind.id}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setChoices((current) => ({ ...current, uploadKind: kind.id }))}
+                    className={`rounded-xl border px-2.5 py-2.5 text-start transition-all active:scale-95 ${
+                      isActive
+                        ? 'border-sky-300/45 bg-sky-400/20 shadow-[0_0_12px_hsla(210,100%,65%,0.2)]'
+                        : 'border-[#d9e7f5] bg-[#f7fbff] hover:bg-sky-50 dark:border-sky-300/15 dark:bg-black/[0.1] dark:hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    <span className={`block text-[11px] font-extrabold ${isActive ? 'text-sky-800 dark:text-sky-100' : 'text-[#31405a] dark:text-foreground'}`}>
+                      {isArabic ? kind.ar : kind.en}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] font-semibold leading-snug text-muted-foreground">
+                      {isArabic ? kind.hintAr : kind.hintEn}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="mt-4">
             <span className="text-xs font-extrabold text-foreground/85">
               {isArabic ? 'الأثاث المرسوم في المخطط؟' : 'The furniture drawn on the plan?'}
@@ -1280,7 +1319,7 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
           <button
             type="button"
             onClick={goToStyle}
-            disabled={!plan}
+            disabled={!plan || !choices.uploadKind}
             className={`mt-4 ${primaryButtonClass}`}
           >
             {isArabic ? 'التالي: الطراز' : 'Next: choose the style'}
