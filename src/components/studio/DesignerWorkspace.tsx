@@ -7,6 +7,7 @@ import {
   Grid3x3,
   ImagePlus,
   LayoutTemplate,
+  Loader2,
   Lock,
   LockOpen,
   Maximize2,
@@ -34,6 +35,8 @@ import {
   ZoomOut,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import {
   buildAssistantReply,
@@ -59,6 +62,20 @@ import DesignerFollowUpDialog from './DesignerFollowUpDialog';
 import RedesignRoomStudio from './RedesignRoomStudio';
 import FloorPlanStudio from './FloorPlanStudio';
 import DesignerSavedProjects from './DesignerSavedProjects';
+import { layoutToBlueprintPng } from './layoutBlueprint';
+import {
+  BLUEPRINT_KEY,
+  asArray,
+  asNumber,
+  asRecord,
+  asText,
+  projectImageUrl,
+  type DesignerProjectTarget,
+  type FloorPlanHandoff,
+  type SavedProject,
+} from './designerProjects';
+
+const SUPABASE_URL = ((import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 
 export type DesignerStartMode = 'redesign' | 'trace' | 'draw';
 
@@ -306,6 +323,11 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const [followUpAnswers, setFollowUpAnswers] = useState<DesignerFormAnswers>({});
   const [pendingBrief, setPendingBrief] = useState<DesignerBrief | null>(null);
   const [pendingRequest, setPendingRequest] = useState('');
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
+  /** Set on a successful save and cleared by the next edit, so the tick can never lie. */
+  const [savedLayoutId, setSavedLayoutId] = useState<string | null>(null);
+  /** A saved project waiting for FloorPlanStudio to pick up and restore. */
+  const [planHandoff, setPlanHandoff] = useState<FloorPlanHandoff | null>(null);
   const labelDragRef = useRef<{ pointerId: number; labelId: string; offsetX: number; offsetY: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const layoutSvgRef = useRef<SVGSVGElement | null>(null);
@@ -330,6 +352,183 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const setWorkspaceMode = (nextMode: DesignerStartMode) => {
     onModeChange(nextMode);
     setView('workspace');
+  };
+
+  /**
+   * Saves the drawn layout as its own project.
+   *
+   * Two things go in and both are load-bearing: the GEOMETRY, which is what makes the drawing
+   * editable again on this canvas, and a rendered BLUEPRINT PNG, which is what lets tab 2 furnish
+   * it. Neither is much use without the other.
+   */
+  const saveLayout = async () => {
+    if (isSavingLayout || !walls.length) return;
+    setIsSavingLayout(true);
+    try {
+      const blueprint = layoutToBlueprintPng({
+        walls,
+        apertures,
+        items,
+        labels: roomLabels.map((label) => ({ name: label.name, x: label.x, y: label.y })),
+      });
+      if (!blueprint) throw new Error(isArabic ? 'لا يوجد رسم لحفظه بعد' : 'There is nothing drawn to save yet');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error(isArabic ? 'يجب تسجيل الدخول' : 'You need to sign in first');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wakti-designer-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          mode: 'draw',
+          title: isArabic ? 'مخطط مرسوم' : 'Drawn layout',
+          summary: [
+            roomLabels.map((label) => label.name.trim()).filter(Boolean).join(', '),
+            isArabic
+              ? `${walls.length} جدار · ${apertures.length} فتحة`
+              : `${walls.length} walls · ${apertures.length} openings`,
+          ].filter(Boolean).join(' — '),
+          choices: { walls, apertures, items, roomLabels, scalePixelsPerUnit, scaleUnit },
+          images: [{ key: BLUEPRINT_KEY, url: blueprint }],
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success || !json?.project?.id) {
+        throw new Error(String(json?.error || (isArabic ? 'تعذّر الحفظ' : 'Could not save')));
+      }
+
+      setSavedLayoutId(String(json.project.id));
+      toast.success(isArabic ? 'تم حفظ المخطط في المحفوظات' : 'Layout saved to your designs');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isArabic ? 'تعذّر الحفظ' : 'Could not save');
+      console.error('[designer-draw] save failed:', message);
+      toast.error(message);
+    } finally {
+      setIsSavingLayout(false);
+    }
+  };
+
+  /**
+   * Puts a saved layout back on the canvas, fully editable.
+   *
+   * ⛔ Every field is read defensively. `choices` is jsonb written by a possibly older version of
+   * this component, so a missing or malformed field has to degrade rather than throw — losing one
+   * door is recoverable, a blank screen is not.
+   *
+   * History is RESET to a single snapshot of what was just loaded rather than restored from the
+   * record, so the furthest undo can reach is the drawing as it was saved, never an empty canvas
+   * belonging to some earlier session.
+   */
+  const hydrateLayout = (project: SavedProject) => {
+    const restoredWalls: Wall[] = asArray(project.choices.walls)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asText(entry.id))
+      .map((entry) => {
+        const type = asText(entry.type);
+        const control = asRecord(entry.control);
+        const wall: Wall = {
+          id: asText(entry.id),
+          x1: asNumber(entry.x1, 0),
+          y1: asNumber(entry.y1, 0),
+          x2: asNumber(entry.x2, 0),
+          y2: asNumber(entry.y2, 0),
+          type: type === 'structural' || type === 'beam' ? type : 'partition',
+          breaks: asArray(entry.breaks)
+            .map((raw) => asRecord(raw))
+            .map((raw) => ({
+              id: asText(raw.id) || crypto.randomUUID(),
+              positionRatio: asNumber(raw.positionRatio, 0.5),
+              width: asNumber(raw.width, 40),
+            })),
+        };
+        if (typeof control.x === 'number' && typeof control.y === 'number') {
+          wall.control = { x: control.x, y: control.y };
+        }
+        return wall;
+      });
+
+    // An opening whose wall did not survive would be invisible and impossible to delete.
+    const wallIds = new Set(restoredWalls.map((wall) => wall.id));
+    const restoredApertures: Aperture[] = asArray(project.choices.apertures)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asText(entry.id) && wallIds.has(asText(entry.wallId)))
+      .map((entry) => ({
+        id: asText(entry.id),
+        wallId: asText(entry.wallId),
+        type: asText(entry.type) === 'window' ? 'window' : 'door',
+        positionRatio: asNumber(entry.positionRatio, 0.5),
+        width: asNumber(entry.width, 40),
+        hinge: asText(entry.hinge) === 'end' ? 'end' : 'start',
+        swing: asText(entry.swing) === 'right' ? 'right' : 'left',
+      }));
+
+    const restoredItems: PlacedItem[] = asArray(project.choices.items)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asText(entry.symbolId))
+      .map((entry) => ({
+        id: asText(entry.id) || crypto.randomUUID(),
+        symbolId: asText(entry.symbolId),
+        x: asNumber(entry.x, 0),
+        y: asNumber(entry.y, 0),
+        rotation: asNumber(entry.rotation, 0),
+        width: asNumber(entry.width, 40),
+        depth: asNumber(entry.depth, 40),
+      }));
+
+    const restoredLabels: DesignerRoomLabel[] = asArray(project.choices.roomLabels)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asText(entry.name))
+      .map((entry) => ({
+        roomId: asText(entry.roomId) || crypto.randomUUID(),
+        name: asText(entry.name),
+        x: asNumber(entry.x, 0),
+        y: asNumber(entry.y, 0),
+        widthUnits: asNumber(entry.widthUnits, 0),
+        heightUnits: asNumber(entry.heightUnits, 0),
+      }));
+
+    setWalls(restoredWalls);
+    setApertures(restoredApertures);
+    setItems(restoredItems);
+    setRoomLabels(restoredLabels);
+    setScalePixelsPerUnit(asNumber(project.choices.scalePixelsPerUnit, 20));
+    setScaleUnit(asText(project.choices.scaleUnit) === 'ft' ? 'ft' : 'm');
+    setHistory([{ walls: restoredWalls, apertures: restoredApertures, items: restoredItems }]);
+    setHistoryIndex(0);
+    setSelectedElementId(null);
+    setSelectedTool('select');
+    setLayoutFeedback('none');
+    // The trace underlay is a reference image that was never saved, so there is none to restore.
+    setUnderlay(null);
+    setZoom(1);
+    setSavedLayoutId(project.id);
+    resetDrawing();
+  };
+
+  /**
+   * The one place a saved project is routed, and it does not guess. The button the user pressed
+   * decides the destination; the project's own mode decides which buttons exist at all, over in
+   * DesignerSavedProjects. A room-photo project reaches neither branch.
+   */
+  const handleOpenProject = (target: DesignerProjectTarget, project: SavedProject) => {
+    if (target === 'draw') {
+      hydrateLayout(project);
+      setWorkspaceMode('draw');
+      toast.success(isArabic ? 'تم فتح الرسم للتعديل' : 'Drawing opened for editing');
+      return;
+    }
+    if (target === 'trace') {
+      const blueprintUrl = projectImageUrl(project, BLUEPRINT_KEY);
+      if (!blueprintUrl) {
+        toast.error(isArabic
+          ? 'هذا المشروع لا يحتوي على الرسم الأصلي'
+          : 'This project has no original drawing saved with it');
+        return;
+      }
+      setPlanHandoff({ project, blueprintUrl });
+      setWorkspaceMode('trace');
+    }
   };
 
   const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -876,6 +1075,8 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
    * walls or openings did not have to change when furniture arrived.
    */
   const commitLayout = (nextWalls: Wall[], nextApertures: Aperture[], nextItems: PlacedItem[] = items) => {
+    // The drawing has just diverged from whatever was saved, so the saved tick stops applying.
+    setSavedLayoutId(null);
     const snapshot: LayoutSnapshot = {
       walls: nextWalls.map(cloneWall),
       apertures: nextApertures.map((aperture) => ({ ...aperture })),
@@ -2247,11 +2448,19 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
         </nav>
 
         {view === 'saved' ? (
-          <DesignerSavedProjects language={language} onStartDesign={() => setView('workspace')} />
+          <DesignerSavedProjects
+            language={language}
+            onStartDesign={() => setView('workspace')}
+            onOpenProject={handleOpenProject}
+          />
         ) : activeMode === 'redesign' ? (
           <RedesignRoomStudio language={language} />
         ) : activeMode === 'trace' ? (
-          <FloorPlanStudio language={plannerLanguage} />
+          <FloorPlanStudio
+            language={plannerLanguage}
+            handoff={planHandoff}
+            onHandoffConsumed={() => setPlanHandoff(null)}
+          />
         ) : (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.85fr)] lg:gap-4">
             <section className={`${cardClass} relative min-h-[390px] overflow-hidden p-3 md:p-4`}>
@@ -3038,6 +3247,27 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
                               <button type="button" title={isArabic ? 'تراجع' : 'Undo'} aria-label={isArabic ? 'تراجع' : 'Undo'} onClick={handleUndo} disabled={historyIndex < 0} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#40506a] transition hover:bg-sky-50 hover:text-[#075985] disabled:cursor-not-allowed disabled:opacity-35 dark:text-sky-100/70 dark:hover:bg-white/[0.1] dark:hover:text-white"><Undo2 className="h-4 w-4" /></button>
                               <button type="button" title={isArabic ? 'إعادة' : 'Redo'} aria-label={isArabic ? 'إعادة' : 'Redo'} onClick={handleRedo} disabled={historyIndex + 1 >= history.length} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#40506a] transition hover:bg-sky-50 hover:text-[#075985] disabled:cursor-not-allowed disabled:opacity-35 dark:text-sky-100/70 dark:hover:bg-white/[0.1] dark:hover:text-white"><Redo2 className="h-4 w-4" /></button>
                               <button type="button" title={isArabic ? 'حذف المحدد' : 'Delete selected'} aria-label={isArabic ? 'حذف المحدد' : 'Delete selected'} onClick={handleDeleteSelected} disabled={!selectedElementId} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-35 dark:text-rose-300 dark:hover:bg-rose-400/10"><Trash2 className="h-4 w-4" /></button>
+                            </div>
+                            {/* Save is deliberately the one labelled action in this bar. Before it
+                                existed a refresh destroyed the whole drawing, and an icon-only
+                                button is not discoverable enough for the thing that prevents that. */}
+                            <div className="flex gap-1 rounded-xl border border-[#c9dff5] bg-[#f7fbff] p-1 dark:border-sky-300/15 dark:bg-black/[0.22]">
+                              <button
+                                type="button"
+                                onClick={() => void saveLayout()}
+                                disabled={isSavingLayout || !walls.length}
+                                title={isArabic ? 'احفظ المخطط' : 'Save layout'}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-extrabold text-[#075985] transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-35 dark:text-sky-100 dark:hover:bg-white/[0.1]"
+                              >
+                                {isSavingLayout
+                                  ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                                  : savedLayoutId
+                                    ? <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                                    : <Save className="h-4 w-4 shrink-0" />}
+                                <span className="whitespace-nowrap">
+                                  {savedLayoutId ? (isArabic ? 'محفوظ' : 'Saved') : (isArabic ? 'احفظ' : 'Save')}
+                                </span>
+                              </button>
                             </div>
                           </div>
                         </div>

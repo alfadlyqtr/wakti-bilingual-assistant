@@ -1,24 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Images, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Images, Loader2, PencilRuler, RefreshCw, Save, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import DesignerImageLightbox, { type LightboxImage } from './DesignerImageLightbox';
-
-type SavedImage = {
-  key: string;
-  url: string;
-  storage_path?: string;
-};
-
-type SavedProject = {
-  id: string;
-  title: string;
-  mode: string;
-  summary: string | null;
-  images: SavedImage[];
-  created_at: string;
-};
+import {
+  canReopen,
+  readSavedProject,
+  type DesignerProjectTarget,
+  type SavedProject,
+} from './designerProjects';
 
 type DbResult<T> = { data: T | null; error: { message: string } | null };
 
@@ -42,15 +33,18 @@ const VIEW_LABELS: Record<string, { en: string; ar: string }> = {
   halfA: { en: 'Room half 1', ar: 'نصف الغرفة الأول' },
   halfB: { en: 'Room half 2', ar: 'نصف الغرفة الثاني' },
   top: { en: 'Aerial view', ar: 'منظر علوي' },
+  blueprint: { en: 'Original drawing', ar: 'الرسم الأصلي' },
   floorplan: { en: 'Whole home', ar: 'المنزل كامل' },
 };
 
 export default function DesignerSavedProjects({
   language,
   onStartDesign,
+  onOpenProject,
 }: {
   language: 'en' | 'ar';
   onStartDesign: () => void;
+  onOpenProject: (target: DesignerProjectTarget, project: SavedProject) => void;
 }) {
   const isArabic = language === 'ar';
   const { user } = useAuth();
@@ -79,20 +73,14 @@ export default function DesignerSavedProjects({
     setIsLoading(true);
     setErrorMessage(null);
     try {
+      // `choices` is what a project is reopened FROM — the drawn geometry for a layout, the picks
+      // and room pins for a floor plan. Without it the panel can only ever be a gallery.
       const { data, error } = await designerProjects()
-        .select('id, title, mode, summary, images, created_at')
+        .select('id, title, mode, summary, choices, images, created_at')
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
 
-      const rows = (data || []).map((row) => ({
-        id: String(row.id),
-        title: String(row.title || 'Room design'),
-        mode: String(row.mode || 'redesign'),
-        summary: row.summary ? String(row.summary) : null,
-        created_at: String(row.created_at),
-        images: Array.isArray(row.images) ? (row.images as SavedImage[]).filter((item) => item?.url) : [],
-      }));
-      setProjects(rows);
+      setProjects((data || []).map(readSavedProject));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setErrorMessage(isArabic ? 'تعذّر تحميل التصاميم المحفوظة' : 'Could not load your saved designs');
@@ -129,7 +117,7 @@ export default function DesignerSavedProjects({
     }
   };
 
-  const openProject = (project: SavedProject, index: number) => {
+  const openLightbox = (project: SavedProject, index: number) => {
     setLightbox({
       images: project.images.map((image, position) => ({
         url: image.url,
@@ -140,6 +128,7 @@ export default function DesignerSavedProjects({
   };
 
   const cardClass = 'rounded-2xl border border-[#c9dff5] bg-white/90 shadow-[0_10px_24px_rgba(6,5,65,0.08)] dark:border-sky-300/20 dark:bg-black/30 dark:shadow-none';
+  const openButtonClass = 'inline-flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-sky-300/45 bg-sky-400/15 px-2.5 text-[11px] font-extrabold text-sky-800 transition-all hover:bg-sky-400/25 active:scale-95 dark:text-sky-100';
 
   if (isLoading) {
     return (
@@ -234,7 +223,7 @@ export default function DesignerSavedProjects({
                 <button
                   key={image.url}
                   type="button"
-                  onClick={() => openProject(project, index)}
+                  onClick={() => openLightbox(project, index)}
                   className="aspect-[4/3] overflow-hidden rounded-lg border border-[#d9e7f5] transition active:scale-95 dark:border-sky-300/15"
                   aria-label={labelFor(image.key, index + 1)}
                 >
@@ -245,6 +234,44 @@ export default function DesignerSavedProjects({
 
             {project.summary && (
               <p className="px-3 pb-3 text-[10px] leading-relaxed text-muted-foreground">{project.summary}</p>
+            )}
+
+            {/* ⛔ Routed strictly on the project's own mode — nothing here guesses. A drawn layout is
+                the only kind with two doors, because a drawing is genuinely useful in both places:
+                back on the canvas to change the walls, or over in Furnish to dress it. A redesign
+                project offers nothing, so a room photo set can never be loaded as a floor plan. */}
+            {canReopen(project) && (
+              <div className="flex gap-2 border-t border-[#e4eef8] p-2 dark:border-sky-300/10">
+                {project.mode === 'draw' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onOpenProject('draw', project)}
+                      className={openButtonClass}
+                    >
+                      <PencilRuler className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{isArabic ? 'تعديل الرسم' : 'Edit drawing'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenProject('trace', project)}
+                      className={openButtonClass}
+                    >
+                      <Wand2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{isArabic ? 'افرشها' : 'Furnish it'}</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpenProject('trace', project)}
+                    className={openButtonClass}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{isArabic ? 'افتح وواصل التعديل' : 'Open & keep editing'}</span>
+                  </button>
+                )}
+              </div>
             )}
           </section>
         ))}

@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.wakti.app",
+      "sha256_cert_fingerprints": [
+        "13:2C:29:E8:4D:AD:E0:56:7A:72:BA:13:E5:A0:98:56:DF:92:C5:49:31:02:60:4F:B3:83:20:FA:1B:B2:39:96",
+        "08:49:E8:75:3C:15:64:CC:DD:0F:26:27:1B:6D:9D:AC:8E:08:26:E3:C3:3D:64:4C:67:4D:98:C6:CE:08:55:2E"
+      ]
+    }
+  }
+]

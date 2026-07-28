@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
 
+[[headers]]
+  for = "/.well-known/assetlinks.json"
+  [headers.values]
+    Content-Type = "application/json"
+
 [[redirects]]
   from = "/_bucket/*"
   to = "https://prod-packager-packages.codesandbox.io/:splat"

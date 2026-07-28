@@ -38,6 +38,12 @@
       "headers": [
         { "key": "Content-Type", "value": "application/json" }
       ]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
     }
   ],
   "rewrites": [
@@ -46,6 +52,7 @@
     { "source": "/api/qr/redirect", "destination": "/api/qr/redirect" },
     { "source": "/apple-app-site-association", "destination": "/apple-app-site-association" },
     { "source": "/.well-known/apple-app-site-association", "destination": "/.well-known/apple-app-site-association" },
+    { "source": "/.well-known/assetlinks.json", "destination": "/.well-known/assetlinks.json" },
     { "source": "/_bucket/:path*", "destination": "https://prod-packager-packages.codesandbox.io/:path*" },
     { "source": "/_packager/:path*", "destination": "https://aiwi8rnkp5.execute-api.eu-west-1.amazonaws.com/prod/packages/:path*" },
     { "source": "/preview/:subdomain", "destination": "/index.html" },

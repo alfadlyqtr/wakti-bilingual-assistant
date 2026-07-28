@@ -5,6 +5,9 @@
 //      Saved tab would fill up with dead images within hours.
 //   2. Fetching those URLs from the browser is blocked by CORS, so only the server can
 //      read them.
+// It also accepts browser-side `data:` URLs, which is what makes a saved project REOPENABLE:
+// the uploaded blueprint and a layout drawn on the canvas only ever exist in the browser, and
+// without them a saved project is just a gallery of finished pictures with no source to edit.
 // Deliberately self-contained (no ../_shared imports) so it can be deployed via the
 // Supabase MCP tool, which does not bundle sibling folders.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -17,10 +20,32 @@ const corsHeaders = {
 
 // Public-read bucket, so the Saved tab can render plain <img> tags with no signing.
 const BUCKET = "generated-images";
-const MAX_IMAGES = 6;
+// ⛔ Was 6, which a floor plan project filled exactly (1 whole-home render + up to 5 room
+// close-ups). Storing the blueprint alongside them needs a 7th slot, and silently dropping it
+// would leave a project that looks saved but cannot be reopened.
+const MAX_IMAGES = 8;
+// Generous, but bounded: a blueprint arrives inline as base64 rather than as a link.
+const MAX_INLINE_BYTES = 8 * 1024 * 1024;
+
+const DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i;
 
 type IncomingImage = { key: string; url: string };
 type StoredImage = { key: string; url: string; storage_path: string };
+
+/** Decodes a browser `data:` URL into raw bytes, or null if it is not one we can use. */
+function decodeDataUrl(url: string): { bytes: Uint8Array; contentType: string } | null {
+  const match = DATA_URL.exec(url);
+  if (!match) return null;
+  try {
+    const binary = atob(match[2].replace(/\s/g, ""));
+    if (!binary.length || binary.length > MAX_INLINE_BYTES) return null;
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return { bytes, contentType: match[1].toLowerCase() };
+  } catch {
+    return null;
+  }
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -58,7 +83,7 @@ Deno.serve(async (req: Request) => {
         key: safeSlug(String((item as IncomingImage)?.key || ""), `image${index + 1}`),
         url: String((item as IncomingImage)?.url || "").trim(),
       }))
-      .filter((item) => /^https?:\/\//i.test(item.url));
+      .filter((item) => /^https?:\/\//i.test(item.url) || DATA_URL.test(item.url));
 
     if (!images.length) return json({ success: false, error: "No images to save" }, 400);
 
@@ -66,16 +91,27 @@ Deno.serve(async (req: Request) => {
     const stored: StoredImage[] = [];
 
     for (const image of images) {
-      const resp = await fetch(image.url);
-      if (!resp.ok) {
-        console.error(`[designer-save] could not fetch ${image.key}: ${resp.status}`);
-        continue;
+      let bytes: Uint8Array;
+      let contentType: string;
+
+      // A blueprint or a drawn canvas arrives inline, so there is nothing to go and fetch.
+      const inline = decodeDataUrl(image.url);
+      if (inline) {
+        bytes = inline.bytes;
+        contentType = inline.contentType;
+      } else {
+        const resp = await fetch(image.url);
+        if (!resp.ok) {
+          console.error(`[designer-save] could not fetch ${image.key}: ${resp.status}`);
+          continue;
+        }
+        const header = (resp.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+        contentType = header.startsWith("image/") ? header : "image/jpeg";
+        bytes = new Uint8Array(await resp.arrayBuffer());
       }
-      const header = (resp.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-      const contentType = header.startsWith("image/") ? header : "image/jpeg";
-      const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-      const bytes = new Uint8Array(await resp.arrayBuffer());
       if (!bytes.length) continue;
+
+      const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
 
       // First folder MUST be the user id so the existing per-user storage policies apply.
       const path = `${userId}/designer/${projectId}/${image.key}.${extension}`;

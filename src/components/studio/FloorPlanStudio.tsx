@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -45,6 +45,16 @@ import {
   type RoomOverrides,
   type RoomStyleOverride,
 } from './floorPlanOptions';
+import {
+  BLUEPRINT_KEY,
+  FLOOR_PLAN_KEY,
+  asArray,
+  asNumber,
+  asRecord,
+  asText,
+  projectImageUrl,
+  type FloorPlanHandoff,
+} from './designerProjects';
 
 const SUPABASE_URL = ((import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 
@@ -385,7 +395,96 @@ const preparePlan = async (file: File): Promise<{ dataUrl: string; width: number
   return { dataUrl: canvas.toDataURL('image/jpeg', 0.92), width, height };
 };
 
-export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' }) {
+/**
+ * Re-loads a stored blueprint as if the user had just picked it off their phone.
+ *
+ * Everything downstream — the plan reader, the render sizing, the reference image sent to the
+ * provider — expects a data URL plus the plan's own pixel dimensions. Putting the stored file back
+ * through `preparePlan` makes a reopened project indistinguishable from a fresh upload, rather than
+ * a second code path that would have to be kept in step with the first one forever.
+ */
+const planFromStoredUrl = async (url: string, name: string): Promise<PlanAsset> => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`blueprint fetch failed: ${response.status}`);
+  const blob = await response.blob();
+  const file = new File([blob], name, { type: blob.type || 'image/png' });
+  const prepared = await preparePlan(file);
+  return { name, ...prepared };
+};
+
+const ROW_KEYS: FloorPlanRowKey[] = ['style', 'palette', 'flooring', 'lighting', 'ceiling', 'finish'];
+
+/**
+ * ⛔ Mirrors `safeSlug` in wakti-designer-save. Room close-ups are stored under the room's slugged
+ * name, so "M. BATHROOM" is on disk as "mbathroom". Looking one up by its raw name finds nothing
+ * and the close-ups silently vanish on reopen.
+ */
+const storedRoomKey = (name: string): string => (
+  name.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32)
+);
+
+/** Pulls one row-and-custom pair out of saved jsonb, dropping anything blank. */
+const restoreRowMap = (raw: Record<string, unknown>): Partial<Record<FloorPlanRowKey, string>> => {
+  const result: Partial<Record<FloorPlanRowKey, string>> = {};
+  ROW_KEYS.forEach((key) => {
+    const value = asText(raw[key]);
+    if (value) result[key] = value;
+  });
+  return result;
+};
+
+/**
+ * Rebuilds the whole-home picks from a saved project.
+ *
+ * ⛔ `uploadKind` deliberately falls back to null rather than 'home'. Every project saved before
+ * that question existed has no answer stored, and guessing "whole home" for what might be a master
+ * suite is the exact mistake the picker was added to stop — so a reopened project asks again.
+ */
+const restoreChoices = (raw: Record<string, unknown>): FloorPlanChoices => {
+  const rows = asRecord(raw.rows);
+  const uploadKind = asText(raw.uploadKind);
+  return {
+    furnitureMode: asText(raw.furnitureMode) === 'fresh' ? 'fresh' : 'keep',
+    uploadKind: uploadKind === 'home' || uploadKind === 'suite' || uploadKind === 'room' ? uploadKind : null,
+    scope: asText(raw.scope) === 'rooms' ? 'rooms' : 'home',
+    rows: {
+      style: asText(rows.style, DEFAULT_FLOOR_PLAN_CHOICES.rows.style),
+      palette: asText(rows.palette, DEFAULT_FLOOR_PLAN_CHOICES.rows.palette),
+      flooring: asText(rows.flooring),
+      lighting: asText(rows.lighting),
+      ceiling: asText(rows.ceiling),
+      finish: asText(rows.finish),
+    },
+    custom: restoreRowMap(asRecord(raw.custom)),
+    speed: asText(raw.speed) === 'quick' ? 'quick' : 'best',
+    customNote: asText(raw.customNote),
+  };
+};
+
+/** Rebuilds one room's own direction, keeping only the fields that actually carry something. */
+const restoreOverride = (raw: unknown): RoomStyleOverride => {
+  const record = asRecord(raw);
+  const override: RoomStyleOverride = {};
+  const purpose = asText(record.purpose);
+  const purposeNote = asText(record.purposeNote);
+  const note = asText(record.note);
+  if (purpose) override.purpose = purpose;
+  if (purposeNote) override.purposeNote = purposeNote;
+  if (note) override.note = note;
+  const rows = restoreRowMap(asRecord(record.rows));
+  const custom = restoreRowMap(asRecord(record.custom));
+  if (Object.keys(rows).length) override.rows = rows;
+  if (Object.keys(custom).length) override.custom = custom;
+  return override;
+};
+
+export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }: {
+  language: 'en' | 'ar';
+  /** A saved project to restore, handed over by the Saved tab. Optional so nothing else breaks. */
+  handoff?: FloorPlanHandoff | null;
+  /** Called once the hand-over has been taken, so it can never be applied twice. */
+  onHandoffConsumed?: () => void;
+}) {
   const isArabic = language === 'ar';
 
   const [step, setStep] = useState<StudioStep>('plan');
@@ -700,6 +799,120 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
     roomRenders.forEach((room) => images.push({ url: room.url, label: room.name }));
     return images;
   }, [renderUrl, roomRenders, isArabic]);
+
+  /** Which hand-over has already been applied, so the same one is never restored twice. */
+  const restoredProjectRef = useRef<string | null>(null);
+
+  /**
+   * Picks up a saved project handed over from the Saved tab.
+   *
+   * The stored blueprint is re-fetched and run back through `preparePlan`, so from this point on a
+   * reopened project behaves exactly like a fresh upload. Where it lands differs by what it is:
+   *   - A DRAWN LAYOUT stops at the plan step. It has never been read or styled, and the user still
+   *     has to say whether it is a whole home, a suite or one room.
+   *   - A FINISHED FLOOR PLAN gets its render, pins, reading, picks and edit history back and lands
+   *     on the result, ready to keep editing without paying to read the plan again.
+   *
+   * ⛔ Guarded by project id, not by a cancellation flag. Clearing the hand-over in the parent
+   * changes this effect's dependency, and a cleanup-based guard would abort its own restore.
+   */
+  useEffect(() => {
+    if (!handoff) {
+      // Lets the same project be reopened again later rather than being blocked by a stale id.
+      restoredProjectRef.current = null;
+      return;
+    }
+    if (restoredProjectRef.current === handoff.project.id) return;
+    restoredProjectRef.current = handoff.project.id;
+
+    const { project, blueprintUrl } = handoff;
+    void (async () => {
+      setIsReadingFile(true);
+      setErrorMessage('');
+      try {
+        const asset = await planFromStoredUrl(blueprintUrl, `${project.title || 'blueprint'}.png`);
+
+        // Common ground first, so nothing from the previous session can leak across.
+        setPlan(asset);
+        setSelectedIds([]);
+        setCombineMode(false);
+        setActiveRoomId(null);
+        setEditInput('');
+        setStatusMessage('');
+        setElapsedSeconds(0);
+        setIsSaved(false);
+
+        if (project.mode !== 'floorplan') {
+          setChoices(DEFAULT_FLOOR_PLAN_CHOICES);
+          setRoomOverrides({});
+          setRoomGroups([]);
+          setHasReadPlan(false);
+          setPlanBrief('');
+          setLabels([]);
+          setRenderUrl(null);
+          setRoomRenders([]);
+          setEditHistory([]);
+          setStep('plan');
+          toast.success(isArabic ? 'تم فتح الرسم، جاهز للتأثيث' : 'Drawing opened, ready to furnish');
+          return;
+        }
+
+        const saved = project.choices;
+        const brief = asText(saved.planBrief);
+        const restoredLabels: FloorPlanLabel[] = asArray(saved.labels)
+          .map((entry) => asRecord(entry))
+          .filter((entry) => asText(entry.id) && asText(entry.name))
+          .map((entry) => ({
+            id: asText(entry.id),
+            name: asText(entry.name),
+            x: asNumber(entry.x, 0.5),
+            y: asNumber(entry.y, 0.5),
+          }));
+        const labelIds = new Set(restoredLabels.map((label) => label.id));
+
+        const restoredOverrides: RoomOverrides = {};
+        Object.entries(asRecord(saved.roomOverrides)).forEach(([key, value]) => {
+          restoredOverrides[key] = restoreOverride(value);
+        });
+
+        // A group needs at least two surviving rooms to still mean anything.
+        const restoredGroups: RoomGroup[] = asArray(saved.roomGroups)
+          .map((entry) => asRecord(entry))
+          .map((entry) => ({
+            id: asText(entry.id) || crypto.randomUUID(),
+            labelIds: asArray(entry.labelIds).map((id) => asText(id)).filter((id) => labelIds.has(id)),
+          }))
+          .filter((group) => group.labelIds.length > 1);
+
+        const wholeHome = projectImageUrl(project, FLOOR_PLAN_KEY);
+
+        setChoices(restoreChoices(saved));
+        setPlanBrief(brief);
+        setHasReadPlan(Boolean(brief) || restoredLabels.length > 0);
+        setLabels(restoredLabels);
+        setRoomOverrides(restoredOverrides);
+        setRoomGroups(restoredGroups);
+        setEditHistory(asArray(saved.edits).map((entry) => asText(entry)).filter(Boolean));
+        setRenderUrl(wholeHome || null);
+        setRoomRenders(restoredLabels
+          .map((label) => {
+            const url = projectImageUrl(project, storedRoomKey(label.name));
+            return url ? { labelId: label.id, name: label.name, url } : null;
+          })
+          .filter((room): room is RoomRender => room !== null));
+        setStep(wholeHome ? 'result' : 'style');
+        toast.success(isArabic ? 'تم فتح المشروع' : 'Project opened');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[floorplan] reopen failed:', message);
+        toast.error(isArabic ? 'تعذّر فتح هذا المشروع' : 'Could not open that project');
+      } finally {
+        setIsReadingFile(false);
+        onHandoffConsumed?.();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoff]);
 
   const handlePlanSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1082,9 +1295,14 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
     setIsSaving(true);
     try {
       const token = await getToken();
+      // ⛔ The blueprint goes in as well, and it is the entire reason this project can be reopened
+      // later. It is a browser data URL, which wakti-designer-save only started accepting when
+      // reopening was built — and the image cap had to go from 6 to 8 to make room for it, because
+      // one render plus five close-ups already filled the old limit exactly.
       const images = [
-        { key: 'floorplan', url: renderUrl },
+        { key: FLOOR_PLAN_KEY, url: renderUrl },
         ...roomRenders.map((room) => ({ key: room.name, url: room.url })),
+        ...(plan ? [{ key: BLUEPRINT_KEY, url: plan.dataUrl }] : []),
       ];
       const style = FLOOR_PLAN_STYLES.find((item) => item.id === choices.rows.style);
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wakti-designer-save`, {
@@ -1099,10 +1317,16 @@ export default function FloorPlanStudio({ language }: { language: 'en' | 'ar' })
           choices: {
             ...choices,
             rooms: labels.map((label) => label.name),
+            // ⛔ The pins themselves, with their coordinates and ids — not just the names above.
+            // Names alone cannot be put back on the drawing, and the ids are what roomOverrides and
+            // roomGroups key on, so without these both would reopen orphaned.
+            labels,
+            // The architect's reading, so reopening does not have to pay to read the plan again.
+            planBrief,
             roomOverrides,
-            roomGroups: roomGroups.map((group) => group.labelIds
-              .map((id) => labels.find((label) => label.id === id)?.name)
-              .filter(Boolean)),
+            // Stored with their real ids for the same reason: a group's own styling lives in
+            // roomOverrides under the group id, so regenerating it on load would lose that styling.
+            roomGroups,
             edits: editHistory,
           },
           images,
