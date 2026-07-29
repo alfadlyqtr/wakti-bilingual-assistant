@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { setActiveScopedUserId } from "@/utils/userScopedStorage";
 import { startGoogleSignIn } from "@/utils/googleSignIn";
+import { startAppleSignIn } from "@/utils/appleSignIn";
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -152,12 +153,32 @@ export function LoginForm({
     }
   };
 
+  const handleAppleLogin = async () => {
+    setErrorMsg(null);
+    setIsLoading(true);
+
+    try {
+      const { error } = await startAppleSignIn(redirectTo);
+      if (error) {
+        setErrorMsg(error.message);
+        toast.error(language === 'en' ? 'Apple Login Failed: ' + error.message : 'فشل تسجيل الدخول بأبل: ' + error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : (language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      setErrorMsg(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   // Translations
   const translations = {
     en: {
       login: "Login",
       signInWithGoogle: "Log in with Google",
+      signInWithApple: "Log in with Apple",
       email: "Email",
       password: "Password",
       forgotPassword: "Forgot Password?",
@@ -170,6 +191,7 @@ export function LoginForm({
     ar: {
       login: "تسجيل الدخول",
       signInWithGoogle: "تسجيل الدخول عبر جوجل",
+      signInWithApple: "تسجيل الدخول عبر أبل",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
       forgotPassword: "نسيت كلمة المرور؟",
@@ -269,6 +291,16 @@ export function LoginForm({
           disabled={isLoading}
         >
           {isLoading ? t.loading : t.login}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full text-base py-6 shadow-sm"
+          disabled={isLoading}
+          onClick={handleAppleLogin}
+        >
+          {t.signInWithApple}
         </Button>
 
         <Button

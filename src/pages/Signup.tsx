@@ -20,6 +20,7 @@ import { countries } from "@/utils/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { setActiveScopedUserId } from "@/utils/userScopedStorage";
 import { startGoogleSignIn } from "@/utils/googleSignIn";
+import { startAppleSignIn } from "@/utils/appleSignIn";
 
 type AuthTab = "login" | "signup";
 
@@ -639,12 +640,33 @@ export default function Signup() {
     }
   };
 
+  const handleAppleLogin = async () => {
+    setErrorMsg(null);
+    setIsLoading(true);
+
+    try {
+      const { error } = await startAppleSignIn(returnTo);
+      if (error) {
+        setErrorMsg(error.message);
+        toast.error(language === 'en' ? 'Apple Login Failed: ' + error.message : 'فشل تسجيل الدخول بأبل: ' + error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : (language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      setErrorMsg(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const translations = {
     en: {
       appName: "WAKTI",
       createAccount: "Create Account",
       signInWithGoogle: "Continue with Google",
       googleShort: "Log in with Google",
+      signInWithApple: "Continue with Apple",
+      appleShort: "Log in with Apple",
       name: "Name",
       username: "Username",
       email: "Email",
@@ -678,6 +700,8 @@ export default function Signup() {
       createAccount: "إنشاء حساب",
       signInWithGoogle: "المتابعة باستخدام جوجل",
       googleShort: "تسجيل الدخول عبر جوجل",
+      signInWithApple: "المتابعة باستخدام أبل",
+      appleShort: "تسجيل الدخول عبر أبل",
       name: "الاسم",
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
@@ -737,11 +761,10 @@ export default function Signup() {
     <>
       {/* ── CSS ── */}
       <style>{`
-        /* page: fixed, NO scroll */
+        /* page: fixed, NO scroll — everything must fit dynamically */
         .su-page {
           position: fixed; inset: 0; width: 100%; height: 100dvh;
-          overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column;
-          -webkit-overflow-scrolling: touch;
+          overflow: hidden; display: flex; flex-direction: column;
           background: ${dk ? '#07080f' : '#eef0f8'};
         }
 
@@ -1117,8 +1140,8 @@ export default function Signup() {
           align-items: center;
           justify-content: space-between;
           gap: 14px;
-          padding: 14px 16px;
-          border-radius: 22px;
+          padding: 10px 14px;
+          border-radius: 18px;
           border: 1px solid ${dk ? 'rgba(255,255,255,0.08)' : 'rgba(6,5,65,0.10)'};
           background: ${dk ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)'};
           transition: all 0.22s ease;
@@ -1196,8 +1219,8 @@ export default function Signup() {
           box-shadow: none;
         }
         .su-google-mark {
-          width: 17px;
-          height: 17px;
+          width: 20px;
+          height: 20px;
           flex-shrink: 0;
         }
         .su-google-entry {
@@ -1215,10 +1238,10 @@ export default function Signup() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 10px;
-          height: 38px;
-          min-width: 128px;
-          padding: 0 14px;
+          gap: 8px;
+          height: 34px;
+          min-width: 112px;
+          padding: 0 12px;
           border-radius: 999px;
           background: #ffffff;
           border: 1px solid rgba(66,133,244,0.12);
@@ -1230,6 +1253,52 @@ export default function Signup() {
           font-weight: 700;
           letter-spacing: -0.01em;
           color: #1f1f1f;
+        }
+        .su-apple-entry {
+          border-color: ${dk ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.14)'};
+          background: ${dk
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.045) 0%, rgba(128,128,128,0.05) 100%)'
+            : 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(0,0,0,0.04) 100%)'
+          };
+        }
+        .su-apple-entry:hover {
+          border-color: ${dk ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.28)'};
+          box-shadow: ${dk ? '0 10px 28px rgba(0,0,0,0.26)' : '0 10px 24px rgba(0,0,0,0.10)'};
+        }
+        .su-apple-badge {
+          border: 1px solid ${dk ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'};
+          background: ${dk ? '#ffffff' : '#ffffff'};
+        }
+        .su-signup-entry {
+          cursor: pointer;
+          border-color: ${dk ? 'hsla(210,100%,65%,0.30)' : 'hsla(243,84%,14%,0.20)'};
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(210,100%,65%,0.12) 0%, hsla(280,70%,65%,0.08) 100%)'
+            : 'linear-gradient(135deg, hsla(243,84%,14%,0.06) 0%, hsla(210,80%,40%,0.05) 100%)'
+          };
+        }
+        .su-signup-entry:hover:not(:disabled) {
+          transform: translateY(-1px);
+          border-color: ${dk ? 'hsla(210,100%,65%,0.50)' : 'hsla(243,84%,14%,0.35)'};
+          box-shadow: ${dk
+            ? '0 8px 28px hsla(210,100%,65%,0.20), 0 2px 12px hsla(280,70%,65%,0.12)'
+            : '0 8px 24px hsla(243,84%,14%,0.12), 0 2px 10px hsla(210,80%,50%,0.08)'
+          };
+        }
+        .su-signup-entry:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .su-signup-badge {
+          border: 1px solid ${dk ? 'hsla(210,100%,65%,0.35)' : 'rgba(6,5,65,0.15)'};
+          background: #060541;
+          box-shadow: ${dk
+            ? '0 0 12px hsla(210,100%,65%,0.35), 0 0 24px hsla(210,100%,65%,0.15), inset 0 1px 0 rgba(255,255,255,0.10)'
+            : '0 4px 14px rgba(6,5,65,0.30), 0 2px 6px rgba(6,5,65,0.18), inset 0 1px 0 rgba(255,255,255,0.15)'
+          };
+        }
+        .su-signup-badge .su-google-badge-text {
+          color: #ffffff;
         }
 
         /* ─── back button ─── */
@@ -1308,14 +1377,14 @@ export default function Signup() {
         <div className="relative z-10 flex flex-col items-center justify-start sm:justify-center flex-1 px-5 pt-2 sm:pt-0 pb-5">
 
           {/* ── Logo ── */}
-          <div className="flex flex-col items-center gap-3 sm:gap-6 mb-3 sm:mb-4">
+          <div className="flex flex-col items-center gap-2 mb-2">
             <div className="cursor-pointer" onClick={() => navigate("/")}>
               <Logo3D size="lg" />
             </div>
             
             {authTab === "signup" && (
-              <div className="text-center space-y-2">
-                <div className="flex justify-center mb-1">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 max-w-[340px] mx-auto">
                   <AnimatePresence mode="wait">
                     {isPlayingAudio ? (
                       <motion.button
@@ -1326,7 +1395,7 @@ export default function Signup() {
                         exit={{ opacity: 0, scale: 0.8 }}
                         transition={{ duration: 0.15 }}
                         onClick={() => { if (audioRef.current) { audioRef.current.pause(); } }}
-                        className="su-audio-btn"
+                        className="su-audio-btn flex-shrink-0"
                         aria-label="Pause"
                       >
                         <Pause className="w-3 h-3" />
@@ -1345,76 +1414,76 @@ export default function Signup() {
                             audioRef.current.play();
                           }
                         }}
-                        className="su-audio-btn"
+                        className="su-audio-btn flex-shrink-0"
                         aria-label="Play"
                       >
                         <Play className="w-3 h-3" />
                       </motion.button>
                     ) : null}
                   </AnimatePresence>
-                </div>
 
-                <p className="text-sm text-muted-foreground max-w-[320px] mx-auto leading-relaxed text-center">
-                  {language === 'ar' ? (
-                    <span className="inline-block">
-                      {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
-                        <motion.span
-                          key={index}
-                          initial={{ color: 'hsl(var(--muted-foreground))' }}
-                          animate={{
-                            color: currentWordIndex === index && isPlayingAudio
-                              ? 'hsl(142, 76%, 55%)'
-                              : 'hsl(var(--muted-foreground))',
-                            scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
-                            fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
-                          }}
-                          transition={{ duration: 0.2 }}
-                          className="inline-block"
-                          style={{
-                            marginRight: word === '،' || word === '.' ? '0.2rem' : '0.3rem',
-                            marginLeft: word === '،' || word === '.' ? '0.2rem' : '0',
-                            textShadow: currentWordIndex === index && isPlayingAudio
-                              ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
-                              : 'none'
-                          }}
-                        >
-                          {word}
-                        </motion.span>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="inline-block">
-                      {['Hi', '!', 'Thanks', 'for', 'joining', 'us', '.', 'Please', 'enter', 'your', 'email', 'and', 'password', 'to', 'get', 'started', '.'].map((word, index) => (
-                        <motion.span
-                          key={index}
-                          initial={{ color: 'hsl(var(--muted-foreground))' }}
-                          animate={{
-                            color: currentWordIndex === index && isPlayingAudio
-                              ? 'hsl(142, 76%, 55%)'
-                              : 'hsl(var(--muted-foreground))',
-                            scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
-                            fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
-                          }}
-                          transition={{ duration: 0.2 }}
-                          className="inline-block"
-                          style={{
-                            marginRight: word === '.' || word === '!' ? '0.4rem' : '0.25rem',
-                            textShadow: currentWordIndex === index && isPlayingAudio
-                              ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
-                              : 'none'
-                          }}
-                        >
-                          {word}
-                        </motion.span>
-                      ))}
-                    </span>
-                  )}
-                </p>
+                  <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                    {language === 'ar' ? (
+                      <span className="inline-block">
+                        {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
+                          <motion.span
+                            key={index}
+                            initial={{ color: 'hsl(var(--muted-foreground))' }}
+                            animate={{
+                              color: currentWordIndex === index && isPlayingAudio
+                                ? 'hsl(142, 76%, 55%)'
+                                : 'hsl(var(--muted-foreground))',
+                              scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
+                              fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className="inline-block"
+                            style={{
+                              marginRight: word === '،' || word === '.' ? '0.2rem' : '0.3rem',
+                              marginLeft: word === '،' || word === '.' ? '0.2rem' : '0',
+                              textShadow: currentWordIndex === index && isPlayingAudio
+                                ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
+                                : 'none'
+                            }}
+                          >
+                            {word}
+                          </motion.span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="inline-block">
+                        {['Hi', '!', 'Thanks', 'for', 'joining', 'us', '.', 'Please', 'enter', 'your', 'email', 'and', 'password', 'to', 'get', 'started', '.'].map((word, index) => (
+                          <motion.span
+                            key={index}
+                            initial={{ color: 'hsl(var(--muted-foreground))' }}
+                            animate={{
+                              color: currentWordIndex === index && isPlayingAudio
+                                ? 'hsl(142, 76%, 55%)'
+                                : 'hsl(var(--muted-foreground))',
+                              scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
+                              fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className="inline-block"
+                            style={{
+                              marginRight: word === '.' || word === '!' ? '0.4rem' : '0.25rem',
+                              textShadow: currentWordIndex === index && isPlayingAudio
+                                ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
+                                : 'none'
+                            }}
+                          >
+                            {word}
+                          </motion.span>
+                        ))}
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="w-full max-w-sm mb-2 sm:mb-3">
+          <div className="w-full max-w-sm mb-2">
             <div className="su-auth-tabs">
               <button
                 type="button"
@@ -1444,7 +1513,7 @@ export default function Signup() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.5, ease: [0.22,1,0.36,1] }}
-            className="su-panel w-full max-w-sm px-5 py-4"
+            className="su-panel w-full max-w-sm px-4 py-3"
           >
             {/* Error */}
             <AnimatePresence>
@@ -1612,13 +1681,30 @@ export default function Signup() {
                       <button type="submit" disabled={isLoading} className="su-pill w-full">
                         {isLoading
                           ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                          : <><img src={WAKTI_LOGO_SRC} alt="" className="w-4 h-4 rounded-[5px] object-contain shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />{language === 'en' ? 'Log in' : 'تسجيل الدخول'}</>
+                          : <><img src={WAKTI_LOGO_SRC} alt="" className="w-5 h-5 rounded-[5px] object-contain shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />{language === 'en' ? 'Log in' : 'تسجيل الدخول'}</>
                         }
                       </button>
                     </div>
 
                     {!isGuestUpgradeFlow && (
                       <div className="w-full min-w-0">
+                        <button
+                          type="button"
+                          disabled={isLoading}
+                          onClick={handleAppleLogin}
+                          className="su-google-login-btn"
+                          aria-label={t.appleShort}
+                          style={{ borderColor: 'rgba(255,255,255,0.15)' }}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="su-google-mark" fill="#1f1f1f">
+                            <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                          </svg>
+                          <span>{t.appleShort}</span>
+                        </button>
+                      </div>
+                    )}
+                    {!isGuestUpgradeFlow && (
+                      <div className="w-full min-w-0 mt-2">
                         <button
                           type="button"
                           disabled={isLoading}
@@ -1633,11 +1719,24 @@ export default function Signup() {
                     )}
                   </div>
                 ) : (
-                  <button type="submit" disabled={isLoading || !agreedToTerms} className="su-pill">
-                    {isLoading
-                      ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                      : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
-                    }
+                  <button type="submit" disabled={isLoading || !agreedToTerms} className="su-partner-entry su-signup-entry w-full max-w-sm">
+                    <span className="su-google-badge su-signup-badge" aria-hidden="true">
+                      <img src={WAKTI_LOGO_SRC} alt="" className="w-5 h-5 rounded-[5px] object-contain" />
+                      <span className="su-google-badge-text">Wakti</span>
+                    </span>
+                    <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
+                      <div className="su-partner-entry-copy">
+                        {isLoading
+                          ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...')
+                          : t.signup}
+                      </div>
+                      <div className="su-partner-entry-note">
+                        {language === 'ar' ? 'أنشئ حسابك بالبريد الإلكتروني' : 'Create your account with email'}
+                      </div>
+                    </div>
+                    {isLoading && (
+                      <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full flex-shrink-0" />
+                    )}
                   </button>
                 )}
               </div>
@@ -1645,37 +1744,12 @@ export default function Signup() {
             </form>
           </motion.div>
 
-          {authTab === "signup" && !isGuestUpgradeFlow && (
-            <motion.button
-              type="button"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12, duration: 0.35, ease: [0.22,1,0.36,1] }}
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="su-partner-entry su-google-entry mt-3 w-full max-w-sm"
-            >
-              <span className="su-google-badge" aria-hidden="true">
-                <GoogleMark className="su-google-mark" />
-                <span className="su-google-badge-text">Google</span>
-              </span>
-              <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
-                <div className="su-partner-entry-copy">
-                  {t.signInWithGoogle}
-                </div>
-                <div className="su-partner-entry-note">
-                  {language === 'ar' ? 'استخدم حساب جوجل لإكمال التسجيل بسرعة' : 'Use your Google account for faster signup'}
-                </div>
-              </div>
-            </motion.button>
-          )}
-
           {authTab === "signup" && (
             <motion.button
               type="button"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.16, duration: 0.4, ease: [0.22,1,0.36,1] }}
+              transition={{ delay: 0.12, duration: 0.35, ease: [0.22,1,0.36,1] }}
               onClick={() => {
                 setRealXPartnerError(null);
                 setIsRealXPartnerDialogOpen(true);
@@ -1691,6 +1765,58 @@ export default function Signup() {
                 </div>
                 <div className="su-partner-entry-note">
                   {language === 'ar' ? 'افتح مسار الشريك المخصص' : 'Open the dedicated partner flow'}
+                </div>
+              </div>
+            </motion.button>
+          )}
+
+          {authTab === "signup" && !isGuestUpgradeFlow && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.14, duration: 0.35, ease: [0.22,1,0.36,1] }}
+              onClick={handleAppleLogin}
+              disabled={isLoading}
+              className="su-partner-entry su-apple-entry mt-3 w-full max-w-sm"
+            >
+              <span className="su-google-badge su-apple-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="su-google-mark" fill="#1f1f1f">
+                  <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                </svg>
+                <span className="su-google-badge-text">Apple</span>
+              </span>
+              <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
+                <div className="su-partner-entry-copy">
+                  {t.signInWithApple}
+                </div>
+                <div className="su-partner-entry-note">
+                  {language === 'ar' ? 'استخدم حساب أبل لإكمال التسجيل بسرعة' : 'Use your Apple account for faster signup'}
+                </div>
+              </div>
+            </motion.button>
+          )}
+
+          {authTab === "signup" && !isGuestUpgradeFlow && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.16, duration: 0.4, ease: [0.22,1,0.36,1] }}
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="su-partner-entry su-google-entry mt-3 w-full max-w-sm"
+            >
+              <span className="su-google-badge" aria-hidden="true">
+                <GoogleMark className="su-google-mark" />
+                <span className="su-google-badge-text">Google</span>
+              </span>
+              <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
+                <div className="su-partner-entry-copy">
+                  {t.signInWithGoogle}
+                </div>
+                <div className="su-partner-entry-note">
+                  {language === 'ar' ? 'استخدم حساب جوجل لإكمال التسجيل بسرعة' : 'Use your Google account for faster signup'}
                 </div>
               </div>
             </motion.button>
