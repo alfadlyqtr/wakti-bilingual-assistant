@@ -1354,6 +1354,40 @@ export default function Signup() {
 
         /* ─── field icon ─── */
         .su-icon { color: ${accent}; opacity: 0.45; }
+
+        /* ─── dynamic fit: shrink everything proportionally on short screens ─── */
+        @media (max-height: 780px) {
+          .su-logo-wrap { transform: scale(0.82); margin: -10px 0; }
+          .su-greeting-p { font-size: 12.5px; }
+        }
+        @media (max-height: 720px) {
+          .su-main-col { padding-bottom: 10px !important; }
+          .su-logo-wrap { transform: scale(0.68); margin: -16px 0; }
+          .su-greeting-p { font-size: 12px; }
+          .su-auth-tabs { padding: 4px; }
+          .su-auth-tab { height: 30px; font-size: 11px; }
+          .su-panel { padding-left: 14px !important; padding-right: 14px !important; padding-top: 10px !important; padding-bottom: 10px !important; }
+          .su-panel input, .su-panel [role='combobox'] { height: 38px !important; font-size: 13px !important; }
+          .su-details-pill { padding: 4px 12px; font-size: 9px; }
+          .su-partner-entry { padding: 8px 12px !important; border-radius: 16px; margin-top: 8px !important; gap: 10px; }
+          .su-google-badge { height: 30px; min-width: 100px; gap: 6px; padding: 0 10px; }
+          .su-google-badge-text { font-size: 12px; }
+          .su-google-mark { width: 17px; height: 17px; }
+          .su-realx-badge { height: 30px; min-width: 100px; }
+          .su-realx-logo { width: 82px; }
+          .su-partner-entry-copy { font-size: 12px; }
+          .su-partner-entry-note { font-size: 9px; margin-top: 2px; }
+        }
+        @media (max-height: 640px) {
+          .su-logo-wrap { transform: scale(0.55); margin: -24px 0; }
+          .su-greeting-p { font-size: 11px; }
+          .su-partner-entry { padding: 6px 10px !important; margin-top: 6px !important; }
+          .su-panel input, .su-panel [role='combobox'] { height: 36px !important; }
+        }
+        /* landscape phones: allow scroll as safety net */
+        @media (orientation: landscape) and (max-height: 500px) {
+          .su-page { overflow-y: auto; }
+        }
       `}</style>
 
       <audio ref={audioRef} playsInline className="hidden" />
@@ -1374,11 +1408,11 @@ export default function Signup() {
         </div>
 
         {/* ── Main layout: everything fits in remaining height ── */}
-        <div className="relative z-10 flex flex-col items-center justify-start sm:justify-center flex-1 px-5 pt-2 sm:pt-0 pb-5">
+        <div className="su-main-col relative z-10 flex flex-col items-center justify-start sm:justify-center flex-1 px-5 pt-2 sm:pt-0 pb-5">
 
           {/* ── Logo ── */}
           <div className="flex flex-col items-center gap-2 mb-2">
-            <div className="cursor-pointer" onClick={() => navigate("/")}>
+            <div className="cursor-pointer su-logo-wrap" onClick={() => navigate("/")}>
               <Logo3D size="lg" />
             </div>
             
@@ -1422,7 +1456,7 @@ export default function Signup() {
                     ) : null}
                   </AnimatePresence>
 
-                  <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                  <p className="su-greeting-p text-sm text-muted-foreground leading-relaxed flex-1">
                     {language === 'ar' ? (
                       <span className="inline-block">
                         {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
