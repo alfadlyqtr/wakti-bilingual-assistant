@@ -1179,6 +1179,9 @@ export default function Signup() {
           font-size: 10px;
           margin-top: 4px;
           color: ${dk ? 'rgba(255,255,255,0.48)' : 'hsl(243,20%,44%)'};
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .su-auth-actions-row {
@@ -1356,17 +1359,18 @@ export default function Signup() {
         .su-icon { color: ${accent}; opacity: 0.45; }
 
         /* ─── dynamic fit: shrink everything proportionally on short screens ─── */
-        @media (max-height: 780px) {
+        @media (max-height: 820px) {
           .su-logo-wrap { transform: scale(0.82); margin: -10px 0; }
           .su-greeting-p { font-size: 12.5px; }
         }
-        @media (max-height: 720px) {
-          .su-main-col { padding-bottom: 10px !important; }
-          .su-logo-wrap { transform: scale(0.68); margin: -16px 0; }
+        @media (max-height: 770px) {
+          .su-main-col { padding-bottom: 8px !important; }
+          .su-logo-wrap { transform: scale(0.66); margin: -16px 0; }
           .su-greeting-p { font-size: 12px; }
           .su-auth-tabs { padding: 4px; }
           .su-auth-tab { height: 30px; font-size: 11px; }
           .su-panel { padding-left: 14px !important; padding-right: 14px !important; padding-top: 10px !important; padding-bottom: 10px !important; }
+          .su-panel form > * + * { margin-top: 8px !important; }
           .su-panel input, .su-panel [role='combobox'] { height: 38px !important; font-size: 13px !important; }
           .su-details-pill { padding: 4px 12px; font-size: 9px; }
           .su-partner-entry { padding: 8px 12px !important; border-radius: 16px; margin-top: 8px !important; gap: 10px; }
@@ -1378,7 +1382,7 @@ export default function Signup() {
           .su-partner-entry-copy { font-size: 12px; }
           .su-partner-entry-note { font-size: 9px; margin-top: 2px; }
         }
-        @media (max-height: 640px) {
+        @media (max-height: 660px) {
           .su-logo-wrap { transform: scale(0.55); margin: -24px 0; }
           .su-greeting-p { font-size: 11px; }
           .su-partner-entry { padding: 6px 10px !important; margin-top: 6px !important; }
@@ -1825,7 +1829,7 @@ export default function Signup() {
                   {t.signInWithApple}
                 </div>
                 <div className="su-partner-entry-note">
-                  {language === 'ar' ? 'استخدم حساب أبل لإكمال التسجيل بسرعة' : 'Use your Apple account for faster signup'}
+                  {language === 'ar' ? 'تسجيل سريع عبر حساب أبل' : 'Fast signup with Apple ID'}
                 </div>
               </div>
             </motion.button>
@@ -1850,7 +1854,7 @@ export default function Signup() {
                   {t.signInWithGoogle}
                 </div>
                 <div className="su-partner-entry-note">
-                  {language === 'ar' ? 'استخدم حساب جوجل لإكمال التسجيل بسرعة' : 'Use your Google account for faster signup'}
+                  {language === 'ar' ? 'تسجيل سريع عبر حساب جوجل' : 'Fast signup with Google'}
                 </div>
               </div>
             </motion.button>

@@ -3815,7 +3815,24 @@ ${convertToGlobalComponent(content, componentName)}
     // 🔍 Use error classification system for smarter fix prompts
     const errorClassification = classifyError(error);
     console.log(`[Auto-Fix] Error classified as: ${errorClassification.type}`, errorClassification);
-    
+
+    // 🎯 ROOT-CAUSE TARGETING: "X.y is not a function" almost always means the
+    // object X was never initialized/exported by its SETUP file — the crashing
+    // line is only the symptom. Extract the identifier and force the fixer to
+    // inspect the SOURCE file, not just patch the call site.
+    const notFunctionMatch = error.match(/([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s+is not a function/);
+    const rootCauseGuidance = notFunctionMatch
+      ? `
+
+**🎯 ROOT-CAUSE RULE for "${notFunctionMatch[1]} is not a function":**
+The crashing line is the SYMPTOM, not the cause. The object "${notFunctionMatch[1].split('.')[0]}" was never properly created, initialized, or imported.
+1. Use read_file on the failing file and find where "${notFunctionMatch[1].split('.')[0]}" comes from (check its import).
+2. If it comes from a library that needs a setup file (e.g. react-i18next needs an i18n setup file like /i18n.js or /src/i18n.js), use read_file on that setup file.
+3. The setup file MUST actually initialize AND export the object (e.g. i18n.use(initReactI18next).init({ resources, ... }) plus export default i18n). A file that only defines DATA (like a translations dictionary) without initializing/exporting the library IS the bug.
+4. Fix the SOURCE/SETUP file so "${notFunctionMatch[1]}" genuinely exists.
+5. Do NOT just add optional chaining (?.), wrap in try/catch, or delete the call — that hides the bug and silently breaks the feature.`
+      : '';
+
     // Generate fix instructions based on error type
     let fixInstructions = '';
     
@@ -3888,7 +3905,7 @@ Wrong data type or calling non-function as function.
 1. Use read_file to see the code
 2. Check if you're calling a function that doesn't exist
 3. Verify the data structure matches what you expect
-4. Add type checks if needed`;
+4. Add type checks if needed${rootCauseGuidance}`;
         break;
         
       case 'not-rendered':
@@ -3936,7 +3953,7 @@ The app uses react-router-dom components (Link, useNavigate, Route, etc.) but th
 **FIX STEPS:**
 1. Use read_file to see the file causing the error
 2. Find the exact line causing the issue
-3. Fix the root cause, not just the symptom`;
+3. Fix the root cause, not just the symptom${rootCauseGuidance}`;
     }
     
     // Add retry-specific instructions
@@ -3973,6 +3990,17 @@ ${fixInstructions}
     // Clear error state
     setCrashReport(null);
     
+    // 🤫 Hide the internal auto-fix instructions from chat — they are for the
+    // AI, not the user. Show a short friendly status message instead.
+    skipUserMessageSaveRef.current = true;
+    setChatMessages(prev => [...prev, {
+      id: `autofix-${Date.now()}`,
+      role: 'assistant',
+      content: isRTL
+        ? `🔧 **إصلاح تلقائي** (المحاولة ${attemptNumber}/${MAX_GEMINI_ATTEMPTS}) — أعمل على إصلاح الخطأ الآن...`
+        : `🔧 **Auto-fix** (attempt ${attemptNumber}/${MAX_GEMINI_ATTEMPTS}) — working on the error now...`
+    }]);
+    
     // Send fix request
     setChatInput(fixPrompt);
     
@@ -3987,6 +4015,9 @@ ${fixInstructions}
       // Reset trigger flag after a delay to allow new errors
       setTimeout(() => {
         autoFixTriggeredRef.current = false;
+        // Safety net: if the submit above was blocked before it could consume
+        // the silent flag, clear it so the next real user message still saves.
+        skipUserMessageSaveRef.current = false;
       }, 5000);
     }, 100);
   }, [crashReport]);

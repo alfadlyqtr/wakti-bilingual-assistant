@@ -1,4 +1,5 @@
-﻿import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+﻿// Build: 2026-08-02 contract-verifier-i18n-hardening
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildTrialErrorPayload, checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
@@ -5247,9 +5248,78 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                     planHits('i18n');
                   const hasEntry = planHits(entryFile.toLowerCase()) || planHitsBasename(entryFile.split('/').pop() || 'index.js');
                   const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
-                  if (!hasContext) warnings.push('Missing LanguageContext provider file.');
-                  if (!hasEntry) warnings.push(`Provider not mounted in ${entryFile}.`);
-                  if (!hasApp) warnings.push(`Toggle UI / translated labels not wired in ${appFile}.`);
+
+                  // --------------------------------------------------------------
+                  // CONTENT-LEVEL CHECKS — path checks alone are not enough.
+                  // A plan can "touch" /i18n.js yet ship a dictionary-only file
+                  // that never calls i18n.init() and never exports the instance,
+                  // which crashes at runtime with
+                  // "i18n.changeLanguage is not a function".
+                  // --------------------------------------------------------------
+                  const planCodeEntries: Array<{ path: string; code: string }> = [];
+                  if (planObj && typeof planObj === 'object') {
+                    if (Array.isArray(planObj.steps)) {
+                      for (const step of planObj.steps) {
+                        const f = (step && typeof step.file === 'string') ? step.file : (typeof planObj.file === 'string' ? planObj.file : null);
+                        const c = step && typeof step.changeTo === 'string' ? step.changeTo : '';
+                        if (f && c.trim()) planCodeEntries.push({ path: f.toLowerCase(), code: c });
+                      }
+                    }
+                    if (Array.isArray(planObj.codeChanges)) {
+                      for (const ch of planObj.codeChanges) {
+                        if (ch && typeof ch.file === 'string' && typeof ch.code === 'string' && ch.code.trim()) {
+                          planCodeEntries.push({ path: ch.file.toLowerCase(), code: ch.code });
+                        }
+                      }
+                    }
+                  }
+                  const isI18nPath = (p: string) => /i18n|languagecontext|locales?|translation/i.test(p);
+                  const i18nLooksFunctional = (code: string): boolean => {
+                    if (!code.trim()) return false;
+                    const hasExport = /export\s+default|export\s+(?:const|function|class)\s/.test(code);
+                    const initializesI18next = /\.init\s*\(/.test(code) && /initReactI18next|react-i18next|from\s+['"]i18next['"]/.test(code);
+                    const isWorkingContext = /createContext/.test(code) && /useState|useReducer/.test(code);
+                    return hasExport && (initializesI18next || isWorkingContext);
+                  };
+                  const existingI18nPath = allPaths.find(p => isI18nPath(p.toLowerCase()) && /\.(jsx?|tsx?)$/.test(p));
+                  const existingI18nWorks = existingI18nPath ? i18nLooksFunctional(currentFiles[existingI18nPath] || '') : false;
+
+                  // Foundation files are only mandatory when the project does NOT
+                  // already have a working i18n setup. Demanding index.js/App.js
+                  // again for a translation pass would wrongly flag legit
+                  // phase-2 plans as partial.
+                  if (!existingI18nWorks) {
+                    if (!hasContext) warnings.push('Missing i18n/LanguageContext setup file.');
+                    if (!hasEntry) warnings.push(`i18n not imported in ${entryFile}.`);
+                    if (!hasApp) warnings.push(`Toggle UI / translated labels not wired in ${appFile}.`);
+                  }
+
+                  // If the plan (re)writes the i18n setup file, its content must
+                  // be REAL: initialize the library and export it. A
+                  // dictionary-only file is the exact bug that produced
+                  // "i18n.changeLanguage is not a function".
+                  const i18nPlanEntry = planCodeEntries.find(f => isI18nPath(f.path));
+                  if (i18nPlanEntry && !i18nLooksFunctional(i18nPlanEntry.code)) {
+                    warnings.push('The i18n setup file in this plan only defines translation data — it never initializes the library (i18n.use(initReactI18next).init(...)) and never exports it, so the app would crash with "i18n.changeLanguage is not a function".');
+                  }
+
+                  // Someone must actually CONSUME the translations, otherwise the
+                  // toggle changes nothing visible (the "only the header changed"
+                  // failure mode).
+                  const projectToggleCode = `${currentFiles[appFile] || ''}\n${headerFile ? (currentFiles[headerFile] || '') : ''}`;
+                  const projectAlreadyConsumes = /useTranslation|changeLanguage|toggleLanguage/.test(projectToggleCode);
+                  const planHasConsumer = planCodeEntries.some(f =>
+                    !isI18nPath(f.path) && /useTranslation|changeLanguage|\bt\(\s*['"`]/.test(f.code)
+                  );
+                  if (!planHasConsumer && !projectAlreadyConsumes) {
+                    warnings.push('No component in this plan consumes translations (no useTranslation/t() calls) — the toggle would change nothing visible.');
+                  }
+
+                  // Dictionary-only plan: touches translation file(s) but rewires
+                  // no component — translated strings would never render.
+                  if (normalizedPlanFiles.length > 0 && normalizedPlanFiles.every(p => isI18nPath(p))) {
+                    warnings.push('This plan only edits the translation dictionary and modifies no components — the translated strings would never appear on screen.');
+                  }
                 } else if (isDarkModeToggle) {
                   const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
                   if (!hasApp) warnings.push(`Dark-mode toggle not wired in ${appFile}.`);
@@ -5326,7 +5396,8 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                 })
                 .slice(0, 12); // Cap at 12 to prevent runaway passes
               if (remainingComponents.length > 0) {
-                queuedFollowup = `Phase 2 — translate remaining components using react-i18next: ${remainingComponents.join(', ')}. For each file: add import { useTranslation } from 'react-i18next'; const { t } = useTranslation(); replace every hardcoded English string with a t('key') call; add the matching Arabic translations for all new keys into the 'ar' resources inside /src/i18n.js; flip any directional classes (left/right, pl-/pr-, text-left/text-right) based on i18n.dir(). Keep all logic and structure untouched.`;
+                const i18nResourceFile = allPaths.find(p => /(^|\/)i18n\.[jt]sx?$/i.test(p)) || '/src/i18n.js';
+                queuedFollowup = `Phase 2 — translate remaining components using react-i18next: ${remainingComponents.join(', ')}. For each file: add import { useTranslation } from 'react-i18next'; const { t } = useTranslation(); replace every hardcoded English string with a t('key') call; add the matching Arabic translations for all new keys into the 'ar' resources inside ${i18nResourceFile}; flip any directional classes (left/right, pl-/pr-, text-left/text-right) based on i18n.dir(). CRITICAL: when editing ${i18nResourceFile}, only ADD new keys to resources — NEVER remove the i18n.use(initReactI18next).init(...) call or the export default, or the app will crash with "i18n.changeLanguage is not a function". Keep all logic and structure untouched.`;
               }
             }
 
