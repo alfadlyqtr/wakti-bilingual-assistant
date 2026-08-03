@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search, Sparkles, ImagePlus } from 'lucide-react';
+import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search, Sparkles, ImagePlus, ExternalLink } from 'lucide-react';
 import { GmailClient } from '@/components/email/GmailClient';
 import { CustomMailClient } from '@/components/email/CustomMailClient';
 import { toast } from 'sonner';
@@ -828,6 +828,15 @@ export default function Email() {
                   <div>1. Sign in to account.apple.com.</div>
                   <div className="mt-1">2. Open Sign-In and Security, then App-Specific Passwords.</div>
                   <div className="mt-1">3. Generate a new app-specific password and paste it into Wakti.</div>
+                  <a
+                    href="https://account.apple.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#060541]/16 bg-white/90 px-3 py-1.5 text-xs font-medium text-[#060541] shadow-sm transition hover:bg-[#f3f5ff] dark:border-white/10 dark:bg-white/5 dark:text-foreground dark:hover:bg-white/10"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open account.apple.com
+                  </a>
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">IMAP: imap.mail.me.com:993 · SMTP: smtp.mail.me.com:587</div>
               </div>

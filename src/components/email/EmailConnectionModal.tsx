@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTheme } from '@/providers/ThemeProvider';
 import { detectProviderSettings } from '@/hooks/useEmailConnections';
-import { Mail, Server, Save, Loader2, CheckCircle2, XCircle, Apple } from 'lucide-react';
+import { Mail, Server, Save, Loader2, CheckCircle2, XCircle, Apple, ExternalLink } from 'lucide-react';
 
 type EmailConnectionModalConfig = {
   provider?: string;
@@ -119,6 +119,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
     icloudStepTwo: isAr ? 'افتح قسم Sign-In and Security ثم App-Specific Passwords.' : 'Open Sign-In and Security, then App-Specific Passwords.',
     icloudStepThree: isAr ? 'أنشئ كلمة مرور تطبيق جديدة والصقها هنا بدل كلمة مرور Apple العادية.' : 'Generate a new app-specific password and paste it here instead of your normal Apple password.',
     icloudServerNote: isAr ? 'تم تجهيز إعدادات iCloud تلقائيًا. يمكنك فتح الإعدادات المتقدمة فقط إذا احتجت.' : 'The iCloud server settings are already filled in for you. Open Advanced only if you need to review them.',
+    icloudOpenApple: isAr ? 'افتح account.apple.com' : 'Open account.apple.com',
     successMessage: isEditing ? (isAr ? 'تم حفظ الإعدادات وإعادة الربط بنجاح!' : 'Settings saved and reconnected successfully!') : (isAr ? 'تم الاتصال بنجاح!' : 'Connected successfully!'),
   };
 
@@ -277,6 +278,15 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, pres
                 <div>2. {t.icloudStepTwo}</div>
                 <div>3. {t.icloudStepThree}</div>
               </div>
+              <a
+                href="https://account.apple.com"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#060541]/16 bg-white/90 px-3 py-1.5 text-xs font-medium text-[#060541] shadow-sm transition hover:bg-[#f3f5ff] dark:border-white/10 dark:bg-white/5 dark:text-foreground dark:hover:bg-white/10"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {t.icloudOpenApple}
+              </a>
               <div className={innerNoteClass}>
                 {t.icloudServerNote}
               </div>
