@@ -342,7 +342,7 @@ const resolvePromptPart = (
  * approved render used to sit in slot 1 and half 2 inherited half 1's camera — both renders came
  * back showing the same end of the room. The camera photo must always occupy slot 1.
  */
-export type RedesignRenderMode = 'establish' | 'match';
+export type RedesignRenderMode = 'establish' | 'match' | 'edit';
 
 export type RedesignPromptContext = {
   /** Written survey of the room, produced from every uploaded photo. */
@@ -365,6 +365,12 @@ export type RedesignPromptContext = {
    * same dominant wall.
    */
   renderMode: RedesignRenderMode;
+  /**
+   * The ONE change the client asked for, used only by the 'edit' mode. It leads that prompt,
+   * because an instruction buried at word 700 is an instruction the model ignores — the exact
+   * lesson the owner's-brief block below was reordered for.
+   */
+  editInstruction?: string;
 };
 
 // Used by both chained modes. Naming the categories one by one matters: "match the style" gets
@@ -377,6 +383,22 @@ export const buildRedesignPrompt = (
   language: 'en' | 'ar',
   context: RedesignPromptContext,
 ): string => {
+  // ⛔ THE EDIT PROMPT IS ITS OWN PROMPT, built before anything else and deliberately WITHOUT the
+  // design brief. The render being edited already embodies every choice the owner made, so
+  // restating the brief would only invite the model to re-style a picture it was told to copy.
+  // Its single reference is the finished render itself.
+  if (context.renderMode === 'edit') {
+    const instruction = (context.editInstruction || '').trim().replace(/\s+/g, ' ').slice(0, 300);
+    return [
+      'THIS IS A TARGETED EDIT OF AN IMAGE THAT ALREADY EXISTS.',
+      'The attached image is a finished interior render the client is looking at right now, and it is almost entirely correct. Reproduce it as closely as you possibly can — the same camera position, viewing direction and framing, the same room shape, the same windows and doors, the same furniture in the same places, the same materials, the same colours, the same lighting — and change ONLY what the instruction below names.',
+      'Everything the client has not mentioned must come out looking exactly as it does in the attached image. Treat every pixel you were not asked about as already approved. Do not restyle a wall, do not rearrange furniture, do not swap a material and do not adjust the lighting anywhere the instruction does not name. If the instruction names one object, that one object is the only thing that changes.',
+      `THE CHANGE THE CLIENT IS ASKING FOR, and nothing else: ${instruction}`,
+      'Apply that change properly and unmistakably — a client who has to squint to find it will ask again. If it names a colour, use that exact colour. If it names a position, use that exact position.',
+      'Output exactly one single image. Photorealistic architectural interior visualisation. No people, no pets, no text, no watermark, no collage, no split screen, no picture-in-picture.',
+    ].join('\n');
+  }
+
   const view = REDESIGN_VIEWS.find((item) => item.key === viewKey)!;
   const roomType = resolvePromptPart(REDESIGN_ROOM_TYPES, choices.roomType, choices.roomTypeCustom);
   const style = resolvePromptPart(REDESIGN_STYLES, choices.style, choices.styleCustom);

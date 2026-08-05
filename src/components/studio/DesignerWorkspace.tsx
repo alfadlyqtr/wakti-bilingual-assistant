@@ -56,7 +56,13 @@ import {
   type DesignerFormAnswers,
   type DesignerFormField,
 } from './designerFollowUp';
-import { describeEditCommand, parseDesignerEditCommand, type DesignerEditCommand } from './designerEditCommands';
+import {
+  describeEditCommand,
+  findFurnitureSymbol,
+  findPlacedItemByHint,
+  parseDesignerEditCommand,
+  type DesignerEditCommand,
+} from './designerEditCommands';
 import { FurniturePalette, FurnitureShapes, type PlacedItem } from './LayoutFurniture';
 import { furnitureById, type FurnitureSymbol } from './floorPlanFurniture';
 import DesignerFollowUpDialog from './DesignerFollowUpDialog';
@@ -1386,6 +1392,124 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
         setRoomLabels((current) => current.map((label) => (
           label.roomId === target.roomId ? { ...label, name: command.nextName } : label
         )));
+        return { didApply: true };
+      }
+      case 'add-item': {
+        const symbol = findFurnitureSymbol(command.itemHint);
+        if (!symbol) return { didApply: false };
+        addFurniture(symbol);
+        return { didApply: true };
+      }
+      case 'remove-item': {
+        const item = findPlacedItemByHint(items, command.itemHint, selectedElementId);
+        if (!item) return { didApply: false };
+        commitLayout(walls, apertures, items.filter((entry) => entry.id !== item.id));
+        setSelectedElementId(null);
+        return { didApply: true };
+      }
+      case 'move-item': {
+        const item = findPlacedItemByHint(items, command.itemHint, selectedElementId);
+        if (!item) return { didApply: false };
+
+        // The room the piece currently sits in decides which side of a wall is "inside". Falls
+        // back to the canvas centre when the plan has no labels yet.
+        const reference = roomLabels.length
+          ? roomLabels.reduce((closest, label) => (
+            Math.hypot(label.x - item.x, label.y - item.y) < Math.hypot(closest.x - item.x, closest.y - item.y) ? label : closest
+          ))
+          : { x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2 };
+
+        const inwardNormal = (wall: Wall, point: Point): Point => {
+          const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) || 1;
+          const dx = (wall.x2 - wall.x1) / length;
+          const dy = (wall.y2 - wall.y1) / length;
+          const first = { x: -dy, y: dx };
+          const facesRoom = first.x * (reference.x - point.x) + first.y * (reference.y - point.y);
+          return facesRoom >= 0 ? first : { x: dy, y: -dx };
+        };
+
+        // Sits the piece against a wall, inside the room, facing into it. Rotation snaps to a
+        // right angle because furniture floating at 37 degrees looks like a mistake on a plan.
+        const placeBesideWall = (wall: Wall, point: Point) => {
+          const inward = inwardNormal(wall, point);
+          const offset = item.depth / 2 + scalePixelsPerUnit * 0.15;
+          const x = clampToCanvas(snapToGrid(point.x + inward.x * offset));
+          const y = clampToCanvas(snapToGrid(point.y + inward.y * offset));
+          const degrees = (Math.atan2(inward.x, inward.y) * 180) / Math.PI;
+          const rotation = ((Math.round(degrees / 90) * 90) + 360) % 360;
+          return { x, y, rotation };
+        };
+
+        let destination: { x: number; y: number; rotation?: number } | null = null;
+        if (command.target.type === 'window' || command.target.type === 'door') {
+          const targetType = command.target.type;
+          const candidates = apertures
+            .filter((aperture) => aperture.type === targetType)
+            .map((aperture) => {
+              const wall = walls.find((entry) => entry.id === aperture.wallId);
+              if (!wall) return null;
+              const point = getPointOnWall(wall, aperture.positionRatio);
+              return { wall, point, distance: Math.hypot(point.x - item.x, point.y - item.y) };
+            })
+            .filter((entry): entry is { wall: Wall; point: Point; distance: number } => entry !== null)
+            .sort((first, second) => first.distance - second.distance);
+          if (!candidates.length) return { didApply: false };
+          destination = placeBesideWall(candidates[0].wall, candidates[0].point);
+        } else if (command.target.type === 'wall') {
+          const candidates = walls
+            .filter((wall) => wall.type !== 'beam')
+            .map((wall) => {
+              const position = getClosestWallPosition({ x: item.x, y: item.y }, wall);
+              return { wall, point: getPointOnWall(wall, position.ratio), distance: position.distance };
+            })
+            .sort((first, second) => first.distance - second.distance);
+          if (!candidates.length) return { didApply: false };
+          destination = placeBesideWall(candidates[0].wall, candidates[0].point);
+        } else if (command.target.type === 'item') {
+          const anchor = findPlacedItemByHint(items, command.target.itemHint, undefined, item.id);
+          if (!anchor) return { didApply: false };
+          const gap = scalePixelsPerUnit * 0.4;
+          destination = {
+            x: clampToCanvas(snapToGrid(anchor.x + anchor.width / 2 + gap + item.width / 2)),
+            y: clampToCanvas(snapToGrid(anchor.y)),
+          };
+        } else {
+          const hint = command.target.roomHint.toLowerCase();
+          const label = roomLabels.find((entry) => entry.name.toLowerCase().includes(hint));
+          if (!label) return { didApply: false };
+          destination = { x: clampToCanvas(snapToGrid(label.x)), y: clampToCanvas(snapToGrid(label.y)) };
+        }
+        if (!destination) return { didApply: false };
+        const next = destination;
+        commitLayout(walls, apertures, items.map((entry) => (
+          entry.id === item.id
+            ? { ...entry, x: next.x, y: next.y, rotation: next.rotation ?? entry.rotation }
+            : entry
+        )));
+        setSelectedElementId(item.id);
+        return { didApply: true };
+      }
+      case 'space-items': {
+        const first = findPlacedItemByHint(items, command.firstHint, selectedElementId);
+        const second = findPlacedItemByHint(items, command.secondHint, undefined, first?.id);
+        if (!first || !second) return { didApply: false };
+        const gapNeeded = scalePixelsPerUnit * 0.8;
+        const dx = second.x - first.x;
+        const dy = second.y - first.y;
+        const distance = Math.hypot(dx, dy);
+        const currentGap = distance - (Math.max(first.width, first.depth) / 2 + Math.max(second.width, second.depth) / 2);
+        if (currentGap >= gapNeeded) {
+          return { didApply: true, detail: isArabic ? 'بينهم مسافة كافية أصلًا.' : 'They already have enough space between them.' };
+        }
+        const push = gapNeeded - Math.max(currentGap, 0);
+        const ux = distance > 1 ? dx / distance : 1;
+        const uy = distance > 1 ? dy / distance : 0;
+        const x = clampToCanvas(snapToGrid(second.x + ux * push));
+        const y = clampToCanvas(snapToGrid(second.y + uy * push));
+        commitLayout(walls, apertures, items.map((entry) => (
+          entry.id === second.id ? { ...entry, x, y } : entry
+        )));
+        setSelectedElementId(second.id);
         return { didApply: true };
       }
       default:

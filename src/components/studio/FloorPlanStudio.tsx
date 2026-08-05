@@ -982,6 +982,29 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
   };
 
   /**
+   * Asks the vision judge whether an edited render actually shows the ONE change the client
+   * asked for. Any failure of the check itself (network, parsing, refusal) degrades to
+   * "compliant" — a broken judge must never block a finished render from reaching the client.
+   */
+  const verifyEdit = async (token: string, imageUrl: string, instruction: string): Promise<{ compliant: boolean; reason: string }> => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wakti-room-analyzer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mode: 'verify', image_url: imageUrl, instruction }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success) return { compliant: true, reason: '' };
+      return {
+        compliant: json?.compliant !== false,
+        reason: String(json?.reason || ''),
+      };
+    } catch {
+      return { compliant: true, reason: '' };
+    }
+  };
+
+  /**
    * Moves to the style step, reading the plan first so the per-room chips have a room list.
    *
    * A failed reading costs the user their per-room controls but never their render, so it is
@@ -1183,6 +1206,11 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
       // alone" was impossible to obey and every room came back redesigned. Giving it the current
       // image to copy is the only thing that makes a one-line change behave like a one-line change.
       const editReferences = renderUrl ? [renderUrl, plan.dataUrl] : [plan.dataUrl];
+      // ⛔ When there IS a current render, only the NEW instruction is sent — never the whole
+      // history. Reference 1 already shows every earlier change applied, so repeating them orders
+      // the model to change things that are already correct, and each repeated line is one more
+      // invitation to drift. The full history still lives in state: undo and save need it.
+      const promptEdits = renderUrl ? [instruction] : nextHistory;
       const url = await renderWithRetry(
         token,
         editReferences,
@@ -1190,12 +1218,46 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
         (safeMode) => buildFloorPlanPrompt(choices, {
           planBrief,
           safeMode,
-          editHistory: nextHistory,
+          editHistory: promptEdits,
           rooms: roomsForPrompt,
           editFromCurrentRender: Boolean(renderUrl),
         }),
         isArabic ? 'نطبّق التغيير' : 'Applying your change',
       );
+
+      // The judge reads the fresh render against the client's own words. A disobedient render is
+      // retried ONCE with the failure spelled out — and the second result is kept whatever the
+      // judge says, so a stubborn request can never burn renders in a loop.
+      if (renderUrl) {
+        setStatusMessage(isArabic ? 'نتأكد أن التغيير ظهر…' : 'Checking your change took effect…');
+        const verdict = await verifyEdit(token, url, instruction);
+        if (!verdict.compliant) {
+          console.warn('[floorplan] edit judge rejected first attempt:', verdict.reason);
+          setStatusMessage(isArabic ? 'لم يظهر التغيير، نعيد المحاولة…' : 'The change did not come through, retrying…');
+          const retryReferences = [url, plan.dataUrl];
+          const retryUrl = await renderWithRetry(
+            token,
+            retryReferences,
+            planSetup(),
+            (safeMode) => buildFloorPlanPrompt(choices, {
+              planBrief,
+              safeMode,
+              editHistory: [
+                `YOUR PREVIOUS ATTEMPT IGNORED THIS REQUEST (${verdict.reason || 'the change was not visible'}). It is the ONLY thing that matters now: ${instruction}`,
+              ],
+              rooms: roomsForPrompt,
+              editFromCurrentRender: true,
+            }),
+            isArabic ? 'نعيد تطبيق التغيير' : 'Re-applying your change',
+          );
+          setRenderUrl(retryUrl);
+          setRoomRenders([]);
+          setStatusMessage('');
+          setElapsedSeconds(0);
+          toast.success(isArabic ? 'تم التعديل' : 'Change applied');
+          return;
+        }
+      }
       setRenderUrl(url);
       // Room close-ups were taken from the previous render, so they no longer match.
       setRoomRenders([]);

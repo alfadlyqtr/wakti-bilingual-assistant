@@ -65,6 +65,21 @@ ACCENT COLOURS: the exact accent colours present and which objects carry them.
 PLANTS AND DECOR: planter materials and colours, and the type of planting.
 LIGHTING MOOD: colour temperature and the direction the light comes from.`;
 
+// Judges whether an edited render actually obeyed the ONE change the client asked for. This is
+// what lets the app retry a disobedient render instead of handing the client a picture that
+// ignored them — the single most reported complaint about this feature.
+const VERIFY_SYSTEM_PROMPT = `You are a strict quality-control judge for an AI interior design tool. The client asked for ONE specific change to an interior render. You are shown the render produced AFTER the edit request.
+
+Decide whether that ONE requested change is clearly visible in this image.
+
+Rules:
+- Judge ONLY the requested change. Nothing else matters: do not fail the image for its style, its quality, or for anything the client did not ask about.
+- The change must be plainly visible, not hinted at. "paint the wall green" passes only if the wall is clearly green. "move the bed next to the window" passes only if the bed clearly sits by the window.
+- If the instruction names a specific object, colour, material or position, that exact object, colour, material or position must be what appears. A different shade, a different piece, or the right piece in the wrong place FAILS.
+- When you cannot tell at all, answer compliant=true. Only answer false when you can see the instruction was ignored, applied to the wrong thing, or applied to the wrong place.
+
+Answer with JSON only, no other text: {"compliant": true or false, "reason": "one short sentence"}`;
+
 // Reads a 2D architectural floor plan so it can be rebuilt as a furnished top-down render.
 // The written brief is what reaches the image model as text; the ROOMS line is what lets the
 // app lay real, editable name labels over the finished render instead of trusting the image
@@ -380,6 +395,46 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, spec }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // VERIFY MODE — did the edited render obey the client's one instruction?
+    if (mode === "verify") {
+      const instruction = String(body?.instruction || "").trim().slice(0, 500);
+      const inline = typeof body?.image_base64 === "string" ? toImageInput(body.image_base64) : null;
+      const verifyUrl = typeof body?.image_url === "string" ? body.image_url.trim() : "";
+      const reference = inline || (verifyUrl ? await fetchImageAsInput(verifyUrl) : null);
+      if (!reference || !instruction) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing image or instruction" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const rawVerdict = await callGemini(
+        [reference],
+        VERIFY_SYSTEM_PROMPT,
+        `THE CHANGE THE CLIENT ASKED FOR: ${instruction}\n\nLook at this render produced after that request. Is the requested change clearly visible?`,
+        300,
+        { jsonOutput: true },
+      );
+
+      // A judge that cannot be read must never block the client — degrade to "compliant".
+      let compliant = true;
+      let reason = "";
+      try {
+        const verdict = JSON.parse(rawVerdict.replace(/^```(?:json)?|```$/g, "").trim());
+        if (typeof verdict?.compliant === "boolean") compliant = verdict.compliant;
+        reason = String(verdict?.reason || "").slice(0, 200);
+      } catch {
+        console.warn("[room-analyzer] verify verdict unparsable:", rawVerdict.slice(0, 120));
+      }
+
+      await logUsage(req, "success", Date.now() - startTime, { mode: "verify", compliant });
+
+      return new Response(
+        JSON.stringify({ success: true, compliant, reason }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

@@ -17,6 +17,7 @@ import {
   Paintbrush,
   Palette,
   RefreshCw,
+  Send,
   SlidersHorizontal,
   Smartphone,
   Sparkles,
@@ -181,6 +182,9 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
+  const [editInput, setEditInput] = useState('');
+  /** One entry per applied edit, so undoing an edit restores the previous pair for free. */
+  const [resultSnapshots, setResultSnapshots] = useState<RenderResult[][]>([]);
 
   const setChoice = <K extends keyof RedesignChoices>(key: K, value: RedesignChoices[K]) => {
     setChoices((current) => ({ ...current, [key]: value }));
@@ -286,6 +290,29 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   };
 
   /**
+   * Asks the vision judge whether an edited render actually shows the ONE change the client
+   * asked for. Any failure of the check itself degrades to "compliant" — a broken judge must
+   * never block a finished render from reaching the client.
+   */
+  const verifyEdit = async (token: string, imageUrl: string, instruction: string): Promise<{ compliant: boolean; reason: string }> => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/wakti-room-analyzer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mode: 'verify', image_url: imageUrl, instruction }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success) return { compliant: true, reason: '' };
+      return {
+        compliant: json?.compliant !== false,
+        reason: String(json?.reason || ''),
+      };
+    } catch {
+      return { compliant: true, reason: '' };
+    }
+  };
+
+  /**
    * The references for one render, and what each one MEANS.
    *
    * ⛔ Exactly ONE of the owner's photos per render, never several. In image-to-image the
@@ -331,6 +358,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
     plan: RenderPlan,
     analysis: string,
     safeMode: boolean,
+    editInstruction?: string,
   ): Promise<string> => {
     const view = REDESIGN_VIEWS.find((item) => item.key === viewKey)!;
     const requestBody = {
@@ -339,6 +367,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
         roomAnalysis: analysis,
         safeMode,
         renderMode: plan.mode,
+        editInstruction,
       }),
       image_base64s: plan.references,
       user_id: user?.id,
@@ -388,14 +417,15 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
     token: string,
     plan: RenderPlan,
     analysis: string,
+    editInstruction?: string,
   ): Promise<string> => {
     try {
-      return await renderSingleView(viewKey, token, plan, analysis, false);
+      return await renderSingleView(viewKey, token, plan, analysis, false, editInstruction);
     } catch (firstError) {
       const message = firstError instanceof Error ? firstError.message : String(firstError);
       if (/trial|sign in|تسجيل الدخول|محاولاتك/i.test(message)) throw firstError;
       console.warn(`[redesign] ${viewKey} refused, retrying in safe mode:`, message);
-      return renderSingleView(viewKey, token, plan, analysis, true);
+      return renderSingleView(viewKey, token, plan, analysis, true, editInstruction);
     }
   };
 
@@ -414,6 +444,8 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
     setFailedKeys([]);
     setSavedProjectId(null);
     setActiveSlide(0);
+    setEditInput('');
+    setResultSnapshots([]);
     setIsSurveying(true);
 
     try {
@@ -506,6 +538,119 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       setPendingKeys([]);
       setIsRendering(false);
     }
+  };
+
+  /**
+   * Applies one written change to the finished renders.
+   *
+   * The slide the user is looking at is edited directly: its own render is the only reference,
+   * so the model has the picture to copy and exactly one instruction to obey. The OTHER view is
+   * then re-matched from its own photo with the freshly edited render as the design source —
+   * the same chain that made the pair consistent in the first place — so the change appears in
+   * both halves instead of silently splitting the room into two designs.
+   */
+  const applyEdit = async (rawInstruction: string) => {
+    const instruction = rawInstruction.trim();
+    if (!instruction || isRendering || !results.length) return;
+    const slideView = REDESIGN_VIEWS[Math.min(activeSlide, REDESIGN_VIEWS.length - 1)];
+    const targetView = results.some((item) => item.key === slideView.key)
+      ? slideView
+      : REDESIGN_VIEWS.find((view) => results.some((item) => item.key === view.key));
+    const targetResult = targetView ? results.find((item) => item.key === targetView.key) : undefined;
+    if (!targetView || !targetResult) return;
+
+    const snapshot = results.map((item) => ({ ...item }));
+    setIsRendering(true);
+    setErrorMessage(null);
+    setEditInput('');
+    setActiveViewKey(targetView.key);
+    setPendingKeys([targetView.key]);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error(isArabic ? 'يجب تسجيل الدخول' : 'You need to sign in first');
+
+      let editedUrl = await renderWithRetry(
+        targetView.key,
+        token,
+        { mode: 'edit', references: [targetResult.url] },
+        roomAnalysis,
+        instruction,
+      );
+
+      // The judge checks the edit actually landed. A disobedient render is retried ONCE with
+      // the failure spelled out, and the second result is kept whatever the judge says next.
+      const verdict = await verifyEdit(token, editedUrl, instruction);
+      if (!verdict.compliant) {
+        console.warn('[redesign] edit judge rejected first attempt:', verdict.reason);
+        editedUrl = await renderWithRetry(
+          targetView.key,
+          token,
+          { mode: 'edit', references: [editedUrl] },
+          roomAnalysis,
+          `YOUR PREVIOUS ATTEMPT IGNORED THIS REQUEST (${verdict.reason || 'the change was not visible'}). It is the ONLY thing that matters now: ${instruction}`,
+        );
+      }
+
+      const editedResults = [
+        ...results.filter((item) => item.key !== targetView.key),
+        { key: targetView.key, url: editedUrl } as RenderResult,
+      ];
+      setResults(editedResults);
+
+      const otherView = REDESIGN_VIEWS.find((view) => view.key !== targetView.key);
+      const otherCurrent = otherView ? results.find((item) => item.key === otherView.key) : undefined;
+      if (otherView && otherCurrent) {
+        const otherAnchor = otherView.key === 'halfA' ? photoAnchors.half1 : photoAnchors.half2;
+        const otherPhoto = photos[Math.min(Math.max(otherAnchor - 1, 0), Math.max(photos.length - 1, 0))]?.dataUrl;
+        if (otherPhoto) {
+          setActiveViewKey(otherView.key);
+          setPendingKeys([otherView.key]);
+          try {
+            const matchedUrl = await renderWithRetry(
+              otherView.key,
+              token,
+              { mode: 'match', references: [otherPhoto, editedUrl] },
+              roomAnalysis,
+            );
+            setResults([
+              ...editedResults.filter((item) => item.key !== otherView.key),
+              { key: otherView.key, url: matchedUrl },
+            ]);
+          } catch (matchError) {
+            // The edit itself already landed — a failed re-match keeps the old other half.
+            console.warn('[redesign] re-match after edit failed:', matchError instanceof Error ? matchError.message : matchError);
+          }
+        }
+      }
+
+      setResultSnapshots((current) => [...current, snapshot]);
+      setSavedProjectId(null);
+      toast.success(isArabic ? 'تم التعديل' : 'Change applied');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isArabic ? 'فشل التعديل' : 'The edit failed');
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setActiveViewKey(null);
+      setPendingKeys([]);
+      setIsRendering(false);
+    }
+  };
+
+  /**
+   * Undo restores the previous pair from memory — no render, no charge. The trade-off is that
+   * the restored URLs are the provider's own, which eventually expire, but an undo chain never
+   * outlives the session that made it.
+   */
+  const undoEdit = () => {
+    setResultSnapshots((current) => {
+      if (!current.length) return current;
+      const previous = current[current.length - 1];
+      setResults(previous.map((item) => ({ ...item })));
+      setSavedProjectId(null);
+      return current.slice(0, -1);
+    });
   };
 
   /** Results in view order, so the lightbox arrows follow the same sequence as the carousel. */
@@ -930,6 +1075,52 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
           <p className="text-center text-[10px] font-semibold text-muted-foreground">
             {isArabic ? 'اسحب يميناً أو يساراً لرؤية باقي الصور' : 'Swipe left or right to see the other renders'}
           </p>
+
+          {results.length > 0 && !isRendering && (
+            <div className="rounded-xl border border-[#d9e7f5] bg-[#f7fbff] p-2.5 dark:border-sky-300/15 dark:bg-black/25">
+              <div className="flex items-center justify-between gap-2 px-1 pb-1.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-foreground/65">
+                  {isArabic ? 'عدّل النتيجة' : 'Edit the result'}
+                </span>
+                {resultSnapshots.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={undoEdit}
+                    className="text-[10px] font-extrabold text-sky-700 transition hover:text-sky-900 dark:text-sky-200 dark:hover:text-sky-100"
+                  >
+                    {isArabic ? 'تراجع عن آخر تعديل' : 'Undo last edit'}
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <textarea
+                  value={editInput}
+                  onChange={(event) => setEditInput(event.target.value.slice(0, 300))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      applyEdit(editInput);
+                    }
+                  }}
+                  rows={2}
+                  placeholder={isArabic ? 'مثال: بدّل لون الجدار خلف السرير إلى الأخضر الزيتوني' : 'e.g. Paint the wall behind the bed olive green'}
+                  className="min-h-[58px] flex-1 resize-none rounded-xl border border-[#d9e7f5] bg-white px-3 py-2 text-xs font-semibold text-[#31405a] outline-none placeholder:font-normal placeholder:text-muted-foreground focus:border-sky-400/70 focus:ring-2 focus:ring-sky-400/20 dark:border-sky-300/15 dark:bg-black/25 dark:text-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => applyEdit(editInput)}
+                  disabled={isRendering || !editInput.trim()}
+                  aria-label={isArabic ? 'تطبيق' : 'Apply'}
+                  className="inline-flex h-[58px] w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-[0_0_16px_hsla(210,100%,65%,0.35)] transition active:scale-95 disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-1.5 px-1 text-[10px] leading-relaxed text-muted-foreground">
+                {isArabic ? 'اكتب تغييرًا واحدًا في كل مرة، وسيظهر في الصورتين معًا.' : 'Ask for one change at a time — it will appear in both views.'}
+              </p>
+            </div>
+          )}
 
           {errorMessage && (
             <div className="flex items-start gap-2 rounded-xl border border-rose-300/50 bg-rose-50 px-3 py-2 dark:border-rose-300/25 dark:bg-rose-400/10">
