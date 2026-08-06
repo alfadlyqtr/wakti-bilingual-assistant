@@ -28,7 +28,6 @@ import { WeatherButton } from "@/components/WeatherButton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getScopedStorageItem } from "@/utils/userScopedStorage";
 import { useWaktiOperator } from "@/contexts/WaktiOperatorContext";
-import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 
 interface AppHeaderProps {
   unreadTotal?: number;
@@ -36,7 +35,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
-  const { user, signOut, isGuest } = useAuth();
+  const { user, signOut } = useAuth();
   const { isOpen: isOperatorOpen, stage: operatorStage, open: openOperator, close: closeOperator } = useWaktiOperator();
   const { profile, loading: profileLoading, refetch: refetchProfile } = useUserProfile();
   const navigate = useNavigate();
@@ -44,7 +43,6 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const [avatarKey, setAvatarKey] = useState(Date.now());
   // Local override for immediate avatar display before refetch completes
   const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
-  const [guestOperatorDialogOpen, setGuestOperatorDialogOpen] = useState(false);
   const hasTriedSignedFallbackRef = useRef(false);
 
   // Check if we're on the Wakti AI V2 page
@@ -60,13 +58,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     navigate('/login');
   };
 
-  const guestUpgradeRedirectTo = `${location.pathname}${location.search}${location.hash}`;
-
   const handleOperatorButtonClick = () => {
-    if (isGuest) {
-      setGuestOperatorDialogOpen(true);
-      return;
-    }
     if (isOperatorOpen) closeOperator();
     else openOperator();
   };
@@ -744,13 +736,6 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           )}
         </div>
       </div>
-
-      <StudioGuestLoginDialog
-        open={guestOperatorDialogOpen}
-        onOpenChange={setGuestOperatorDialogOpen}
-        redirectTo={guestUpgradeRedirectTo}
-        language={language === 'ar' ? 'ar' : 'en'}
-      />
 
       {/* Mobile slide-down nav */}
       {!isHomescreenMode && location.pathname === '/dashboard' && (

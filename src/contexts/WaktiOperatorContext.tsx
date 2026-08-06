@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Mic, MicOff, Loader2, Sparkles, X, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +11,7 @@ import { getWaktiMusicStyleGroups } from '@/utils/musicStyleCatalog';
 import { analyzeWaktiOperatorSemantics } from '@/utils/waktiOperatorSemantic';
 import { onEvent } from '@/utils/eventBus';
 import { toast } from '@/components/ui/toast-helper';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 
 interface WaktiOperatorContextValue {
   isOpen: boolean;
@@ -393,13 +394,15 @@ export function useWaktiOperator() {
 
 export function WaktiOperatorOverlay() {
   const { language, theme } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const { isOpen, stage, showIntro, transcript, plan, error, close, startRecording, stopRecording, updateInteraction, continueInteraction, editInteraction } = useWaktiOperator();
   const [isExpanded, setIsExpanded] = useState(false);
   const [openChoiceGroupId, setOpenChoiceGroupId] = useState<string | null>(null);
   const [interactionDraftText, setInteractionDraftText] = useState('');
   const [visualMode, setVisualMode] = useState<'default' | 'subtle'>('default');
+  const [guestTalkDialogOpen, setGuestTalkDialogOpen] = useState(false);
   const statusLabel = formatStage(stage, language);
   const isBusy = stage === 'transcribing' || stage === 'planning' || stage === 'executing';
   const isRecording = stage === 'recording';
@@ -451,6 +454,15 @@ export function WaktiOperatorOverlay() {
     ? 'bg-[linear-gradient(135deg,#060541_0%,#172a7c_100%)] text-white shadow-[0_16px_38px_rgba(6,5,65,0.34),inset_0_1px_0_rgba(255,255,255,0.12)]'
     : 'bg-[linear-gradient(135deg,#060541_0%,#20369b_100%)] text-white shadow-[0_16px_38px_rgba(6,5,65,0.24),inset_0_1px_0_rgba(255,255,255,0.18)]';
   const transcriptClass = isDark ? 'text-white/80' : 'text-[#060541]/78';
+  const guestUpgradeRedirectTo = `${location.pathname}${location.search}${location.hash}`;
+
+  const handleTalkClick = useCallback(() => {
+    if (isGuest) {
+      setGuestTalkDialogOpen(true);
+      return;
+    }
+    void startRecording();
+  }, [isGuest, startRecording]);
 
   useEffect(() => {
     if (showIntro || isRecording || stage === 'error') {
@@ -557,7 +569,7 @@ export function WaktiOperatorOverlay() {
         <div className="mt-4 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => startRecording()}
+            onClick={handleTalkClick}
             className={`inline-flex min-h-[3.35rem] flex-1 items-center justify-center gap-2 rounded-[1.25rem] px-4 py-3 text-[0.98rem] font-bold transition-all active:scale-[0.98] ${primaryButtonClass}`}
           >
             <Mic className="h-4 w-4" />
@@ -574,7 +586,7 @@ export function WaktiOperatorOverlay() {
           </div>
           <button
             type="button"
-            onClick={() => startRecording()}
+            onClick={handleTalkClick}
             className={`inline-flex min-h-[2.9rem] shrink-0 items-center justify-center gap-2 rounded-[1rem] px-4 py-2.5 text-sm font-bold transition-all active:scale-[0.98] ${primaryButtonClass}`}
           >
             <Mic className="h-4 w-4" />
@@ -582,6 +594,13 @@ export function WaktiOperatorOverlay() {
           </button>
         </div>
       ) : null}
+
+      <StudioGuestLoginDialog
+        open={guestTalkDialogOpen}
+        onOpenChange={setGuestTalkDialogOpen}
+        redirectTo={guestUpgradeRedirectTo}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
 
       {isExpanded && transcript && !isGuidancePlan ? (
         <div className={`mt-4 rounded-[1.3rem] border px-3.5 py-3.5 text-sm leading-6 ${secondarySurfaceClass} ${transcriptClass}`}>
