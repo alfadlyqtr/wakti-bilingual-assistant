@@ -30,6 +30,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import RedesignRoomChoiceSection from './RedesignRoomChoiceSection';
 import DesignerImageLightbox from './DesignerImageLightbox';
+import { StudioGuestLoginDialog } from './StudioGuestLoginDialog';
 import { renderFileName, saveImagesToDevice } from './saveImageToDevice';
 import {
   REDESIGN_FINISH_LEVELS,
@@ -144,7 +145,7 @@ const preparePhoto = async (file: File): Promise<string> => {
 
 export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar' }) {
   const isArabic = language === 'ar';
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const carouselRef = useRef<HTMLDivElement | null>(null);
 
@@ -183,6 +184,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   const [isSaving, setIsSaving] = useState(false);
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
   const [editInput, setEditInput] = useState('');
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   /** One entry per applied edit, so undoing an edit restores the previous pair for free. */
   const [resultSnapshots, setResultSnapshots] = useState<RenderResult[][]>([]);
 
@@ -431,6 +433,10 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
 
   const handleGenerate = async () => {
     if (isRendering) return;
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (photos.length < MIN_PHOTOS) {
       toast.error(isArabic ? `أضف ${MIN_PHOTOS} صور على الأقل` : `Add at least ${MIN_PHOTOS} photos`);
       return;
@@ -1422,6 +1428,13 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
         onSaveProject={saveProject}
         isSavingProject={isSaving}
         isSavedProject={Boolean(savedProjectId)}
+      />
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo="/music?studioTab=designer"
+        language={language}
       />
     </div>
   );

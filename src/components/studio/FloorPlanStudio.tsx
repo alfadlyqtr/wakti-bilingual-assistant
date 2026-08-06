@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import DesignerImageLightbox, { type LightboxImage } from './DesignerImageLightbox';
 import FloorPlanCanvas, { type FloorPlanLabel } from './FloorPlanCanvas';
+import { StudioGuestLoginDialog } from './StudioGuestLoginDialog';
 import { renderFileName, saveImagesToDevice } from './saveImageToDevice';
 import {
   CUSTOM_ID,
@@ -486,6 +488,7 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
   onHandoffConsumed?: () => void;
 }) {
   const isArabic = language === 'ar';
+  const { isGuest } = useAuth();
 
   const [step, setStep] = useState<StudioStep>('plan');
   const [plan, setPlan] = useState<PlanAsset | null>(null);
@@ -531,6 +534,7 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1140,6 +1144,10 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
 
   const generate = async () => {
     if (!plan || isWorking) return;
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     setIsWorking(true);
     setErrorMessage('');
     setStep('result');
@@ -2012,6 +2020,13 @@ export default function FloorPlanStudio({ language, handoff, onHandoffConsumed }
         onSaveProject={saveProject}
         isSavingProject={isSaving}
         isSavedProject={isSaved}
+      />
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo="/music?studioTab=designer"
+        language={language}
       />
     </div>
   );

@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import {
@@ -69,6 +70,7 @@ import DesignerFollowUpDialog from './DesignerFollowUpDialog';
 import RedesignRoomStudio from './RedesignRoomStudio';
 import FloorPlanStudio from './FloorPlanStudio';
 import DesignerSavedProjects from './DesignerSavedProjects';
+import { StudioGuestLoginDialog } from './StudioGuestLoginDialog';
 import { layoutToBlueprintPng } from './layoutBlueprint';
 import {
   BLUEPRINT_KEY,
@@ -290,6 +292,7 @@ const drawTools = [
 export default function DesignerWorkspace({ language, mode, onModeChange }: DesignerWorkspaceProps) {
   const isArabic = language === 'ar';
   const plannerLanguage = isArabic ? 'ar' : 'en';
+  const { isGuest } = useAuth();
   const activeMode = mode || 'redesign';
   const activeOption = modeOptions.find((option) => option.key === activeMode)!;
   const [view, setView] = useState<DesignerView>('workspace');
@@ -331,6 +334,7 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const [followUpAnswers, setFollowUpAnswers] = useState<DesignerFormAnswers>({});
   const [pendingBrief, setPendingBrief] = useState<DesignerBrief | null>(null);
   const [pendingRequest, setPendingRequest] = useState('');
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   /** Set on a successful save and cleared by the next edit, so the tick can never lie. */
   const [savedLayoutId, setSavedLayoutId] = useState<string | null>(null);
@@ -1555,6 +1559,10 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
   const handleDesignerSend = async () => {
     const request = designerPrompt.trim();
     if (!request || designerIsLoading) return;
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
 
     const userEntry: DesignerChatEntry = {
       id: `designer-user-${Date.now()}`,
@@ -3641,6 +3649,13 @@ export default function DesignerWorkspace({ language, mode, onModeChange }: Desi
         onSubmit={handleFollowUpSubmit}
         onSkip={handleFollowUpSkip}
         onClose={() => setFollowUpOpen(false)}
+      />
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo="/music?studioTab=designer"
+        language={language}
       />
     </section>
   );
