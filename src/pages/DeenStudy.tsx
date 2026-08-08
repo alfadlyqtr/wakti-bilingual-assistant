@@ -318,11 +318,13 @@ export default function DeenStudy() {
   const [dailyPlanProgressByPlan, setDailyPlanProgressByPlan] = useState<Record<string, number>>(() => readDailyPlanProgress());
   const [dailyLearntAyahKeys, setDailyLearntAyahKeys] = useState<string[]>(() => readDailyLearntAyahKeys());
   const [jumpingSessionAyah, setJumpingSessionAyah] = useState(false);
+  const [gapSession, setGapSession] = useState<{ surahNumber: number; startAyah: number; endAyah: number } | null>(null);
   const [viewAllSurahNumber, setViewAllSurahNumber] = useState<number | null>(null);
   const [viewAllRows, setViewAllRows] = useState<SurahViewAllRow[]>([]);
   const [viewAllVisibleAyahCount, setViewAllVisibleAyahCount] = useState(0);
   const [viewAllAyahMap, setViewAllAyahMap] = useState<Record<number, AyahData>>({});
   const [viewAllLoading, setViewAllLoading] = useState(false);
+  const [openingGapKey, setOpeningGapKey] = useState<string | null>(null);
   const [showPlanPicker, setShowPlanPicker] = useState(false);
   const startCardLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startCardLongPressTriggeredRef = useRef(false);
@@ -335,6 +337,18 @@ export default function DeenStudy() {
       .select("*")
       .order("updated_at", { ascending: false })
       .then(({ data }: any) => { setMemorization(data ?? []); setLoading(false); });
+  }, []);
+
+  const reloadMemorizationData = useCallback(async (): Promise<any[]> => {
+    setLoading(true);
+    const { data } = await (supabase as any)
+      .from("deen_memorization")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    const nextRows = data ?? [];
+    setMemorization(nextRows);
+    setLoading(false);
+    return nextRows;
   }, []);
 
   useEffect(() => {
@@ -430,6 +444,9 @@ export default function DeenStudy() {
 
   const onPlayerComplete = useCallback(async (result: "memorized") => {
     if (!sessionAyah) return;
+    const activeGapSession = !!gapSession
+      && gapSession.surahNumber === sessionAyah.surah_number
+      && playerMode === "learn";
     const alreadyMemorized = memorization.some(
       (m) =>
         m.surah_number === sessionAyah.surah_number &&
@@ -471,19 +488,22 @@ export default function DeenStudy() {
           );
         }
       }
-      const nextCursor = getNextAyahCursor(sessionAyah.surah_number, sessionAyah.ayah_number);
-      const updated: StudyPlan = nextCursor
-        ? { ...plan, currentSurah: nextCursor.surah, currentAyah: nextCursor.ayah }
-        : { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number };
-      setPlanStore((prev) => {
-        const next: StudyPlanStore = {
-          ...prev,
-          plans: prev.plans.map((p) => p.id === updated.id ? updated : p),
-        };
-        savePlanStore(next);
-        return next;
-      });
+      if (!activeGapSession) {
+        const nextCursor = getNextAyahCursor(sessionAyah.surah_number, sessionAyah.ayah_number);
+        const updated: StudyPlan = nextCursor
+          ? { ...plan, currentSurah: nextCursor.surah, currentAyah: nextCursor.ayah }
+          : { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number };
+        setPlanStore((prev) => {
+          const next: StudyPlanStore = {
+            ...prev,
+            plans: prev.plans.map((p) => p.id === updated.id ? updated : p),
+          };
+          savePlanStore(next);
+          return next;
+        });
+      }
     }
+
     // Build continuous memorized chain backwards within same surah
     const chain: AyahData[] = [sessionAyah];
     let prev = sessionAyah.ayah_number - 1;
@@ -497,18 +517,16 @@ export default function DeenStudy() {
       prev--;
     }
 
-    if (playerMode === "review") {
-      const surahMeta = SURAH_LIST.find((s) => s.n === sessionAyah.surah_number);
-      const nextAyah = sessionAyah.ayah_number + 1;
-      const canHaveNext = !!surahMeta && nextAyah <= surahMeta.ayahs;
-      if (canHaveNext) {
-        const isNextMemorized = memorization.some(
-          (m) => m.surah_number === sessionAyah.surah_number && m.ayah_number === nextAyah && m.status === "memorized"
-        );
-        if (isNextMemorized) {
-          const nextData = await fetchAyah(sessionAyah.surah_number, nextAyah);
-          if (nextData) chain.push(nextData);
-        }
+    const surahMeta = SURAH_LIST.find((s) => s.n === sessionAyah.surah_number);
+    const nextAyah = sessionAyah.ayah_number + 1;
+    const canHaveNext = !!surahMeta && nextAyah <= surahMeta.ayahs;
+    if (canHaveNext) {
+      const isNextMemorized = memorization.some(
+        (m) => m.surah_number === sessionAyah.surah_number && m.ayah_number === nextAyah && m.status === "memorized"
+      );
+      if (isNextMemorized) {
+        const nextData = await fetchAyah(sessionAyah.surah_number, nextAyah);
+        if (nextData) chain.push(nextData);
       }
     }
 
@@ -518,7 +536,7 @@ export default function DeenStudy() {
     setShowReview(true);
     setSessionAyah(null);
     reloadMemorization();
-  }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr, memorization]);
+  }, [sessionAyah, gapSession, plan, playerMode, upsertMemorization, reloadMemorization, isAr, memorization]);
 
   const onPlayerNotYet = useCallback(async () => {
     if (!sessionAyah) return;
@@ -619,6 +637,11 @@ export default function DeenStudy() {
     void openLearnSession(plan.currentSurah, plan.currentAyah);
   }, [plan, startingSession, openLearnSession]);
 
+  const handleActivePlanChipTap = useCallback(() => {
+    if (!plan || startingSession) return;
+    setShowPlanPicker(true);
+  }, [plan, startingSession]);
+
   const closePlanPicker = useCallback(() => {
     setShowPlanPicker(false);
     startCardLongPressTriggeredRef.current = false;
@@ -673,8 +696,7 @@ export default function DeenStudy() {
     }
   }, []);
 
-  const openSurahViewAll = useCallback((group: { surahNumber: number; items: any[] }) => {
-    const ayahNumbers = Array.from(new Set(group.items.map((item) => item.ayah_number as number))).sort((a, b) => a - b);
+  const openSurahViewAllByAyahNumbers = useCallback((surahNumber: number, ayahNumbers: number[]) => {
     const rows: SurahViewAllRow[] = [];
     let cursor = 1;
     ayahNumbers.forEach((ayahNumber) => {
@@ -685,12 +707,65 @@ export default function DeenStudy() {
       cursor = ayahNumber + 1;
     });
 
-    setViewAllSurahNumber(group.surahNumber);
+    setViewAllSurahNumber(surahNumber);
     setViewAllRows(rows);
     setViewAllVisibleAyahCount(0);
     setViewAllAyahMap({});
-    void loadViewAllBatch(group.surahNumber, ayahNumbers, 0);
+    void loadViewAllBatch(surahNumber, ayahNumbers, 0);
   }, [loadViewAllBatch]);
+
+  const openSurahViewAll = useCallback((group: { surahNumber: number; items: any[] }) => {
+    const ayahNumbers = Array.from(new Set(group.items.map((item) => item.ayah_number as number))).sort((a, b) => a - b);
+    openSurahViewAllByAyahNumbers(group.surahNumber, ayahNumbers);
+  }, [openSurahViewAllByAyahNumbers]);
+
+  const openGapSession = useCallback(async (surahNumber: number, startAyah: number, endAyah: number) => {
+    const gapKey = `${surahNumber}:${startAyah}-${endAyah}`;
+    if (openingGapKey) return;
+    setOpeningGapKey(gapKey);
+    setGapSession({ surahNumber, startAyah, endAyah });
+    const data = await fetchAyah(surahNumber, startAyah);
+    if (!data) {
+      setGapSession(null);
+      setOpeningGapKey(null);
+      toast.error(isAr ? "تعذر تحميل الآية" : "Could not load ayah");
+      return;
+    }
+
+    setViewAllSurahNumber(null);
+    setViewAllRows([]);
+    setViewAllVisibleAyahCount(0);
+    setViewAllAyahMap({});
+    setViewAllLoading(false);
+    setOpeningGapKey(null);
+    setSessionAyah(data);
+    setPlayerMode("learn");
+  }, [openingGapKey, isAr]);
+
+  const closeGapSessionAndReturnToViewAll = useCallback(async (surahNumber: number) => {
+    setGapSession(null);
+    setSessionAyah(null);
+    setOpeningGapKey(null);
+    const latestRows = await reloadMemorizationData();
+    const ayahNumbers = Array.from(new Set(
+      latestRows
+        .filter((m) => m.status === "memorized" && m.surah_number === surahNumber)
+        .map((m) => m.ayah_number as number)
+    )).sort((a, b) => a - b);
+    openSurahViewAllByAyahNumbers(surahNumber, ayahNumbers);
+  }, [reloadMemorizationData, openSurahViewAllByAyahNumbers]);
+
+  const handleSessionClose = useCallback(() => {
+    if (gapSession && sessionAyah && playerMode === "learn") {
+      setGapSession(null);
+      setSessionAyah(null);
+      setOpeningGapKey(null);
+      setShowReview(false);
+      setActiveTab("review");
+      return;
+    }
+    setSessionAyah(null);
+  }, [gapSession, sessionAyah, playerMode]);
 
   const closeSurahViewAll = useCallback(() => {
     setViewAllSurahNumber(null);
@@ -698,6 +773,7 @@ export default function DeenStudy() {
     setViewAllVisibleAyahCount(0);
     setViewAllAyahMap({});
     setViewAllLoading(false);
+    setOpeningGapKey(null);
   }, []);
 
   const memorizedItems = memorization.filter((m) => m.status === "memorized");
@@ -911,7 +987,7 @@ export default function DeenStudy() {
           jumpingSuggestion={jumpingSessionAyah}
           onComplete={onPlayerComplete}
           onNotYet={onPlayerNotYet}
-          onClose={() => setSessionAyah(null)}
+          onClose={handleSessionClose}
         />
       )}
 
@@ -969,8 +1045,10 @@ export default function DeenStudy() {
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
           loading={viewAllLoading}
+          openingGapKey={openingGapKey}
           hasMore={viewAllVisibleAyahCount < viewAllMemorizedAyahNumbers.length}
           onLoadMore={loadMoreViewAll}
+          onGapPress={(startAyah, endAyah) => { void openGapSession(viewAllSurahNumber, startAyah, endAyah); }}
           onClose={closeSurahViewAll}
         />
       )}
@@ -983,21 +1061,54 @@ export default function DeenStudy() {
           localHafsByAyah={localHafsByAyah}
           reviewOnly={reviewSourceMode === "review"}
           loading={reviewLoading}
-          onReturn={() => { setShowReview(false); setActiveTab("today"); }}
+          onReturn={() => {
+            if (gapSession) {
+              setShowReview(false);
+              setGapSession(null);
+              setSessionAyah(null);
+              setOpeningGapKey(null);
+              setActiveTab("review");
+              return;
+            }
+            setShowReview(false);
+            setActiveTab("today");
+          }}
           onNext={async () => {
             if (reviewSourceMode === "review") {
               setShowReview(false);
               return;
             }
-            if (!plan || !plan.currentSurah || !plan.currentAyah) return;
-            const nextTarget = { surah: plan.currentSurah, ayah: plan.currentAyah };
-            const maxSurah = SURAH_LIST[SURAH_LIST.length - 1]?.n ?? 114;
-            const currentSurahMeta = SURAH_LIST.find((s) => s.n === nextTarget.surah);
-            if (!currentSurahMeta || nextTarget.surah > maxSurah || nextTarget.ayah < 1 || nextTarget.ayah > currentSurahMeta.ayahs) {
-              setShowReview(false);
-              toast.success(isAr ? "أكملت المصحف كاملًا 🌟" : "You completed the Quran 🌟");
-              return;
+
+            let nextTarget: { surah: number; ayah: number } | null = null;
+            if (gapSession) {
+              const currentReviewAyah = reviewAyahs.find((a) => `${a.surah_number}:${a.ayah_number}` === reviewHighlightAyahKey) ?? reviewAyahs[reviewAyahs.length - 1];
+              if (!currentReviewAyah) {
+                setShowReview(false);
+                await closeGapSessionAndReturnToViewAll(gapSession.surahNumber);
+                return;
+              }
+
+              const nextGapAyah = currentReviewAyah.ayah_number + 1;
+              if (nextGapAyah > gapSession.endAyah) {
+                setShowReview(false);
+                await closeGapSessionAndReturnToViewAll(gapSession.surahNumber);
+                return;
+              }
+
+              nextTarget = { surah: gapSession.surahNumber, ayah: nextGapAyah };
+            } else {
+              if (!plan || !plan.currentSurah || !plan.currentAyah) return;
+              nextTarget = { surah: plan.currentSurah, ayah: plan.currentAyah };
+              const maxSurah = SURAH_LIST[SURAH_LIST.length - 1]?.n ?? 114;
+              const currentSurahMeta = SURAH_LIST.find((s) => s.n === nextTarget.surah);
+              if (!currentSurahMeta || nextTarget.surah > maxSurah || nextTarget.ayah < 1 || nextTarget.ayah > currentSurahMeta.ayahs) {
+                setShowReview(false);
+                toast.success(isAr ? "أكملت المصحف كاملًا 🌟" : "You completed the Quran 🌟");
+                return;
+              }
             }
+
+            if (!nextTarget) return;
             setReviewLoading(true);
             const nextData = await fetchAyah(nextTarget.surah, nextTarget.ayah);
             setReviewLoading(false);
@@ -1026,7 +1137,9 @@ export default function DeenStudy() {
           </button>
           <h1 className="text-base font-bold" style={{ color: textPri }}>{isAr ? "الدراسة" : "Study"}</h1>
           {plan && (
-            <div
+            <button
+              type="button"
+              onClick={handleActivePlanChipTap}
               className="ml-auto h-7 max-w-[150px] px-2.5 rounded-full text-[10px] font-semibold flex items-center gap-1.5 flex-shrink-0"
               style={{
                 background: "transparent",
@@ -1034,10 +1147,12 @@ export default function DeenStudy() {
                 border: `1px solid ${accentBorder}`,
                 boxShadow: "none",
               }}
+              title={isAr ? "تغيير الخطة" : "Switch plan"}
+              aria-label={isAr ? "تغيير الخطة" : "Switch plan"}
             >
               <Target className="w-3 h-3 flex-shrink-0" />
               <span className="truncate flex-1 min-w-0">{planDisplayName(plan, isAr)}</span>
-            </div>
+            </button>
           )}
         </div>
         <div className="flex rounded-xl p-1 gap-1" style={{ background: surface, border: `1px solid ${bdr}` }}>
@@ -1057,35 +1172,36 @@ export default function DeenStudy() {
         {/* ── TODAY TAB ── */}
         {activeTab === "today" && (
           <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-3 gap-2">
+              <StatCard
+                value={learntTodayItems.length}
+                valueSuffix={isAr ? "آية" : "ayah"}
+                label={isAr ? "اليوم" : "Today"}
+                color="#60a5fa"
+                bg="hsla(210,100%,65%,0.10)"
+                dark={dark}
+              />
+              <StatCard
+                value={dailyGoal > 0 ? `${Math.min(memorizedTodayCount, dailyGoal)}/${dailyGoal}` : "-"}
+                label={isAr ? "الهدف اليومي" : "Daily goal"}
+                color={accentText}
+                bg={accentBg}
+                dark={dark}
+              />
+              <StatCard
+                value={streakDays}
+                valueSuffix={isAr ? "يوم" : "days"}
+                label={isAr ? "الاستمرارية" : "Streak"}
+                color="#c084fc"
+                bg="hsla(280,60%,75%,0.08)"
+                dark={dark}
+              />
+            </div>
+
             {!plan ? (
               <NoPlanState isAr={isAr} dark={dark} onSetupPlan={() => setActiveTab("plans")} />
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-2">
-                  <StatCard
-                    value={learntTodayItems.length}
-                    valueSuffix={isAr ? "آية" : "ayah"}
-                    label={isAr ? "اليوم" : "Today"}
-                    color="#60a5fa"
-                    bg="hsla(210,100%,65%,0.10)"
-                    dark={dark}
-                  />
-                  <StatCard
-                    value={dailyGoal > 0 ? `${Math.min(memorizedTodayCount, dailyGoal)}/${dailyGoal}` : (isAr ? "—" : "—")}
-                    label={isAr ? "الهدف اليومي" : "Daily goal"}
-                    color={accentText}
-                    bg={accentBg}
-                    dark={dark}
-                  />
-                  <StatCard
-                    value={streakDays}
-                    valueSuffix={isAr ? "يوم" : "days"}
-                    label={isAr ? "الاستمرارية" : "Streak"}
-                    color="#c084fc"
-                    bg="hsla(280,60%,75%,0.08)"
-                    dark={dark}
-                  />
-                </div>
 
                 <button
                   onClick={handleStartCardTap}
@@ -1192,28 +1308,28 @@ export default function DeenStudy() {
                   )}
                 </div>
 
-                <div className="mt-[35px] px-1">
-                  <p
-                    className="text-[13px] leading-relaxed font-medium italic text-center"
-                    style={{
-                      color: textSec,
-                      fontFamily: isAr
-                        ? "'Amiri', 'Noto Naskh Arabic', 'Noto Sans Arabic', 'Segoe UI', 'Tahoma', 'Arial', serif"
-                        : "system-ui, 'Segoe UI', Arial, sans-serif",
-                    }}
-                  >
-                    {isAr
-                      ? "«خيركم من تعلم القرآن وعلّمه»"
-                      : '"The best of you are those who learn the Quran and teach it."'}
-                  </p>
-                  <p className="text-[10px] mt-2 text-center" style={{ color: dark ? "#707070" : "#8a8a8a" }}>
-                    {isAr ? "المصدر: صحيح البخاري" : "Source: Sahih al-Bukhari"}
-                  </p>
-                </div>
-
                 {loading && <Loader />}
               </>
             )}
+
+            <div className="mt-[35px] px-1">
+              <p
+                className="text-[13px] leading-relaxed font-medium italic text-center"
+                style={{
+                  color: textSec,
+                  fontFamily: isAr
+                    ? "'Amiri', 'Noto Naskh Arabic', 'Noto Sans Arabic', 'Segoe UI', 'Tahoma', 'Arial', serif"
+                    : "system-ui, 'Segoe UI', Arial, sans-serif",
+                }}
+              >
+                {isAr
+                  ? "«خيركم من تعلم القرآن وعلّمه»"
+                  : '"The best of you are those who learn the Quran and teach it."'}
+              </p>
+              <p className="text-[10px] mt-2 text-center" style={{ color: dark ? "#707070" : "#8a8a8a" }}>
+                {isAr ? "المصدر: صحيح البخاري" : "Source: Sahih al-Bukhari"}
+              </p>
+            </div>
           </div>
         )}
 
@@ -1348,15 +1464,17 @@ export default function DeenStudy() {
   );
 }
 
-function SurahViewAllOverlay({ surahNumber, rows, ayahMap, isAr, localHafsByAyah, loading, hasMore, onLoadMore, onClose }: {
+function SurahViewAllOverlay({ surahNumber, rows, ayahMap, isAr, localHafsByAyah, loading, openingGapKey, hasMore, onLoadMore, onGapPress, onClose }: {
   surahNumber: number;
   rows: SurahViewAllRow[];
   ayahMap: Record<number, AyahData>;
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
   loading: boolean;
+  openingGapKey: string | null;
   hasMore: boolean;
   onLoadMore: () => void;
+  onGapPress: (startAyah: number, endAyah: number) => void;
   onClose: () => void;
 }) {
   const { theme } = useTheme();
@@ -1407,21 +1525,32 @@ function SurahViewAllOverlay({ surahNumber, rows, ayahMap, isAr, localHafsByAyah
 
         {rows.map((row, idx) => {
           if (row.type === "gap") {
+            const gapKey = `${surahNumber}:${row.startAyah}-${row.endAyah}`;
+            const isOpeningGap = openingGapKey === gapKey;
             return (
-              <div
+              <button
                 key={`gap:${row.startAyah}:${row.endAyah}:${idx}`}
-                className="rounded-2xl px-5 py-5 my-1 text-center"
+                className="w-full rounded-2xl px-5 py-5 my-1 text-center active:scale-[0.99] transition-all"
                 style={{
                   background: dark ? "hsla(45,100%,60%,0.12)" : "hsla(45,95%,50%,0.16)",
                   border: `1px dashed ${dark ? "hsla(45,100%,60%,0.36)" : "hsla(35,95%,40%,0.40)"}`,
                 }}
+                disabled={!!openingGapKey}
+                onClick={() => onGapPress(row.startAyah, row.endAyah)}
               >
-                <p className="text-xs font-semibold" style={{ color: dark ? "#fbbf24" : "#78350f" }}>
-                  {isAr
-                    ? (row.startAyah === row.endAyah ? `الآية ${row.startAyah} غير محفوظة بعد` : `الآيات ${row.startAyah} - ${row.endAyah} غير محفوظة بعد`)
-                    : (row.startAyah === row.endAyah ? `Ayah ${row.startAyah} not memorized yet` : `Ayah ${row.startAyah} - ${row.endAyah} not memorized yet`)}
-                </p>
-              </div>
+                <div className="flex items-center justify-center gap-2">
+                  <p className="text-xs font-semibold" style={{ color: dark ? "#fbbf24" : "#78350f" }}>
+                    {isAr
+                      ? (row.startAyah === row.endAyah ? `الآية ${row.startAyah} غير محفوظة بعد` : `الآيات ${row.startAyah} - ${row.endAyah} غير محفوظة بعد`)
+                      : (row.startAyah === row.endAyah ? `Ayah ${row.startAyah} not memorized yet` : `Ayah ${row.startAyah} - ${row.endAyah} not memorized yet`)}
+                  </p>
+                  {isOpeningGap ? (
+                    <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: dark ? "rgba(251,191,36,0.35)" : "rgba(120,53,15,0.35)", borderTopColor: dark ? "#fbbf24" : "#78350f" }} />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: dark ? "#fbbf24" : "#78350f", transform: isAr ? "rotate(180deg)" : undefined }} />
+                  )}
+                </div>
+              </button>
             );
           }
 
@@ -2001,6 +2130,16 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
   const audioUrl = ayah.audioUrl ?? "";
 
   useEffect(() => {
+    audioRef.current?.pause();
+    setPlaying(false);
+    setPhase(mode === "review" ? "recall" : "listen");
+    setHidden(false);
+    setLoopCount(0);
+    setProgress(0);
+    if (audioRef.current) audioRef.current.currentTime = 0;
+  }, [ayah.surah_number, ayah.ayah_number, mode]);
+
+  useEffect(() => {
     const audio = new Audio(audioUrl);
     audioRef.current = audio;
 
@@ -2101,7 +2240,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
   };
 
   const isListen = phase === "listen";
-  const shouldCenterAyahZone = !hidden && displayArabic.trim().length <= 120;
+  const shouldCenterAyahZone = hidden || displayArabic.trim().length <= 120;
   const jumpTargetLabel = useMemo(() => {
     if (!jumpActionLabel) return null;
     return isAr
@@ -2544,7 +2683,7 @@ function ReviewOverlay({ ayahs, highlightAyahKey, isAr, localHafsByAyah, reviewO
               style={{ background: surface, color: textPri, border: `1px solid ${border}` }}
             >
               <Undo2 className="w-4 h-4" style={{ transform: isAr ? "scaleX(-1)" : undefined }} />
-              <span>{isAr ? "رجوع" : "Return"}</span>
+              <span>{isAr ? "رجوع" : "End Session"}</span>
             </button>
             <button
               onClick={onNext}
