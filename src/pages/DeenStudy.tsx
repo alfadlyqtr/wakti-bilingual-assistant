@@ -312,10 +312,12 @@ export default function DeenStudy() {
   const [localHafsByAyah, setLocalHafsByAyah] = useState<Record<string, string>>({});
   const [reviewAyahs, setReviewAyahs] = useState<AyahData[]>([]);
   const [reviewHighlightAyahKey, setReviewHighlightAyahKey] = useState<string | null>(null);
+  const [reviewSessionSource, setReviewSessionSource] = useState<"today" | "review" | null>(null);
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
   const [reviewAutoPlayNext, setReviewAutoPlayNext] = useState(false);
+  const [reviewAutoNextSkipNotice, setReviewAutoNextSkipNotice] = useState<{ surahNumber: number; startAyah: number; endAyah: number; landingAyah: number } | null>(null);
   const [dailyPlanProgressByPlan, setDailyPlanProgressByPlan] = useState<Record<string, number>>(() => readDailyPlanProgress());
   const [dailyLearntAyahKeys, setDailyLearntAyahKeys] = useState<string[]>(() => readDailyLearntAyahKeys());
   const [jumpingSessionAyah, setJumpingSessionAyah] = useState(false);
@@ -427,6 +429,8 @@ export default function DeenStudy() {
 
   const openLearnSession = async (surahNum: number, ayahNum: number) => {
     setStartingSession(true);
+    setReviewSessionSource(null);
+    setReviewAutoNextSkipNotice(null);
     const data = await fetchAyah(surahNum, ayahNum);
     setStartingSession(false);
     if (!data) { toast.error(isAr ? "تعذر تحميل الآية" : "Could not load ayah"); return; }
@@ -434,8 +438,10 @@ export default function DeenStudy() {
     setPlayerMode("learn");
   };
 
-  const openReviewSession = async (item: any) => {
+  const openReviewSession = async (item: any, source: "today" | "review") => {
     setOpeningReviewItemId(item.id ?? null);
+    setReviewSessionSource(source);
+    setReviewAutoNextSkipNotice(null);
     const data = await fetchAyah(item.surah_number, item.ayah_number);
     setOpeningReviewItemId(null);
     if (!data) { toast.error(isAr ? "تعذر تحميل الآية" : "Could not load ayah"); return; }
@@ -458,7 +464,7 @@ export default function DeenStudy() {
       await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     }
 
-    if (playerMode === "review" && reviewAutoPlayNext) {
+    if (playerMode === "review" && reviewAutoPlayNext && reviewSessionSource === "review") {
       const nextMemorizedAyah = memorization
         .filter((m) => m.status === "memorized" && m.surah_number === sessionAyah.surah_number && m.ayah_number > sessionAyah.ayah_number)
         .sort((a, b) => a.ayah_number - b.ayah_number)[0];
@@ -466,6 +472,18 @@ export default function DeenStudy() {
       if (nextMemorizedAyah) {
         const nextData = await fetchAyah(nextMemorizedAyah.surah_number, nextMemorizedAyah.ayah_number);
         if (nextData) {
+          const skippedStartAyah = sessionAyah.ayah_number + 1;
+          const skippedEndAyah = nextMemorizedAyah.ayah_number - 1;
+          if (skippedEndAyah >= skippedStartAyah) {
+            setReviewAutoNextSkipNotice({
+              surahNumber: sessionAyah.surah_number,
+              startAyah: skippedStartAyah,
+              endAyah: skippedEndAyah,
+              landingAyah: nextMemorizedAyah.ayah_number,
+            });
+          } else {
+            setReviewAutoNextSkipNotice(null);
+          }
           setSessionAyah(nextData);
           setPlayerMode("review");
           reloadMemorization();
@@ -473,6 +491,8 @@ export default function DeenStudy() {
         }
       }
     }
+
+    setReviewAutoNextSkipNotice(null);
 
     if (plan && playerMode === "learn") {
       if (!alreadyMemorized) {
@@ -554,7 +574,7 @@ export default function DeenStudy() {
     setShowReview(true);
     setSessionAyah(null);
     reloadMemorization();
-  }, [sessionAyah, gapSession, plan, playerMode, reviewAutoPlayNext, upsertMemorization, reloadMemorization, isAr, memorization]);
+  }, [sessionAyah, gapSession, plan, playerMode, reviewAutoPlayNext, reviewSessionSource, upsertMemorization, reloadMemorization, isAr, memorization]);
 
   const onPlayerNotYet = useCallback(async () => {
     if (!sessionAyah) return;
@@ -778,10 +798,14 @@ export default function DeenStudy() {
       setGapSession(null);
       setSessionAyah(null);
       setOpeningGapKey(null);
+      setReviewSessionSource(null);
+      setReviewAutoNextSkipNotice(null);
       setShowReview(false);
       setActiveTab("review");
       return;
     }
+    setReviewSessionSource(null);
+    setReviewAutoNextSkipNotice(null);
     setSessionAyah(null);
   }, [gapSession, sessionAyah, playerMode]);
 
@@ -1001,6 +1025,8 @@ export default function DeenStudy() {
           localHafsByAyah={localHafsByAyah}
           alreadyMemorized={sessionAyahAlreadyMemorized}
           reviewAutoPlayNext={reviewAutoPlayNext}
+          showReviewAutoNextToggle={reviewSessionSource === "review"}
+          reviewAutoNextSkipNotice={reviewAutoNextSkipNotice}
           onToggleReviewAutoPlayNext={setReviewAutoPlayNext}
           jumpActionLabel={sessionJumpSuggestion?.actionLabel ?? null}
           onJumpSuggestion={sessionJumpSuggestion ? jumpToSuggestedSessionAyah : undefined}
@@ -1298,7 +1324,7 @@ export default function DeenStudy() {
                                 setShowAllLearntToday(true);
                                 return;
                               }
-                              void openReviewSession(m);
+                              void openReviewSession(m, "today");
                             }} />
                         ))}
                       </div>
@@ -1506,7 +1532,7 @@ export default function DeenStudy() {
                               dark={dark}
                               onUpdate={updateMemorizationStatus}
                               loading={openingReviewItemId === ayahItem.id}
-                              onTap={() => openReviewSession(ayahItem)}
+                              onTap={() => openReviewSession(ayahItem, "review")}
                             />
                           );
                         })}
@@ -2164,13 +2190,15 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = false, reviewAutoPlayNext = false, onToggleReviewAutoPlayNext, jumpActionLabel, onJumpSuggestion, jumpingSuggestion = false, onComplete, onNotYet, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = false, reviewAutoPlayNext = false, showReviewAutoNextToggle = true, reviewAutoNextSkipNotice = null, onToggleReviewAutoPlayNext, jumpActionLabel, onJumpSuggestion, jumpingSuggestion = false, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
   alreadyMemorized?: boolean;
   reviewAutoPlayNext?: boolean;
+  showReviewAutoNextToggle?: boolean;
+  reviewAutoNextSkipNotice?: { surahNumber: number; startAyah: number; endAyah: number; landingAyah: number } | null;
   onToggleReviewAutoPlayNext?: (enabled: boolean) => void;
   jumpActionLabel?: string | null;
   onJumpSuggestion?: () => Promise<void>;
@@ -2306,6 +2334,58 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
   };
 
   const isListen = phase === "listen";
+  const showAutoNextSkipNotice = mode === "review"
+    && !isListen
+    && !!reviewAutoNextSkipNotice
+    && reviewAutoNextSkipNotice.surahNumber === ayah.surah_number
+    && reviewAutoNextSkipNotice.landingAyah === ayah.ayah_number;
+  const autoNextSkipNoticeKey = showAutoNextSkipNotice && reviewAutoNextSkipNotice
+    ? `${reviewAutoNextSkipNotice.surahNumber}:${reviewAutoNextSkipNotice.startAyah}-${reviewAutoNextSkipNotice.endAyah}:${reviewAutoNextSkipNotice.landingAyah}`
+    : null;
+  const autoNextSkipNoticeText = showAutoNextSkipNotice
+    ? (isAr
+      ? (reviewAutoNextSkipNotice.startAyah === reviewAutoNextSkipNotice.endAyah
+        ? `ملاحظة: تم تخطي الآية ${reviewAutoNextSkipNotice.startAyah} (غير محفوظة)`
+        : `ملاحظة: تم تخطي الآيات ${reviewAutoNextSkipNotice.startAyah} - ${reviewAutoNextSkipNotice.endAyah} (غير محفوظة)`)
+      : (reviewAutoNextSkipNotice.startAyah === reviewAutoNextSkipNotice.endAyah
+        ? `Note: skipped ayah ${reviewAutoNextSkipNotice.startAyah} (unmemorized)`
+        : `Note: skipped ayahs ${reviewAutoNextSkipNotice.startAyah}–${reviewAutoNextSkipNotice.endAyah} (unmemorized)`))
+    : null;
+  const [showTimedAutoNextSkipNotice, setShowTimedAutoNextSkipNotice] = useState(false);
+  const [autoNextSkipNoticeProgress, setAutoNextSkipNoticeProgress] = useState(1);
+  const [autoNextSkipNoticeOpacity, setAutoNextSkipNoticeOpacity] = useState(0);
+
+  useEffect(() => {
+    const noticeDurationMs = 5000;
+    const fadeDurationMs = 350;
+    if (!autoNextSkipNoticeKey) {
+      setShowTimedAutoNextSkipNotice(false);
+      setAutoNextSkipNoticeProgress(1);
+      setAutoNextSkipNoticeOpacity(0);
+      return;
+    }
+
+    setShowTimedAutoNextSkipNotice(true);
+    setAutoNextSkipNoticeProgress(1);
+    setAutoNextSkipNoticeOpacity(0);
+    const progressFrame = requestAnimationFrame(() => {
+      setAutoNextSkipNoticeOpacity(1);
+      setAutoNextSkipNoticeProgress(0);
+    });
+    const fadeOutTimer = setTimeout(() => {
+      setAutoNextSkipNoticeOpacity(0);
+    }, noticeDurationMs - fadeDurationMs);
+    const hideTimer = setTimeout(() => {
+      setShowTimedAutoNextSkipNotice(false);
+    }, noticeDurationMs);
+
+    return () => {
+      cancelAnimationFrame(progressFrame);
+      clearTimeout(fadeOutTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [autoNextSkipNoticeKey]);
+
   const shouldCenterAyahZone = hidden || displayArabic.trim().length <= 120;
   const jumpTargetLabel = useMemo(() => {
     if (!jumpActionLabel) return null;
@@ -2342,47 +2422,80 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
       style={{ background: bg }}
     >
       {/* ── HEADER ── */}
-      <div
-        className="flex-shrink-0 px-4 pb-3"
-        style={{
-          paddingTop: "max(env(safe-area-inset-top, 0px) + 56px, 72px)",
-          background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
-          backdropFilter: "blur(20px)",
-          borderBottom: `1px solid ${border}`,
-        }}
-      >
-        <div className="flex items-center gap-3">
-          {/* Back */}
-          <button
-            onClick={onClose}
-            className="h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 active:scale-90 transition-all flex-shrink-0"
-            style={{ background: surface, border: `1px solid ${border}` }}
-            aria-label={isAr ? "رجوع" : "Back"}
-          >
-            <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
-            <span className="text-xs font-semibold" style={{ color: textPri }}>{isAr ? "رجوع" : "Back"}</span>
-          </button>
+      <div className="relative flex-shrink-0">
+        <div
+          className="px-4 pb-3"
+          style={{
+            paddingTop: "max(env(safe-area-inset-top, 0px) + 56px, 72px)",
+            background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
+            backdropFilter: "blur(20px)",
+            borderBottom: `1px solid ${border}`,
+          }}
+        >
+          <div className="flex items-center gap-3">
+            {/* Back */}
+            <button
+              onClick={onClose}
+              className="h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 active:scale-90 transition-all flex-shrink-0"
+              style={{ background: surface, border: `1px solid ${border}` }}
+              aria-label={isAr ? "رجوع" : "Back"}
+            >
+              <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
+              <span className="text-xs font-semibold" style={{ color: textPri }}>{isAr ? "رجوع" : "Back"}</span>
+            </button>
 
-          {/* Title */}
-          <div className="flex-1 min-w-0 text-center">
-            <p className="text-sm font-bold truncate" style={{ color: textPri }}>
-              {isAr ? (surahInfo?.ar ?? `سورة ${ayah.surah_number}`) : (surahInfo?.en ?? `Surah ${ayah.surah_number}`)}
-            </p>
-            <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
-              {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
-              {surahInfo && ` · ${surahInfo.ayahs} ${isAr ? "آية" : "ayahs"}`}
-            </p>
+            {/* Title */}
+            <div className="flex-1 min-w-0 text-center">
+              <p className="text-sm font-bold truncate" style={{ color: textPri }}>
+                {isAr ? (surahInfo?.ar ?? `سورة ${ayah.surah_number}`) : (surahInfo?.en ?? `Surah ${ayah.surah_number}`)}
+              </p>
+              <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
+                {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
+                {surahInfo && ` · ${surahInfo.ayahs} ${isAr ? "آية" : "ayahs"}`}
+              </p>
+            </div>
+
+            {/* Phase tag */}
+            <div className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-bold"
+              style={isListen
+                ? { background: blueAlpha(0.14), color: blue, border: `1px solid ${blueAlpha(0.30)}` }
+                : { background: greenAlpha(0.14), color: green, border: `1px solid ${greenAlpha(0.30)}` }}>
+              {isListen ? (isAr ? "استماع" : "Listen") : (isAr ? "اختبار" : "Recall")}
+            </div>
           </div>
 
-          {/* Phase tag */}
-          <div className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-bold"
-            style={isListen
-              ? { background: blueAlpha(0.14), color: blue, border: `1px solid ${blueAlpha(0.30)}` }
-              : { background: greenAlpha(0.14), color: green, border: `1px solid ${greenAlpha(0.30)}` }}>
-            {isListen ? (isAr ? "استماع" : "Listen") : (isAr ? "اختبار" : "Recall")}
-          </div>
         </div>
 
+        {autoNextSkipNoticeText && showTimedAutoNextSkipNotice && (
+          <div className="absolute inset-x-0 top-full px-4 pt-2 z-20 pointer-events-none">
+            <div
+              className="w-full rounded-lg px-3 py-2 text-[11px] font-medium"
+              style={{
+                opacity: autoNextSkipNoticeOpacity,
+                transition: "opacity 350ms ease",
+                background: dark ? "hsla(45,100%,60%,0.08)" : "hsla(45,95%,50%,0.12)",
+                color: dark ? "#d4a63a" : "#8a5a14",
+                border: `1px solid ${dark ? "hsla(45,100%,60%,0.22)" : "hsla(35,95%,40%,0.24)"}`,
+                textAlign: isAr ? "right" : "left",
+              }}
+            >
+              {autoNextSkipNoticeText}
+              <div
+                className="mt-1.5 h-[2px] w-full rounded-full overflow-hidden"
+                style={{ background: dark ? "hsla(45,100%,60%,0.14)" : "hsla(35,95%,40%,0.14)" }}
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${autoNextSkipNoticeProgress * 100}%`,
+                    background: dark ? "hsla(45,100%,60%,0.50)" : "hsla(35,95%,40%,0.50)",
+                    transition: "width 5000ms linear",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {stickyJumpText && onJumpSuggestion && (
@@ -2495,7 +2608,11 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
                 : (isAr ? "أحسنت! انتقل الآن إلى الاختبار" : "Well done! Now move on to recall")}
           </p>
         ) : mode === "review" ? (
-          <div className="w-full flex items-center justify-between gap-2" dir="ltr">
+          <div
+            className="w-full flex items-center gap-2"
+            dir="ltr"
+            style={{ justifyContent: showReviewAutoNextToggle ? "space-between" : "center" }}
+          >
             <button
               onClick={goBackToListen}
               className="px-3 py-1.5 rounded-full text-[11px] font-semibold active:scale-95 transition-all"
@@ -2504,30 +2621,32 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
               {isAr ? "تريد سماعها أولًا؟ انتقل إلى الاستماع" : "Prefer to hear it first? Go to listen"}
             </button>
 
-            <button
-              onClick={() => onToggleReviewAutoPlayNext?.(!reviewAutoPlayNext)}
-              className="h-8 px-2.5 rounded-full text-[10px] font-semibold active:scale-95 transition-all inline-flex items-center gap-2"
-              style={{
-                background: surface,
-                color: textSec,
-                border: `1px solid ${border}`,
-              }}
-              aria-label={isAr ? "تشغيل التالي تلقائياً" : "Auto-play next"}
-            >
-              <span>{isAr ? "التالي تلقائيًا" : "Auto-next"}</span>
-              <span
-                className="w-7 h-4 rounded-full p-[1px] flex items-center transition-all"
+            {showReviewAutoNextToggle && (
+              <button
+                onClick={() => onToggleReviewAutoPlayNext?.(!reviewAutoPlayNext)}
+                className="h-8 px-2.5 rounded-full text-[10px] font-semibold active:scale-95 transition-all inline-flex items-center gap-2"
                 style={{
-                  background: reviewAutoPlayNext ? greenAlpha(dark ? 0.42 : 0.32) : (dark ? "rgba(255,255,255,0.16)" : "rgba(6,5,65,0.16)"),
-                  justifyContent: reviewAutoPlayNext ? "flex-end" : "flex-start",
+                  background: surface,
+                  color: textSec,
+                  border: `1px solid ${border}`,
                 }}
+                aria-label={isAr ? "تشغيل التالي تلقائياً" : "Auto-play next"}
               >
+                <span>{isAr ? "التالي تلقائيًا" : "Auto-next"}</span>
                 <span
-                  className="w-3 h-3 rounded-full"
-                  style={{ background: dark ? "#f8fafc" : "#ffffff" }}
-                />
-              </span>
-            </button>
+                  className="w-7 h-4 rounded-full p-[1px] flex items-center transition-all"
+                  style={{
+                    background: reviewAutoPlayNext ? greenAlpha(dark ? 0.42 : 0.32) : (dark ? "rgba(255,255,255,0.16)" : "rgba(6,5,65,0.16)"),
+                    justifyContent: reviewAutoPlayNext ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ background: dark ? "#f8fafc" : "#ffffff" }}
+                  />
+                </span>
+              </button>
+            )}
           </div>
         ) : null}
 
