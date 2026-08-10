@@ -315,6 +315,7 @@ export default function DeenStudy() {
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
+  const [reviewAutoPlayNext, setReviewAutoPlayNext] = useState(false);
   const [dailyPlanProgressByPlan, setDailyPlanProgressByPlan] = useState<Record<string, number>>(() => readDailyPlanProgress());
   const [dailyLearntAyahKeys, setDailyLearntAyahKeys] = useState<string[]>(() => readDailyLearntAyahKeys());
   const [jumpingSessionAyah, setJumpingSessionAyah] = useState(false);
@@ -456,6 +457,23 @@ export default function DeenStudy() {
     if (!(playerMode === "review" && alreadyMemorized)) {
       await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     }
+
+    if (playerMode === "review" && reviewAutoPlayNext) {
+      const nextMemorizedAyah = memorization
+        .filter((m) => m.status === "memorized" && m.surah_number === sessionAyah.surah_number && m.ayah_number > sessionAyah.ayah_number)
+        .sort((a, b) => a.ayah_number - b.ayah_number)[0];
+
+      if (nextMemorizedAyah) {
+        const nextData = await fetchAyah(nextMemorizedAyah.surah_number, nextMemorizedAyah.ayah_number);
+        if (nextData) {
+          setSessionAyah(nextData);
+          setPlayerMode("review");
+          reloadMemorization();
+          return;
+        }
+      }
+    }
+
     if (plan && playerMode === "learn") {
       if (!alreadyMemorized) {
         const ayahKey = `${sessionAyah.surah_number}:${sessionAyah.ayah_number}`;
@@ -536,7 +554,7 @@ export default function DeenStudy() {
     setShowReview(true);
     setSessionAyah(null);
     reloadMemorization();
-  }, [sessionAyah, gapSession, plan, playerMode, upsertMemorization, reloadMemorization, isAr, memorization]);
+  }, [sessionAyah, gapSession, plan, playerMode, reviewAutoPlayNext, upsertMemorization, reloadMemorization, isAr, memorization]);
 
   const onPlayerNotYet = useCallback(async () => {
     if (!sessionAyah) return;
@@ -982,6 +1000,8 @@ export default function DeenStudy() {
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
           alreadyMemorized={sessionAyahAlreadyMemorized}
+          reviewAutoPlayNext={reviewAutoPlayNext}
+          onToggleReviewAutoPlayNext={setReviewAutoPlayNext}
           jumpActionLabel={sessionJumpSuggestion?.actionLabel ?? null}
           onJumpSuggestion={sessionJumpSuggestion ? jumpToSuggestedSessionAyah : undefined}
           jumpingSuggestion={jumpingSessionAyah}
@@ -1378,6 +1398,15 @@ export default function DeenStudy() {
                 const isExpanded = expandedSurah === group.surahNumber;
                 const firstAyah = group.items[0]?.ayah_number;
                 const lastAyah = group.items[group.items.length - 1]?.ayah_number;
+                const dropdownRows: SurahViewAllRow[] = [];
+                let dropdownCursor = 1;
+                group.items.forEach((item) => {
+                  if (item.ayah_number > dropdownCursor) {
+                    dropdownRows.push({ type: "gap", startAyah: dropdownCursor, endAyah: item.ayah_number - 1 });
+                  }
+                  dropdownRows.push({ type: "ayah", ayahNumber: item.ayah_number });
+                  dropdownCursor = item.ayah_number + 1;
+                });
                 return (
                   <div
                     key={group.surahNumber}
@@ -1435,17 +1464,52 @@ export default function DeenStudy() {
                           </div>
                           <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
                         </button>
-                        {group.items.map((m) => (
-                          <MemorizationRow
-                            key={m.id}
-                            item={m}
-                            isAr={isAr}
-                            dark={dark}
-                            onUpdate={updateMemorizationStatus}
-                            loading={openingReviewItemId === m.id}
-                            onTap={() => openReviewSession(m)}
-                          />
-                        ))}
+                        {dropdownRows.map((row, idx) => {
+                          if (row.type === "gap") {
+                            const gapKey = `${group.surahNumber}:${row.startAyah}-${row.endAyah}`;
+                            const isOpeningGap = openingGapKey === gapKey;
+                            return (
+                              <button
+                                key={`review-gap:${group.surahNumber}:${row.startAyah}:${row.endAyah}:${idx}`}
+                                className="w-full rounded-xl px-4 h-[60px] text-center active:scale-[0.99] transition-all"
+                                style={{
+                                  background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)",
+                                  border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)"}`,
+                                }}
+                                disabled={!!openingGapKey}
+                                onClick={() => { void openGapSession(group.surahNumber, row.startAyah, row.endAyah); }}
+                              >
+                                <div className="h-full flex items-center gap-3">
+                                  <div className="w-4 h-4 flex-shrink-0" />
+                                  <p className="text-xs font-semibold flex-1 text-center" style={{ color: dark ? "#d4a63a" : "#8a5a14" }}>
+                                    {isAr
+                                      ? (row.startAyah === row.endAyah ? `الآية ${row.startAyah} غير محفوظة بعد` : `الآيات ${row.startAyah} - ${row.endAyah} غير محفوظة بعد`)
+                                      : (row.startAyah === row.endAyah ? `Ayah ${row.startAyah} not memorized yet` : `Ayah ${row.startAyah} - ${row.endAyah} not memorized yet`)}
+                                  </p>
+                                  {isOpeningGap ? (
+                                    <div className="w-4 h-4 border-2 rounded-full animate-spin flex-shrink-0" style={{ borderColor: dark ? "rgba(212,166,58,0.32)" : "rgba(138,90,20,0.32)", borderTopColor: dark ? "#d4a63a" : "#8a5a14" }} />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: dark ? "#d4a63a" : "#8a5a14", transform: isAr ? "rotate(180deg)" : undefined }} />
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          }
+
+                          const ayahItem = group.items.find((m) => m.ayah_number === row.ayahNumber);
+                          if (!ayahItem) return null;
+                          return (
+                            <MemorizationRow
+                              key={ayahItem.id}
+                              item={ayahItem}
+                              isAr={isAr}
+                              dark={dark}
+                              onUpdate={updateMemorizationStatus}
+                              loading={openingReviewItemId === ayahItem.id}
+                              onTap={() => openReviewSession(ayahItem)}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2100,12 +2164,14 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = false, jumpActionLabel, onJumpSuggestion, jumpingSuggestion = false, onComplete, onNotYet, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = false, reviewAutoPlayNext = false, onToggleReviewAutoPlayNext, jumpActionLabel, onJumpSuggestion, jumpingSuggestion = false, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
   alreadyMemorized?: boolean;
+  reviewAutoPlayNext?: boolean;
+  onToggleReviewAutoPlayNext?: (enabled: boolean) => void;
   jumpActionLabel?: string | null;
   onJumpSuggestion?: () => Promise<void>;
   jumpingSuggestion?: boolean;
@@ -2429,13 +2495,40 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, alreadyMemorized = f
                 : (isAr ? "أحسنت! انتقل الآن إلى الاختبار" : "Well done! Now move on to recall")}
           </p>
         ) : mode === "review" ? (
-          <button
-            onClick={goBackToListen}
-            className="mx-auto px-3 py-1.5 rounded-full text-[11px] font-semibold active:scale-95 transition-all"
-            style={{ background: blueAlpha(dark ? 0.24 : 0.18), color: dark ? "#dbeafe" : "#060541", border: `1px solid ${blueAlpha(dark ? 0.50 : 0.42)}` }}
-          >
-            {isAr ? "تريد سماعها أولًا؟ انتقل إلى الاستماع" : "Prefer to hear it first? Go to listen"}
-          </button>
+          <div className="w-full flex items-center justify-between gap-2" dir="ltr">
+            <button
+              onClick={goBackToListen}
+              className="px-3 py-1.5 rounded-full text-[11px] font-semibold active:scale-95 transition-all"
+              style={{ background: blueAlpha(dark ? 0.24 : 0.18), color: dark ? "#dbeafe" : "#060541", border: `1px solid ${blueAlpha(dark ? 0.50 : 0.42)}` }}
+            >
+              {isAr ? "تريد سماعها أولًا؟ انتقل إلى الاستماع" : "Prefer to hear it first? Go to listen"}
+            </button>
+
+            <button
+              onClick={() => onToggleReviewAutoPlayNext?.(!reviewAutoPlayNext)}
+              className="h-8 px-2.5 rounded-full text-[10px] font-semibold active:scale-95 transition-all inline-flex items-center gap-2"
+              style={{
+                background: surface,
+                color: textSec,
+                border: `1px solid ${border}`,
+              }}
+              aria-label={isAr ? "تشغيل التالي تلقائياً" : "Auto-play next"}
+            >
+              <span>{isAr ? "التالي تلقائيًا" : "Auto-next"}</span>
+              <span
+                className="w-7 h-4 rounded-full p-[1px] flex items-center transition-all"
+                style={{
+                  background: reviewAutoPlayNext ? greenAlpha(dark ? 0.42 : 0.32) : (dark ? "rgba(255,255,255,0.16)" : "rgba(6,5,65,0.16)"),
+                  justifyContent: reviewAutoPlayNext ? "flex-end" : "flex-start",
+                }}
+              >
+                <span
+                  className="w-3 h-3 rounded-full"
+                  style={{ background: dark ? "#f8fafc" : "#ffffff" }}
+                />
+              </span>
+            </button>
+          </div>
         ) : null}
 
         {/* ── LISTEN controls ── */}
