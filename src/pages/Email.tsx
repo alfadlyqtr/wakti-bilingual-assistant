@@ -59,9 +59,9 @@ export default function Email() {
   const customConnections = emailConn.imap.connections;
   const imapLoading = emailConn.imap.loading;
   const gmailConnected = emailConn.gmail.connection.connected;
-  const verifiedCustomCount = customConnections.filter(connection => emailConn.imap.health[connection.id]?.status === 'verified').length;
+  const verifiedCustomCount = customConnections.filter(connection => emailConn.imap.health[connection.id]?.status !== 'failed').length;
   const icloudConnections = customConnections.filter((connection) => connection.provider === 'icloud');
-  const verifiedIcloudConnections = icloudConnections.filter((connection) => emailConn.imap.health[connection.id]?.status === 'verified');
+  const verifiedIcloudConnections = icloudConnections.filter((connection) => emailConn.imap.health[connection.id]?.status !== 'failed');
   const verifiedIcloudCount = verifiedIcloudConnections.length;
   const primaryIcloudConnection = verifiedIcloudConnections.find((connection) => connection.is_primary)
     || verifiedIcloudConnections[0]

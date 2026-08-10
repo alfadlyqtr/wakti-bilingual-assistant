@@ -99,8 +99,8 @@ export function useEmailConnections() {
   const [imapLoading, setImapLoading] = useState(true);
   const [imapHealth, setImapHealth] = useState<Record<string, ImapConnectionHealth>>(() => cachedImapHealth);
 
-  const shouldValidateConnection = useCallback((revalidate?: boolean) => {
-    return Boolean(revalidate);
+  const shouldValidateConnection = useCallback((_revalidate?: boolean) => {
+    return true;
   }, []);
 
   const callImapApi = useCallback(async (action: string, params: Record<string, unknown>) => {

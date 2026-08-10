@@ -482,7 +482,12 @@ export const buildRedesignPrompt = (
     'THESE ITEMS DO NOT MOVE AND DO NOT DISAPPEAR: every window, every door, every air-conditioning unit or split unit, every radiator, every ceiling fan or light fitting position, every socket and switch, every column, beam, niche, arch, step and built-in wardrobe. Each one stays on the same wall, at the same height, at the same size, in the same position, and the same number of them appear in your image as in the photographs. You may change what they look like to match the chosen style, but you may not relocate one, resize one, delete one or add one. The room keeps its exact width, depth, proportions and ceiling height: a narrow room stays exactly that narrow.',
     ...(analysis
       ? [
-        `SURVEY OF THIS EXACT ROOM (measured from every photograph the owner supplied — obey this over any guess):\n${analysis}`,
+        // ⛔ This used to be a full measured survey of the room, and prose measurements were the
+        // single biggest source of "this is not my room" — every miscount became architecture
+        // both renders then obeyed. Geometry now comes ONLY from the attached photograph, which
+        // cannot lie; the text below names just the character-defining features, so one sitting
+        // outside this camera's view still survives the redesign.
+        `SIGNATURE FEATURES OF THIS EXACT ROOM (read from the owner's photographs — these MUST survive the redesign):\n${analysis}`,
         // ⛔ "Must survive" was not enough. The owner's room is defined by a huge arch covered in
         // scrollwork and circular medallions, and the render reduced it to a thin plain band with
         // two dots — technically still an arch, but the room stopped being his room. Simplifying

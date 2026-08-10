@@ -51,8 +51,12 @@ import {
 
 const SUPABASE_URL = ((import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 
-const MIN_PHOTOS = 4;
-const MAX_PHOTOS = 6;
+// ⛔ EXACTLY TWO PHOTOS, one per end of the room. The old 4–6 uploads all went into a written
+// survey whose misreads became architecture both renders obeyed — the root cause of "this is
+// not my room". Now each render's ground truth is its own photograph, which cannot lie, and the
+// roles are fixed: photo 1 drives the first half, photo 2 drives the opposite half.
+const MIN_PHOTOS = 2;
+const MAX_PHOTOS = 2;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_EDGE_PIXELS = 1280;
 /**
@@ -86,29 +90,10 @@ type RenderResult = {
 /** One render's references, plus what those references MEAN. Built by buildRenderPlan. */
 type RenderPlan = { mode: RedesignRenderMode; references: string[] };
 
-/**
- * Which uploaded photo (1-based) the survey picked as the best source for each half.
- * The survey also returns an AERIAL anchor; it is ignored, because that view was dropped.
- */
-type PhotoAnchors = { half1: number; half2: number };
-
-const DEFAULT_ANCHORS: PhotoAnchors = { half1: 1, half2: 2 };
-
-/**
- * The two eye-level views MUST be driven by different photographs.
- *
- * When the survey names the same photo for both halves — or quietly falls back to it — both
- * renders shoot the same wall, and the owner gets "half 2 looks identical to half 1" with one
- * whole end of their room never drawn at all.
- */
-const normalizeAnchors = (raw: PhotoAnchors, photoCount: number): PhotoAnchors => {
-  const total = Math.max(photoCount, 1);
-  const clamp = (value: number) => Math.min(Math.max(Math.round(value) || 1, 1), total);
-  const half1 = clamp(raw.half1);
-  let half2 = clamp(raw.half2);
-  if (half2 === half1 && total > 1) half2 = (half1 % total) + 1;
-  return { half1, half2 };
-};
+// ⛔ Photo roles are FIXED, never picked by an AI. With exactly two uploads there is nothing to
+// choose: photo 1 is always the first half's camera, photo 2 the opposite half's. The old survey
+// picked anchors itself, and when it named the same photo for both halves, one whole end of the
+// room was never drawn at all.
 
 type WizardStep = 1 | 2 | 3;
 type SectionKey = 'roomType' | 'style' | 'palette' | 'lighting' | 'flooring' | 'finish' | 'furniture' | 'structure';
@@ -177,7 +162,6 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   const [pendingKeys, setPendingKeys] = useState<RedesignViewKey[]>([]);
   const [failedKeys, setFailedKeys] = useState<RedesignViewKey[]>([]);
   const [roomAnalysis, setRoomAnalysis] = useState('');
-  const [photoAnchors, setPhotoAnchors] = useState<PhotoAnchors>(DEFAULT_ANCHORS);
   const [results, setResults] = useState<RenderResult[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -261,33 +245,28 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
   };
 
   /**
-   * Reads every uploaded photo once. Returns a written survey of the room, plus which photo best
-   * suits each view.
+   * Reads the two photos once and names ONLY the room's signature features.
    *
-   * Each render is deliberately given only ONE of the owner's photos, so the survey is how the
-   * remaining photos still reach the model — as measurements and counts it can read, rather than
-   * as extra pictures competing to define the camera.
+   * ⛔ This replaced the full written survey. The survey measured and counted the whole room in
+   * prose, and every misread became architecture both renders obeyed — the single biggest source
+   * of "this is not my room". Geometry now comes from the photographs themselves, which cannot
+   * lie; this reading exists for one reason only, so a feature sitting in ONE photo (an ornate
+   * arch, a sloped ceiling) is still named for the render whose camera never sees it.
+   * A failed reading degrades to silence and never blocks the redesign.
    */
-  const surveyRoom = async (token: string): Promise<{ analysis: string; anchors: PhotoAnchors }> => {
+  const readFeatures = async (token: string): Promise<string> => {
     try {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/wakti-room-analyzer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mode: 'survey', image_base64s: photos.map((photo) => photo.dataUrl) }),
+        body: JSON.stringify({ mode: 'features', image_base64s: photos.map((photo) => photo.dataUrl) }),
       });
       const json = await response.json().catch(() => ({}));
-      if (!response.ok || !json?.success || typeof json?.analysis !== 'string') {
-        return { analysis: '', anchors: DEFAULT_ANCHORS };
-      }
-      const raw = json?.anchors;
-      const anchors = normalizeAnchors({
-        half1: Number(raw?.half1) || DEFAULT_ANCHORS.half1,
-        half2: Number(raw?.half2) || DEFAULT_ANCHORS.half2,
-      }, photos.length);
-      return { analysis: json.analysis.trim(), anchors };
+      if (!response.ok || !json?.success || typeof json?.features !== 'string') return '';
+      const features = json.features.trim();
+      return /^none$/i.test(features) ? '' : features;
     } catch {
-      // The survey only improves accuracy, so never block the redesign on it.
-      return { analysis: '', anchors: DEFAULT_ANCHORS };
+      return '';
     }
   };
 
@@ -337,20 +316,20 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
    */
   const buildRenderPlan = (
     viewKey: RedesignViewKey,
-    anchors: PhotoAnchors,
     approved: RenderResult[],
   ): RenderPlan => {
+    // Fixed roles: the first half always renders from photo 1, the opposite half from photo 2.
     const photoAt = (oneBased: number) =>
       photos[Math.min(Math.max(oneBased - 1, 0), photos.length - 1)].dataUrl;
 
     if (viewKey === 'halfA') {
-      return { mode: 'establish', references: [photoAt(anchors.half1)] };
+      return { mode: 'establish', references: [photoAt(1)] };
     }
 
     const design = approved.find((item) => item.key === 'halfA')?.url;
     return design
-      ? { mode: 'match', references: [photoAt(anchors.half2), design] }
-      : { mode: 'establish', references: [photoAt(anchors.half2)] };
+      ? { mode: 'match', references: [photoAt(2), design] }
+      : { mode: 'establish', references: [photoAt(2)] };
   };
 
   /** Submits one image-to-image task and polls the edge function until it finishes. */
@@ -438,7 +417,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       return;
     }
     if (photos.length < MIN_PHOTOS) {
-      toast.error(isArabic ? `أضف ${MIN_PHOTOS} صور على الأقل` : `Add at least ${MIN_PHOTOS} photos`);
+      toast.error(isArabic ? 'أضف الصورتين أولًا' : 'Add both photos first');
       return;
     }
 
@@ -459,9 +438,8 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       const token = session?.access_token;
       if (!token) throw new Error(isArabic ? 'يجب تسجيل الدخول' : 'You need to sign in first');
 
-      const { analysis, anchors } = await surveyRoom(token);
-      setRoomAnalysis(analysis);
-      setPhotoAnchors(anchors);
+      const features = await readFeatures(token);
+      setRoomAnalysis(features);
       setIsSurveying(false);
 
       // ⛔ STRICTLY SEQUENTIAL, and that is the whole point. halfB has to copy halfA's actual
@@ -474,8 +452,8 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
         setActiveViewKey(view.key);
         setPendingKeys([view.key]);
         try {
-          const plan = buildRenderPlan(view.key, anchors, approved);
-          const url = await renderWithRetry(view.key, token, plan, analysis);
+          const plan = buildRenderPlan(view.key, approved);
+          const url = await renderWithRetry(view.key, token, plan, features);
           approved.push({ key: view.key, url });
           setResults([...approved]);
         } catch (viewError) {
@@ -528,7 +506,6 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       // replacing — but the OTHER finished renders are still used as its design lock.
       const plan = buildRenderPlan(
         viewKey,
-        photoAnchors,
         results.filter((item) => item.key !== viewKey),
       );
       const url = await renderWithRetry(viewKey, token, plan, roomAnalysis);
@@ -607,8 +584,7 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
       const otherView = REDESIGN_VIEWS.find((view) => view.key !== targetView.key);
       const otherCurrent = otherView ? results.find((item) => item.key === otherView.key) : undefined;
       if (otherView && otherCurrent) {
-        const otherAnchor = otherView.key === 'halfA' ? photoAnchors.half1 : photoAnchors.half2;
-        const otherPhoto = photos[Math.min(Math.max(otherAnchor - 1, 0), Math.max(photos.length - 1, 0))]?.dataUrl;
+        const otherPhoto = photos[otherView.key === 'halfA' ? 0 : 1]?.dataUrl;
         if (otherPhoto) {
           setActiveViewKey(otherView.key);
           setPendingKeys([otherView.key]);
@@ -831,13 +807,11 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
             </h2>
             <p className="relative mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
               {isArabic
-                ? `صوّر الغرفة من ${MIN_PHOTOS} إلى ${MAX_PHOTOS} زوايا مختلفة حتى يفهم وكتي الغرفة بالكامل.`
-                : `Shoot the room from ${MIN_PHOTOS} to ${MAX_PHOTOS} different angles so Wakti understands the whole space.`}
+                ? 'التقط صورتين فقط لغرفتك: قف عند أحد الطرفين وصوّر الطرف الآخر، ثم بدّل.'
+                : 'Take exactly 2 photos of your room: stand at one end and photograph the other, then swap ends.'}
             </p>
             <p className="relative mt-1 text-[11px] font-bold text-sky-700 dark:text-sky-200">
-              {isArabic
-                ? `${MIN_PHOTOS} صور على الأقل، و${MAX_PHOTOS} كحد أقصى`
-                : `Minimum ${MIN_PHOTOS} photos, maximum ${MAX_PHOTOS}`}
+              {isArabic ? 'صورتان فقط — صورة لكل طرف' : 'Exactly 2 photos — one for each end'}
             </p>
             <button
               type="button"
@@ -852,9 +826,15 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {photos.map((photo) => (
+              {photos.map((photo, index) => (
                 <div key={photo.id} className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-[#d9e7f5] bg-[#f7fbff] dark:border-sky-300/15 dark:bg-black/25">
                   <img src={photo.dataUrl} alt={photo.name} className="h-full w-full object-cover" />
+                  {/* The badge is the contract: photo 1 always drives the first half's render. */}
+                  <span className="absolute bottom-1.5 start-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                    {index === 0
+                      ? (isArabic ? 'الطرف الأول' : 'First end')
+                      : (isArabic ? 'الطرف المقابل' : 'Opposite end')}
+                  </span>
                   <button
                     type="button"
                     onClick={() => removePhoto(photo.id)}
@@ -882,15 +862,15 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-200" />
                 <p className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-100">
                   {isArabic
-                    ? `أضف ${MIN_PHOTOS - photos.length} صورة أخرى على الأقل لبدء إعادة التصميم. الحد الأقصى ${MAX_PHOTOS} صور.`
-                    : `Add ${MIN_PHOTOS - photos.length} more photo(s) to start the redesign. Maximum ${MAX_PHOTOS} photos.`}
+                    ? 'أضف صورة أخرى — الطرف المقابل من الغرفة — لبدء إعادة التصميم.'
+                    : 'Add one more photo — the opposite end of the room — to start the redesign.'}
                 </p>
               </div>
             ) : (
               <p className="text-[11px] font-semibold text-muted-foreground">
                 {photos.length >= MAX_PHOTOS
-                  ? (isArabic ? `وصلت للحد الأقصى ${MAX_PHOTOS} صور.` : `You have reached the maximum of ${MAX_PHOTOS} photos.`)
-                  : (isArabic ? `يمكنك إضافة ${MAX_PHOTOS - photos.length} صورة أخرى (الحد الأقصى ${MAX_PHOTOS}).` : `You can add ${MAX_PHOTOS - photos.length} more (maximum ${MAX_PHOTOS}).`)}
+                  ? (isArabic ? 'الصورتان جاهزتان — صورة لكل طرف.' : 'Both photos are in — one for each end.')
+                  : (isArabic ? 'يمكنك إضافة صورة أخرى للطرف المقابل.' : 'You can add one more photo for the opposite end.')}
               </p>
             )}
           </div>
@@ -1386,16 +1366,17 @@ export default function RedesignRoomStudio({ language }: { language: 'en' | 'ar'
                 resolveChoiceLabel(REDESIGN_FURNITURE, choices.furniture, choices.furnitureCustom, language),
                 resolveChoiceLabel(REDESIGN_STRUCTURE, choices.structure, choices.structureCustom, language),
               ].join(' · ')}
+
             </p>
           </div>
 
-          {photos.length < MIN_PHOTOS && (
-            <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-300/35 bg-amber-50/70 px-3 py-2 dark:border-amber-300/20 dark:bg-amber-400/[0.07]">
+          {photos.length < 2 && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-300/50 bg-amber-50 px-3 py-2 dark:border-amber-300/25 dark:bg-amber-400/10">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-200" />
-              <p className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-100">
+              <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-100">
                 {isArabic
-                  ? `أضف ${MIN_PHOTOS} صور على الأقل في خطوة الصور قبل التوليد.`
-                  : `Add at least ${MIN_PHOTOS} photos in the Photos step before generating.`}
+                  ? 'أضف الصورتين في خطوة الصور قبل التوليد.'
+                  : 'Add both photos in the Photos step before generating.'}
               </p>
             </div>
           )}

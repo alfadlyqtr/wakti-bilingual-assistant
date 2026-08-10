@@ -80,6 +80,25 @@ Rules:
 
 Answer with JSON only, no other text: {"compliant": true or false, "reason": "one short sentence"}`;
 
+// Names ONLY the signature features of a room from its two photos. This replaced the old full
+// survey on the render path: prose measurements and counts were the single biggest source of
+// "this is not my room", because every misread became architecture both renders then obeyed.
+// Geometry now comes straight from the photographs, which cannot lie; this reading exists for
+// one reason — a feature visible in ONE photo (an ornate arch, a sloped ceiling) must still be
+// named for the render whose camera never sees it.
+const FEATURES_SYSTEM_PROMPT = `You are shown two photographs of the SAME real room, taken from opposite ends.
+
+Your only job is to name the room's SIGNATURE FEATURES — the two to five details that give this specific room its character and that MUST survive any redesign: for example a sloped or raking glass facade, a timber-slatted or coffered ceiling, exposed beams or bracing, a curved or angled wall, a double-height void, an archway or colonnade, a feature staircase, a fireplace, built-in shelving, or a dramatic view out.
+
+For each feature say what it is, where it sits in the room, and describe its shape and ornament in enough detail to redraw it from words alone.
+
+Rules:
+- Both photos show the SAME room. Cross-reference them; never describe them as two rooms.
+- Report only what you can actually see. Never invent features.
+- Do NOT report counts, dimensions, layouts, furniture or finishes. Only character-defining features.
+- Write in English, one short line per feature, no headings, no preamble, no commentary.
+- If the room genuinely has no distinctive feature, answer with the single word: none`;
+
 // Reads a 2D architectural floor plan so it can be rebuilt as a furnished top-down render.
 // The written brief is what reaches the image model as text; the ROOMS line is what lets the
 // app lay real, editable name labels over the finished render instead of trusting the image
@@ -435,6 +454,41 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, compliant, reason }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // FEATURES MODE — name ONLY the signature features of the room in the (two) photos.
+    if (mode === "features") {
+      const inputs: ImageInput[] = [];
+      if (Array.isArray(body?.image_base64s)) {
+        for (const raw of body.image_base64s) {
+          const img = typeof raw === "string" ? toImageInput(raw) : null;
+          if (img) inputs.push(img);
+          if (inputs.length >= 2) break;
+        }
+      } else if (typeof body?.image_base64 === "string") {
+        const img = toImageInput(body.image_base64);
+        if (img) inputs.push(img);
+      }
+      if (!inputs.length) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing room photos" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const features = await callGemini(
+        inputs,
+        FEATURES_SYSTEM_PROMPT,
+        "These photographs show the same room from opposite ends. List only its signature features.",
+        600,
+      );
+
+      await logUsage(req, "success", Date.now() - startTime, { mode: "features" });
+
+      return new Response(
+        JSON.stringify({ success: true, features: (features || "").trim() }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
