@@ -25,11 +25,7 @@ const resolveContactsTab = (searchParams: URLSearchParams) => {
   return "contacts";
 };
 
-const resolveContactsView = (searchParams: URLSearchParams) => {
-  const nextView = (searchParams.get("view") || "contacts").toLowerCase();
-  if (["contacts", "cards"].includes(nextView)) {
-    return nextView as "contacts" | "cards";
-  }
+const resolveContactsView = (_searchParams: URLSearchParams) => {
   return "contacts" as const;
 };
 
@@ -104,7 +100,7 @@ export function ContactsContent({
   language, 
   activeTab, 
   setActiveTab,
-  contactView = "cards",
+  contactView = "contacts",
   setContactView = () => {},
   openChatUserId = null,
   clearOpenChat = () => {},
@@ -290,12 +286,6 @@ export function ContactsContent({
                 </span>
               )}
             </button>
-            {/* Cards tab — hidden but code preserved
-            <button type="button" onClick={() => setContactView("cards")} className={`flex min-w-0 items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-full text-xs font-semibold transition-all ${activeTab === 'contacts' && contactView === 'cards' ? 'bg-[hsl(25,95%,55%)] text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)]' : 'text-muted-foreground hover:text-foreground'}`}>
-              <LayoutGrid className="h-3.5 w-3.5" />
-              <span className="truncate">{language === 'ar' ? 'بطاقات' : 'Cards'}</span>
-            </button>
-            */}
             <button type="button" onClick={() => setContactView("groups")} className={`flex min-w-0 items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-full text-xs font-semibold transition-all ${activeTab === 'groups' ? 'bg-[hsl(280,70%,55%)] text-white shadow-[0_8px_18px_rgba(168,85,247,0.24)]' : 'text-muted-foreground hover:text-foreground'}`}>
               <Users className="h-3.5 w-3.5" />
               <span className="truncate">{language === 'ar' ? 'المجموعات' : 'Group Chat'}</span>

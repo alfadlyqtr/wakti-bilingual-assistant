@@ -89,7 +89,7 @@ export function ContactList({
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
-  const [internalViewMode, setInternalViewMode] = useState<"contacts" | "cards">("cards");
+  const [internalViewMode, setInternalViewMode] = useState<"contacts" | "cards">("contacts");
   const compactView = (viewMode ?? internalViewMode) === "contacts";
   
   // Long-press context menu state

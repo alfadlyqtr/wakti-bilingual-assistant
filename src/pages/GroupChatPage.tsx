@@ -28,6 +28,8 @@ import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
 import { prepareAvatarUploadFile } from "@/utils/avatarUpload";
 import { VoiceRecorder, type VoiceRecorderHandle } from "@/components/contacts/VoiceRecorder";
 
+const REPLY_PREVIEW_CHAR_LIMIT = 50;
+
 function getMentionInfo(text: string): { startIndex: number; filter: string } | null {
   const match = text.match(/(?:^|\s)(@[^\s]*)$/);
   if (!match) return null;
@@ -106,6 +108,8 @@ export default function GroupChatPage() {
   const ignoreNextImageClickRef = useRef(false);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const pendingReactionsRef = useRef<Set<string>>(new Set());
+  const [jumpHighlightMessageId, setJumpHighlightMessageId] = useState<string | null>(null);
+  const jumpHighlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const entryReadCapturedRef = useRef(false);
   const isDark = theme === "dark";
   const entrySource = searchParams.get("from");
@@ -467,6 +471,33 @@ export default function GroupChatPage() {
   const scrollToBottom = useCallback(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
     setShowScrollToBottom(false);
+  }, []);
+
+  const jumpToRepliedMessage = useCallback((replyToId?: string | null) => {
+    if (!replyToId) return;
+
+    const targetBubble = messageBubbleRefs.current[replyToId];
+    if (!targetBubble) return;
+
+    targetBubble.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    setJumpHighlightMessageId(replyToId);
+
+    if (jumpHighlightTimeoutRef.current) {
+      clearTimeout(jumpHighlightTimeoutRef.current);
+    }
+
+    jumpHighlightTimeoutRef.current = setTimeout(() => {
+      setJumpHighlightMessageId((current) => (current === replyToId ? null : current));
+      jumpHighlightTimeoutRef.current = null;
+    }, 1300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (jumpHighlightTimeoutRef.current) {
+        clearTimeout(jumpHighlightTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Turn off Wakti typing indicator when a new Wakti message arrives
@@ -1215,23 +1246,26 @@ export default function GroupChatPage() {
   const renderReplySnippet = (message: GroupChatMessage, isSentByMe: boolean) => {
     if (!message.reply_to || message.is_deleted) return null;
 
+    const getReplyPreviewText = () => {
+      if (message.reply_to?.is_deleted) return language === "ar" ? "تم حذف هذه الرسالة" : "This message was deleted";
+      if (message.reply_to?.message_type === "image") return "📷 Image";
+      if (message.reply_to?.message_type === "voice") return "🎤 Voice";
+      if (message.reply_to?.message_type === "pdf") return "📄 PDF";
+
+      const originalText = message.reply_to?.content || "...";
+      if (originalText.length <= REPLY_PREVIEW_CHAR_LIMIT) return originalText;
+      return `${originalText.slice(0, REPLY_PREVIEW_CHAR_LIMIT)}…`;
+    };
+
     return (
       <div className={cn(
-        "mb-2 rounded-lg px-2 py-1 text-xs border-l-2",
+        "mb-2 rounded-lg px-2 py-1 text-xs border-l-2 cursor-pointer",
         isSentByMe
           ? "bg-white/20 border-white/40 text-white/90"
           : isDark ? "bg-black/20 border-gray-400 text-gray-300" : "bg-black/5 border-gray-400 text-gray-600"
-      )}>
-        <div className="truncate">
-          {message.reply_to.is_deleted
-            ? (language === "ar" ? "تم حذف هذه الرسالة" : "This message was deleted")
-            : message.reply_to.message_type === "image"
-              ? "📷 Image"
-              : message.reply_to.message_type === "voice"
-                ? "🎤 Voice"
-                : message.reply_to.message_type === "pdf"
-                  ? "📄 PDF"
-                  : message.reply_to.content || "..."}
+      )} onClick={() => jumpToRepliedMessage(message.reply_to?.id)}>
+        <div className="whitespace-pre-wrap break-words">
+          {getReplyPreviewText()}
         </div>
       </div>
     );
@@ -1542,13 +1576,14 @@ export default function GroupChatPage() {
                               messageBubbleRefs.current[message.id] = element;
                             }}
                             className={cn(
-                              "max-w-full overflow-hidden select-none rounded-3xl px-4 shadow-sm",
+                              "max-w-full overflow-hidden select-none rounded-3xl px-4 shadow-sm transition-all duration-300",
                               reactionSummary ? "pt-5 pb-3" : "py-3",
                               mine
                                 ? "bg-[linear-gradient(135deg,hsl(210_100%_55%)_0%,hsl(195_100%_50%)_100%)] text-white"
                                 : isWakti
                                   ? "bg-[linear-gradient(135deg,hsl(280_60%_65%)/10_0%,hsl(210_100%_65%)/10_100%)] border border-[hsl(280_60%_65%)]/20 text-foreground"
-                                  : isDark ? "bg-white/8 text-white border border-white/10" : "bg-white border border-[#d9dee9] text-[#060541]"
+                                  : isDark ? "bg-white/8 text-white border border-white/10" : "bg-white border border-[#d9dee9] text-[#060541]",
+                              jumpHighlightMessageId === message.id && (mine ? "ring-2 ring-white/80" : "ring-2 ring-blue-400/80")
                             )}
                             style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
                           >

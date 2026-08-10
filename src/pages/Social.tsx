@@ -42,15 +42,8 @@ const resolveSocialTab = (searchParams: URLSearchParams) => {
   return "contacts";
 };
 
-const resolveSocialView = (searchParams: URLSearchParams) => {
-  const rawView = searchParams.has("view")
-    ? searchParams.get("view")
-    : readStoredValue(SOCIAL_VIEW_STORAGE_KEY, "cards");
-  const view = (rawView || "cards").toLowerCase();
-  if (["contacts", "cards"].includes(view)) {
-    return view as "contacts" | "cards";
-  }
-  return "cards" as const;
+const resolveSocialView = (_searchParams: URLSearchParams) => {
+  return "contacts" as const;
 };
 
 export default function Social() {

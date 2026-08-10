@@ -31,6 +31,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const MAX_CHARS = 200;
+const REPLY_PREVIEW_CHAR_LIMIT = 50;
 
 export default function ChatPage() {
   const { contactId } = useParams<{ contactId: string }>();
@@ -73,6 +74,8 @@ export default function ChatPage() {
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const pendingReactionsRef = useRef<Set<string>>(new Set());
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [jumpHighlightMessageId, setJumpHighlightMessageId] = useState<string | null>(null);
+  const jumpHighlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasScrolledToUnreadRef = useRef(false);
   const isNearBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
@@ -120,6 +123,33 @@ export default function ChatPage() {
     setShowScrollToBottom(false);
     isNearBottomRef.current = true;
   };
+
+  const jumpToRepliedMessage = useCallback((replyToId?: string | null) => {
+    if (!replyToId) return;
+
+    const targetBubble = messageBubbleRefs.current[replyToId];
+    if (!targetBubble) return;
+
+    targetBubble.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    setJumpHighlightMessageId(replyToId);
+
+    if (jumpHighlightTimeoutRef.current) {
+      clearTimeout(jumpHighlightTimeoutRef.current);
+    }
+
+    jumpHighlightTimeoutRef.current = setTimeout(() => {
+      setJumpHighlightMessageId((current) => (current === replyToId ? null : current));
+      jumpHighlightTimeoutRef.current = null;
+    }, 1300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (jumpHighlightTimeoutRef.current) {
+        clearTimeout(jumpHighlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Get current user ID
   useEffect(() => {
@@ -875,6 +905,18 @@ export default function ChatPage() {
     return url.trim().replace(/^(%20|\s)+/, '').replace(/(%20|\s)+$/, '');
   };
 
+  const getReplyPreviewText = (replyTo: DirectMessage['reply_to']) => {
+    if (!replyTo) return '...';
+    if (replyTo.is_deleted) return language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted';
+    if (replyTo.message_type === 'image') return '📷 Image';
+    if (replyTo.message_type === 'voice') return '🎤 Voice';
+    if (replyTo.message_type === 'pdf') return '📄 PDF';
+
+    const originalText = replyTo.content || '...';
+    if (originalText.length <= REPLY_PREVIEW_CHAR_LIMIT) return originalText;
+    return `${originalText.slice(0, REPLY_PREVIEW_CHAR_LIMIT)}…`;
+  };
+
   // Theme-based styles
   const isDark = theme === 'dark';
   
@@ -1008,7 +1050,13 @@ export default function ChatPage() {
                   isSentByMe
                     ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
                     : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
-                } backdrop-blur-sm shadow-sm`}
+                } backdrop-blur-sm shadow-sm transition-all duration-300 ${
+                  jumpHighlightMessageId === message.id
+                    ? isSentByMe
+                      ? 'ring-2 ring-white/80'
+                      : 'ring-2 ring-blue-400/80'
+                    : ''
+                }`}
                 style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
               >
               {/* Quoted reply */}
@@ -1021,12 +1069,9 @@ export default function ChatPage() {
                   isSentByMe
                     ? 'bg-white/20 border-white/40 text-white/90'
                     : isDark ? 'bg-black/20 border-gray-400 text-gray-300' : 'bg-black/5 border-gray-400 text-gray-600'
-                }`}>
-                  <div className="truncate">
-                    {message.reply_to.is_deleted ? (language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted') : message.reply_to.message_type === 'image' ? '📷 Image' :
-                     message.reply_to.message_type === 'voice' ? '🎤 Voice' :
-                     message.reply_to.message_type === 'pdf' ? '📄 PDF' :
-                     message.reply_to.content || '...'}
+                } cursor-pointer`} onClick={() => jumpToRepliedMessage(message.reply_to?.id)}>
+                  <div className="whitespace-pre-wrap break-words">
+                    {getReplyPreviewText(message.reply_to)}
                   </div>
                 </div>
               )}
@@ -1222,12 +1267,9 @@ export default function ChatPage() {
           isSentByMe
             ? 'bg-white/20 border-white/40 text-white/90'
             : isDark ? 'bg-black/20 border-gray-400 text-gray-300' : 'bg-black/5 border-gray-400 text-gray-600'
-        }`}>
-          <div className="truncate">
-            {message.reply_to.is_deleted ? (language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted') : message.reply_to.message_type === 'image' ? '📷 Image' :
-             message.reply_to.message_type === 'voice' ? '🎤 Voice' :
-             message.reply_to.message_type === 'pdf' ? '📄 PDF' :
-             message.reply_to.content || '...'}
+        } cursor-pointer`} onClick={() => jumpToRepliedMessage(message.reply_to?.id)}>
+          <div className="whitespace-pre-wrap break-words">
+            {getReplyPreviewText(message.reply_to)}
           </div>
         </div>
       )}
