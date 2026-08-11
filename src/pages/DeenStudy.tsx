@@ -228,6 +228,7 @@ function saveDailyPlanProgress(byPlanId: Record<string, number>) {
   try {
     localStorage.setItem(STUDY_DAILY_PROGRESS_KEY, JSON.stringify({ date: todayKey(), byPlanId }));
   } catch {}
+  scheduleStudySyncPush();
 }
 
 function readDailyLearntAyahKeys(): string[] {
@@ -246,10 +247,59 @@ function saveDailyLearntAyahKeys(ayahKeys: string[]) {
   try {
     localStorage.setItem(STUDY_DAILY_LEARNT_AYAHS_KEY, JSON.stringify({ date: todayKey(), ayahKeys }));
   } catch {}
+  scheduleStudySyncPush();
 }
 
 function savePlanStore(store: StudyPlanStore) {
   try { localStorage.setItem(STUDY_PLAN_KEY, JSON.stringify(store)); } catch {}
+  scheduleStudySyncPush();
+}
+
+const STUDY_SYNC_META_KEY = "deen_study_sync_meta_v1";
+
+let studySyncUserId: string | null = null;
+let studySyncPushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function readStudySyncMeta(): { uid: string; syncedAt: string } | null {
+  try {
+    const raw = localStorage.getItem(STUDY_SYNC_META_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { uid?: unknown; syncedAt?: unknown };
+    if (typeof parsed?.uid !== "string") return null;
+    return { uid: parsed.uid, syncedAt: typeof parsed.syncedAt === "string" ? parsed.syncedAt : "" };
+  } catch { return null; }
+}
+
+function writeStudySyncMeta(uid: string, syncedAt: string) {
+  try { localStorage.setItem(STUDY_SYNC_META_KEY, JSON.stringify({ uid, syncedAt })); } catch {}
+}
+
+async function pushStudyStateToServer() {
+  const uid = studySyncUserId;
+  if (!uid) return;
+  try {
+    const now = new Date().toISOString();
+    const parseOr = (key: string, fallback: unknown) => {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch { return fallback; }
+    };
+    const { error } = await (supabase as any).from("deen_study_state").upsert({
+      user_id: uid,
+      plan_store: parseOr(STUDY_PLAN_KEY, { activePlanId: null, plans: [] }),
+      daily_progress: parseOr(STUDY_DAILY_PROGRESS_KEY, {}),
+      daily_learnt_ayahs: parseOr(STUDY_DAILY_LEARNT_AYAHS_KEY, {}),
+      updated_at: now,
+    });
+    if (!error) writeStudySyncMeta(uid, now);
+  } catch {}
+}
+
+function scheduleStudySyncPush() {
+  if (!studySyncUserId) return;
+  if (studySyncPushTimer) clearTimeout(studySyncPushTimer);
+  studySyncPushTimer = setTimeout(() => { void pushStudyStateToServer(); }, 2000);
 }
 
 async function fetchAyah(surahNumber: number, ayahNumber: number): Promise<AyahData | null> {
@@ -363,6 +413,75 @@ export default function DeenStudy() {
     setDailyPlanProgressByPlan(readDailyPlanProgress());
     setDailyLearntAyahKeys(readDailyLearntAyahKeys());
   }, [activeTab, planStore.activePlanId]);
+
+  const applyServerStudyState = useCallback((row: any) => {
+    try {
+      if (row?.plan_store) localStorage.setItem(STUDY_PLAN_KEY, JSON.stringify(row.plan_store));
+      if (row?.daily_progress) localStorage.setItem(STUDY_DAILY_PROGRESS_KEY, JSON.stringify(row.daily_progress));
+      if (row?.daily_learnt_ayahs) localStorage.setItem(STUDY_DAILY_LEARNT_AYAHS_KEY, JSON.stringify(row.daily_learnt_ayahs));
+    } catch {}
+    setPlanStore(readPlanStore());
+    setDailyPlanProgressByPlan(readDailyPlanProgress());
+    setDailyLearntAyahKeys(readDailyLearntAyahKeys());
+  }, []);
+
+  // Cross-device sync. Runs only when this page opens; never on app startup/login.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: sd } = await supabase.auth.getSession();
+      const uid = sd.session?.user?.id ?? null;
+      if (cancelled) return;
+      studySyncUserId = uid;
+      if (!uid) return; // guests stay local-only
+
+      const meta = readStudySyncMeta();
+
+      if (meta && meta.uid !== uid) {
+        // A different account was last active on this device: the local copies
+        // are not this user's data, so never upload them.
+        const { data: row } = await (supabase as any)
+          .from("deen_study_state").select("*").eq("user_id", uid).maybeSingle();
+        if (cancelled) return;
+        if (row) {
+          applyServerStudyState(row);
+          writeStudySyncMeta(uid, row.updated_at ?? "");
+        } else {
+          try {
+            localStorage.removeItem(STUDY_PLAN_KEY);
+            localStorage.removeItem(STUDY_DAILY_PROGRESS_KEY);
+            localStorage.removeItem(STUDY_DAILY_LEARNT_AYAHS_KEY);
+          } catch {}
+          setPlanStore({ activePlanId: null, plans: [] });
+          setDailyPlanProgressByPlan({});
+          setDailyLearntAyahKeys([]);
+          writeStudySyncMeta(uid, "");
+        }
+        return;
+      }
+
+      // Timestamp compare: pull the full row only if the server copy is newer.
+      const { data: head } = await (supabase as any)
+        .from("deen_study_state").select("updated_at").eq("user_id", uid).maybeSingle();
+      if (cancelled) return;
+      if (!head) {
+        // First open after this feature shipped: upload existing local progress.
+        if (localStorage.getItem(STUDY_PLAN_KEY) !== null) void pushStudyStateToServer();
+        else writeStudySyncMeta(uid, "");
+        return;
+      }
+      const serverAt = new Date(head.updated_at ?? 0).getTime();
+      const localAt = new Date(meta?.syncedAt || 0).getTime();
+      if (serverAt > localAt) {
+        const { data: row } = await (supabase as any)
+          .from("deen_study_state").select("*").eq("user_id", uid).maybeSingle();
+        if (cancelled || !row) return;
+        applyServerStudyState(row);
+        writeStudySyncMeta(uid, row.updated_at ?? "");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [applyServerStudyState]);
 
   useEffect(() => {
     let cancelled = false;
