@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // @ts-ignore - esbuild WASM for Deno Edge (no cache directory needed)
-import * as esbuild from "https://deno.land/x/esbuild@v0.20.1/wasm.js";
+import * as esbuild from "https://deno.land/x/esbuild@v0.21.5/wasm.js";
+
 
 // Initialize esbuild WASM once (singleton pattern for edge runtime)
 let esbuildInitialized = false;
@@ -9,9 +10,9 @@ const initializeEsbuild = async () => {
   if (esbuildInitialized) return;
   
   const wasmUrls = [
-    "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.20.1/esbuild.wasm",
-    "https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm",
-    "https://cdnjs.cloudflare.com/ajax/libs/esbuild-wasm/0.20.1/esbuild.wasm"
+    "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.21.5/esbuild.wasm",
+    "https://unpkg.com/esbuild-wasm@0.21.5/esbuild.wasm",
+    "https://cdnjs.cloudflare.com/ajax/libs/esbuild-wasm/0.21.5/esbuild.wasm"
   ];
 
   let lastError: Error | null = null;
@@ -3849,11 +3850,11 @@ serve(async (req) => {
     console.error("Build error:", error);
     console.error("Error stack:", error instanceof Error ? error.stack : 'No stack');
     // Don't call esbuild.stop() in catch - may not be initialized
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : "Unknown build error" 
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown build error"
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -3958,7 +3959,7 @@ const normalizePathname = (value) => {
   const raw = typeof value === 'string' && value.length > 0 ? value : '/';
   const noQuery = raw.split('?')[0].split('#')[0] || '/';
   const withLeadingSlash = noQuery.startsWith('/') ? noQuery : '/' + noQuery;
-  const collapsed = withLeadingSlash.replace(/\/+/g, '/');
+  const collapsed = withLeadingSlash.replace(/[/]+/g, '/');
   if (collapsed.length > 1 && collapsed.endsWith('/')) {
     return collapsed.slice(0, -1);
   }
