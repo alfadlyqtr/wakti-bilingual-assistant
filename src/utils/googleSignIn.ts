@@ -58,6 +58,13 @@ export async function startGoogleSignIn(redirectTo = '/dashboard'): Promise<{ er
   const callbackUrl = new URL(GOOGLE_SIGN_IN_CALLBACK_PATH, origin);
   callbackUrl.searchParams.set('next', nextPath);
 
+  // One login ceremony = one shared login_id, passed through the OAuth round trip.
+  // Both the WebView and the external browser stamp the SAME id, so the
+  // single-device guard never treats them as two different devices fighting.
+  const loginId = crypto.randomUUID();
+  callbackUrl.searchParams.set('lid', loginId);
+  try { sessionStorage.setItem('wakti_login_id', loginId); } catch {}
+
   setStoredGoogleRedirect(nextPath);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -122,8 +129,9 @@ export async function waitForGoogleSession(code?: string | null): Promise<Sessio
 export async function finalizeGoogleSignInSession(params: {
   session: Session;
   applyManualLoginRecovery?: ManualLoginRecovery;
+  loginId?: string | null;
 }): Promise<void> {
-  const { session, applyManualLoginRecovery } = params;
+  const { session, applyManualLoginRecovery, loginId } = params;
   const loginTimestamp = Date.now();
 
   try {
@@ -140,22 +148,25 @@ export async function finalizeGoogleSignInSession(params: {
     });
   } catch {}
 
+  // Stamp the shared ceremony login_id BEFORE waking AuthContext, so the
+  // single-device monitor arms with the correct id (no self-kick race).
+  const effectiveLoginId = loginId || crypto.randomUUID();
+  try {
+    sessionStorage.setItem('wakti_login_id', effectiveLoginId);
+  } catch {}
+
   try {
     applyManualLoginRecovery?.(session.user, session, loginTimestamp);
   } catch {}
 
   try {
-    const loginId = crypto.randomUUID();
-    try {
-      sessionStorage.setItem('wakti_login_id', loginId);
-    } catch {}
     Promise.resolve(
       supabase
         .from('user_active_sessions')
         .upsert({
           user_id: session.user.id,
           session_id: session.access_token,
-          login_id: loginId,
+          login_id: effectiveLoginId,
           last_login: new Date().toISOString(),
           device_info: navigator.userAgent || 'Unknown Device',
         })

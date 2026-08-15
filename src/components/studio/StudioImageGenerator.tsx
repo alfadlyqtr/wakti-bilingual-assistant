@@ -31,6 +31,8 @@ import {
   GalleryHorizontalEnd,
 } from 'lucide-react';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
+import ImageEditPanel from '@/components/studio/ImageEditPanel';
+import { EditSegment, fetchSegmentsForTask } from '@/components/studio/imageEditService';
 import type { UploadedFile } from '@/types/fileUpload';
 import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
 import {
@@ -51,7 +53,7 @@ import VisualAdsGenerator, {
   type VisualAdsState,
 } from '@/components/studio/VisualAdsGenerator';
 
-type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
+type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads' | 'pro-studio';
 
 const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 const MAX_STUDIO_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -144,6 +146,23 @@ const createGenerationUiError = (error: unknown, language: string): Error => {
   return tagged;
 };
 
+// A timeout while waiting for an already-submitted task must NOT be retried —
+// retrying resubmits a brand new PAID generation (double charge).
+const createPollTimeoutError = (language: string): Error => {
+  const meta = classifyGenerationError(
+    language === 'ar' ? 'انتهت مدة الانتظار' : 'Generation timed out — please try again',
+    language,
+  );
+  meta.retryable = false;
+  meta.shouldFallbackToBest = false;
+  meta.userMessage = language === 'ar'
+    ? 'الصورة تأخذ وقتاً أطول من المعتاد. حاول مرة أخرى.'
+    : 'The image is taking longer than usual. Please try again.';
+  const tagged = new Error(meta.userMessage) as TaggedGenerationError;
+  tagged.__generationMeta = meta;
+  return tagged;
+};
+
 const getGenerationErrorMeta = (error: unknown, language: string): GenerationErrorMeta => {
   const tagged = error as TaggedGenerationError;
   if (tagged?.__generationMeta) {
@@ -213,6 +232,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // Result
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [resultError, setResultError] = useState<string | null>(null);
+  // Kie 2.0 task that produced the current Quick result (enables Edit feature)
+  const [resultKieTaskId, setResultKieTaskId] = useState<string | null>(null);
+  const [editPanelOpen, setEditPanelOpen] = useState(false);
+  // Segments prefetched in the background right after a Pro Studio generation
+  const [prefetchedSegments, setPrefetchedSegments] = useState<EditSegment[] | null>(null);
+  const prefetchTaskRef = useRef<string | null>(null);
+  const proStudioTaskRef = useRef<string | null>(null);
+  // Kie only edits ORIGINAL generation tasks — we keep the original task ID forever
+  // and accumulate every edit instruction so chained edits rebuild from the original.
+  const [editHistory, setEditHistory] = useState<string[]>([]);
 
   // Uploaded file (for i2i and bg-removal)
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -522,7 +551,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     token: string,
     fallbackFeature?: string,
   ): Promise<string[]> => {
-    const deadline = Date.now() + 3 * 60 * 1000; // 3 minute frontend timeout
+    const deadline = Date.now() + 8 * 60 * 1000; // 8 minute frontend timeout (Grok 2.0 takes ~4 min per image)
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 5000));
       const pollResp = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
@@ -545,8 +574,46 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       }
       // status === 'pending' — continue polling
     }
-    throw createGenerationUiError(language === 'ar' ? 'انتهت مدة الانتظار' : 'Generation timed out — please try again', language);
+    throw createPollTimeoutError(language);
   };
+
+  // ─── Generate: Pro Studio (Grok 2.0) — slow, gorgeous, editable ───
+  const generateProStudio = async (): Promise<string[]> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Authentication required');
+    const token = session.access_token;
+    const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-text2image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ prompt, user_id: user?.id, aspect_ratio: imageAspectRatio, model: 'grok-imagine-image-2-0/text-to-image' }),
+    });
+    const submitJson = await submitResp.json().catch(() => ({} as any));
+    if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
+      emitTrialBlocked(submitJson, 't2i');
+      return [];
+    }
+    if (!submitResp.ok || !submitJson?.success) {
+      throw createGenerationUiError(submitJson?.error || 'Pro Studio submit failed', language);
+    }
+    const taskId: string = submitJson?.taskId;
+    if (!taskId) throw createGenerationUiError('No taskId returned from KIE submit', language);
+    setResultKieTaskId(taskId);
+    proStudioTaskRef.current = taskId;
+    return pollKieTask('wakti-grok-text2image', taskId, { user_id: user?.id }, token, 't2i');
+  };
+
+  // Fire the free segment-map right after a Pro Studio result so Edit opens instantly
+  const prefetchSegments = useCallback((taskId: string) => {
+    prefetchTaskRef.current = taskId;
+    setPrefetchedSegments(null);
+    fetchSegmentsForTask(taskId)
+      .then((segs) => {
+        if (prefetchTaskRef.current === taskId && segs.length > 0) {
+          setPrefetchedSegments(segs);
+        }
+      })
+      .catch(() => { /* panel will fetch on demand */ });
+  }, []);
 
   // ─── Generate: Quick (Grok) Text2Image ───
   const generateQuickText2Image = async (): Promise<string[]> => {
@@ -587,7 +654,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, aspect_ratio: imageAspectRatio }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, aspect_ratio: imageAspectRatio, model: 'nano-banana-2-lite' }),
     });
     const submitJson = await submitResp.json().catch(() => ({} as any));
     if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
@@ -845,6 +912,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       showSuccessToast?: boolean;
       showAlreadySavedToast?: boolean;
       triggerSaveSuccess?: boolean;
+      kieTaskId?: string | null;
+      forceNew?: boolean;
+      extraMeta?: Record<string, unknown>;
     }
   ) => {
     if (!imageUrl || !user?.id) {
@@ -855,9 +925,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       showSuccessToast = true,
       showAlreadySavedToast = true,
       triggerSaveSuccess = true,
+      kieTaskId = null,
+      forceNew = false,
+      extraMeta = {},
     } = options || {};
 
-    if (isSaved && savedImageId && savedSourceUrl === imageUrl) {
+    if (!forceNew && isSaved && savedImageId && savedSourceUrl === imageUrl) {
       if (showAlreadySavedToast) {
         toast.success(language === 'ar' ? 'تم الحفظ بالفعل' : 'Already saved');
       }
@@ -869,9 +942,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
     setIsSaving(true);
     try {
-      let bucketUrl = savedBucketUrl;
+      let bucketUrl = forceNew ? null : savedBucketUrl;
       let storagePath = '';
-      let resolvedImageId = savedImageId;
+      let resolvedImageId = forceNew ? null : savedImageId;
 
       if (!bucketUrl || savedSourceUrl !== imageUrl) {
         const stored = await storeGeneratedImageAsset(imageUrl);
@@ -883,7 +956,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         if (parts[1]) storagePath = decodeURIComponent(parts[1]);
       }
 
-      if (!savedImageId) {
+      if (!resolvedImageId) {
         const { data: existingRow, error: existingErr } = await (supabase as any)
           .from('user_generated_images')
           .select('id')
@@ -892,7 +965,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           .maybeSingle();
         if (existingErr) throw existingErr;
 
-        if (existingRow?.id) {
+        if (!forceNew && existingRow?.id) {
           resolvedImageId = existingRow.id;
           setSavedImageId(existingRow.id);
         } else {
@@ -904,7 +977,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               prompt: prompt || null,
               submode,
               quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
-              meta: { storage_path: storagePath },
+              meta: { storage_path: storagePath, ...(kieTaskId ? { kie_task_id: kieTaskId } : {}), ...extraMeta },
             })
             .select('id')
             .single();
@@ -1061,6 +1134,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setResultImageUrl(null);
     setResultUrls([]);
     setPickerIndex(0);
+    setResultKieTaskId(null);
+    setEditPanelOpen(false);
+    setPrefetchedSegments(null);
+    prefetchTaskRef.current = null;
+    proStudioTaskRef.current = null;
+    setEditHistory([]);
     setIsSaved(false);
     setSavedBucketUrl(null);
     setSavedImageId(null);
@@ -1069,8 +1148,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
     let generatedUrl: string | null = null;
     try {
-      // Quick uses Grok and returns multiple images
-      if (quality === 'quick' && (submode === 'text2image' || submode === 'image2image')) {
+      // Pro Studio: Grok 2.0, multi-image, editable
+      if (submode === 'pro-studio') {
+        const urls = await runWithAutoHeal(generateProStudio);
+        stopProgress();
+        if (urls.length > 0) {
+          setResultUrls(urls);
+          setResultImageUrl(urls[0]);
+          generatedUrl = urls[0];
+          if (proStudioTaskRef.current) prefetchSegments(proStudioTaskRef.current);
+        }
+      } else if (quality === 'quick' && (submode === 'text2image' || submode === 'image2image')) {
         const urls = await runWithAutoHeal(
           submode === 'text2image'
             ? generateQuickText2Image
@@ -1143,12 +1231,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       setIsGenerating(false);
       generateLockRef.current = false;
     }
-    // Auto-save is fire-and-forget — skip for Quick (Grok) since user must choose which image to save
+    // Auto-save is fire-and-forget — skip for Quick (multi-image picker: user chooses which to save)
     if (generatedUrl && quality !== 'quick' && submode !== 'visual-ads' && !operatorPayload?.image?.autoSave) {
       persistGeneratedImage(generatedUrl, {
         showSuccessToast: false,
         showAlreadySavedToast: false,
         triggerSaveSuccess: false,
+        kieTaskId: submode === 'pro-studio' ? proStudioTaskRef.current : null,
       }).catch(() => { /* silent */ });
     }
   }, [imageAspectRatio, isGuest, language, operatorPayload, persistGeneratedImage, prompt, quality, restoredVisualAdsState, runWithAutoHeal, submode, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]);
@@ -1308,6 +1397,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       showSuccessToast: true,
       showAlreadySavedToast: true,
       triggerSaveSuccess: resultUrls.length <= 1, // Don't navigate if there are multiple images
+      kieTaskId: resultKieTaskId,
     });
   };
 
@@ -1363,7 +1453,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               prompt: prompt || null,
               submode,
               quality: submode === 'text2image' || submode === 'image2image' ? quality : null,
-              meta: { storage_path: storagePath },
+              meta: { storage_path: storagePath, ...(resultKieTaskId ? { kie_task_id: resultKieTaskId } : {}) },
             })
             .select('id')
             .single();
@@ -1392,13 +1482,55 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     }
   };
 
+  // ─── Edit feature (Kie 2.0): replace result with edited image + UPDATE the same saved row ───
+  const handleEdited = async (newUrl: string, _editTaskId: string, newInstruction: string) => {
+    const newHistory = [...editHistory, newInstruction].filter(Boolean);
+    setEditHistory(newHistory);
+    setResultImageUrl(newUrl);
+    setResultUrls([newUrl]);
+    setPickerIndex(0);
+    if (resultKieTaskId) prefetchSegments(resultKieTaskId); // cached → instant
+    if (!user?.id) return;
+    try {
+      const stored = await storeGeneratedImageAsset(newUrl);
+      setSavedBucketUrl(stored.url);
+      setSavedSourceUrl(newUrl);
+      if (savedImageId) {
+        // Update the SAME saved image — no duplicate cards. Original task ID stays forever.
+        const { error } = await (supabase as any)
+          .from('user_generated_images')
+          .update({
+            image_url: stored.url,
+            meta: { storage_path: stored.storagePath, kie_task_id: resultKieTaskId, edit_history: newHistory },
+          })
+          .eq('id', savedImageId)
+          .eq('user_id', user.id);
+        if (error) throw error;
+      } else {
+        await persistGeneratedImage(newUrl, {
+          showSuccessToast: false,
+          showAlreadySavedToast: false,
+          triggerSaveSuccess: false,
+          kieTaskId: resultKieTaskId,
+          extraMeta: { edit_history: newHistory },
+        });
+      }
+      setIsSaved(true);
+      toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
+      window.dispatchEvent(new Event('wakti-saved-images-reload'));
+    } catch {
+      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Save failed');
+    }
+  };
+
   // ─── Submode config ───
   const submodes: { key: ImageSubmode; labelEn: string; labelAr: string; emoji: string; shortEn: string; shortAr: string }[] = [
-    { key: 'text2image',         labelEn: 'Text to Image',       labelAr: 'نص إلى صورة',        emoji: '✨',  shortEn: 'Text',        shortAr: 'نص' },
+    { key: 'text2image',         labelEn: 'Text to Image',       labelAr: 'نص إلى صورة',        emoji: '✨',  shortEn: 'Text2Image',  shortAr: 'نص' },
     { key: 'image2image',        labelEn: 'Image to Image',      labelAr: 'صورة إلى صورة',       emoji: '🖼️', shortEn: 'Img2Img',     shortAr: 'صورة' },
     { key: 'background-removal', labelEn: 'Background Removal',  labelAr: 'إزالة الخلفية',       emoji: '🪄',  shortEn: 'BG Remove',   shortAr: 'خلفية' },
     { key: 'draw',               labelEn: 'Draw',                labelAr: 'رسم',                 emoji: '✏️', shortEn: 'Draw',        shortAr: 'رسم' },
     { key: 'visual-ads',         labelEn: 'Poster Ads',          labelAr: 'إعلانات بوستر',       emoji: '🪄',  shortEn: 'Poster Ads',  shortAr: 'بوستر' },
+    { key: 'pro-studio',         labelEn: 'Pro Image Studio',    labelAr: 'استوديو برو للصور',   emoji: '💎',  shortEn: 'Pro Studio',  shortAr: 'برو' },
   ];
 
   // ─── Reset saved state when generating new image ───
@@ -1409,6 +1541,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setShowExtraReferenceImages(false);
     setResultImageUrl(null);
     setResultError(null);
+    setResultKieTaskId(null);
+    setEditPanelOpen(false);
+    setPrefetchedSegments(null);
+    prefetchTaskRef.current = null;
+    proStudioTaskRef.current = null;
+    setEditHistory([]);
     setIsSaved(false);
     setSavedBucketUrl(null);
     setSavedImageId(null);
@@ -1459,6 +1597,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {submodes.map((m) => {
         const isActive = submode === m.key;
         const isVisualAds = m.key === 'visual-ads';
+        const isProStudio = m.key === 'pro-studio';
+        const isWide = isVisualAds || isProStudio;
 
         return (
           <button
@@ -1467,22 +1607,26 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             onClick={() => setSubmode(m.key)}
             title={language === 'ar' ? m.labelAr : m.labelEn}
             className={`relative flex items-center justify-center gap-2 px-3 py-3 rounded-xl transition-all duration-200 min-h-[58px] touch-manipulation ${
-              isVisualAds ? 'col-span-2 sm:col-span-1' : ''
-            } ${
               isActive
                 ? isVisualAds
                   ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400 text-[#060541] shadow-lg shadow-orange-500/40 scale-[1.02]'
-                  : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                  : isProStudio
+                    ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-blue-600 text-white shadow-lg shadow-blue-500/40 scale-[1.02]'
+                    : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
                 : isVisualAds
                   ? 'bg-white/50 dark:bg-white/5 border-2 border-orange-400/60 dark:border-amber-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
-                  : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
+                  : isProStudio
+                    ? 'bg-white/50 dark:bg-white/5 border-2 border-blue-500/60 dark:border-sky-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
+                    : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
             }`}
           >
             <span className="text-lg leading-none">{m.emoji}</span>
             <span className={`font-semibold leading-none ${
-              isVisualAds ? 'text-sm' : 'text-[10px]'
+              isWide ? 'text-sm' : 'text-[10px]'
             } ${
-              isActive ? 'text-white dark:text-[#060541]' : (isVisualAds ? 'text-foreground dark:text-[#f2f2f2]' : 'text-[#858384] dark:text-[#606062]')
+              isActive
+                ? (isVisualAds ? 'text-[#060541]' : 'text-white dark:text-[#060541]')
+                : (isWide ? 'text-foreground dark:text-[#f2f2f2]' : 'text-[#858384] dark:text-[#606062]')
             }`}>
               {language === 'ar' ? m.shortAr : m.shortEn}
             </span>
@@ -1535,6 +1679,15 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         <Download className="h-4 w-4" />
         <span>{language === 'ar' ? 'تحميل' : 'Download'}</span>
       </button>
+      {resultKieTaskId && resultImageUrl && editHistory.length < 5 && (
+        <button
+          onClick={() => setEditPanelOpen(true)}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 text-white border border-blue-300/40 shadow-[0_0_15px_rgba(59,130,246,0.45)] transition-all duration-200 active:scale-95"
+        >
+          <Wand2 className="h-4 w-4" />
+          <span>{language === 'ar' ? 'تعديل' : 'Edit'}</span>
+        </button>
+      )}
       <button
         onClick={() => setLightboxOpen(true)}
         className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-white/80 dark:bg-white/5 border border-border/50 text-foreground transition-all duration-200 active:scale-95"
@@ -1691,6 +1844,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     'background-removal': { key: 'bg_removal', limit: 2, en: 'Background Removal', ar: 'إزالة الخلفية' },
     'draw':               { key: '',           limit: 0, en: '',                   ar: '' },
     'visual-ads':         { key: 'visual_ads', limit: 2, en: 'Poster Ads',         ar: 'إعلانات بوستر' },
+    'pro-studio':         { key: 't2i',        limit: 2, en: 'Pro Image Studio',   ar: 'استوديو برو للصور' },
   };
   const activeTrialInfo = submodeTrialMap[submode];
 
@@ -2611,9 +2765,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {submode !== 'visual-ads' && (
       <div className="rounded-2xl border border-border/50 bg-white/60 dark:bg-white/[0.03] backdrop-blur-sm p-4 space-y-4 shadow-sm">
 
-        {/* Quality toggle (T2I + I2I) */}
-        {(submode === 'text2image' || submode === 'image2image') && (
+        {/* Quality toggle (T2I + I2I) / Format only for Pro Studio */}
+        {(submode === 'text2image' || submode === 'image2image' || submode === 'pro-studio') && (
           <div className="space-y-1">
+            {submode !== 'pro-studio' && (
+            <>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 {language === 'ar' ? 'الجودة' : 'Quality'}
@@ -2660,6 +2816,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               <div className="text-xs font-semibold text-orange-500 dark:text-orange-400">
                 ضعيف للنص بالصور
               </div>
+            )}
+            </>
             )}
 
             <div className="flex items-center gap-2 flex-wrap pt-1">
@@ -3089,6 +3247,18 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         onSent={() => setShareImageTarget(null)}
       />
       <Lightbox />
+      {resultImageUrl && resultKieTaskId && (
+        <ImageEditPanel
+          open={editPanelOpen}
+          imageUrl={resultImageUrl}
+          kieTaskId={resultKieTaskId}
+          language={language}
+          preloadedSegments={prefetchedSegments}
+          editHistory={editHistory}
+          onClose={() => setEditPanelOpen(false)}
+          onEdited={handleEdited}
+        />
+      )}
     </>
   );
 }

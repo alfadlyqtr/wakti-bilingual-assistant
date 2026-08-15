@@ -40,6 +40,7 @@ export default function GoogleSignInCallback() {
         await finalizeGoogleSignInSession({
           session,
           applyManualLoginRecovery,
+          loginId: searchParams.get('lid'),
         });
         clearStoredGoogleRedirect();
         setStatus('success');

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ImageSharePickerDialog } from '@/components/studio/ImageSharePickerDialog';
+import ImageEditPanel from '@/components/studio/ImageEditPanel';
 import { Button } from '@/components/ui/button';
 import ShareButton from '@/components/ui/ShareButton';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
@@ -22,6 +23,7 @@ import {
   Check,
   Plus,
   Sparkles,
+  Wand2,
 } from 'lucide-react';
 
 interface SavedImage {
@@ -56,6 +58,8 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
   const lightboxPctRef = useRef<HTMLSpanElement | null>(null);
   const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
   const [shareImageTarget, setShareImageTarget] = useState<{ id: string; title: string; imageUrl: string | null } | null>(null);
+  const [editTarget, setEditTarget] = useState<SavedImage | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const pinchDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(1);
   const panXRef = useRef(0);
@@ -252,6 +256,55 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
     }
   };
 
+  // ─── Edited image from Kie 2.0: UPDATE the same saved row in place ───
+  // Original task ID stays forever; every instruction is appended to edit_history,
+  // so re-edits always rebuild from the original with the full recipe.
+  const handleEditedFromSaved = async (newUrl: string, _editTaskId: string, newInstruction: string) => {
+    if (!user?.id || !editTarget) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(newUrl);
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const blob = await res.blob();
+      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+      const fileName = `${user.id}/edit-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('generated-images')
+        .upload(fileName, blob, { contentType: blob.type, upsert: false });
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage.from('generated-images').getPublicUrl(fileName);
+      const bucketUrl = (urlData?.publicUrl || '').replace(/%20/g, ' ').trim();
+      if (!bucketUrl) throw new Error('Failed to get public URL');
+
+      const newHistory = [
+        ...((editTarget.meta?.edit_history as string[]) || []),
+        newInstruction,
+      ].filter(Boolean);
+      const mergedMeta = {
+        ...(editTarget.meta || {}),
+        storage_path: fileName,
+        edit_history: newHistory,
+      };
+
+      const { error: dbErr } = await (supabase as any)
+        .from('user_generated_images')
+        .update({ image_url: bucketUrl, meta: mergedMeta })
+        .eq('id', editTarget.id)
+        .eq('user_id', user.id);
+      if (dbErr) throw dbErr;
+
+      toast.success(language === 'ar' ? 'تم التحديث' : 'Updated');
+      await loadImages();
+    } catch (err) {
+      console.error('Failed to save edited image:', err);
+      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Save failed');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -277,6 +330,7 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
       image2image: { en: 'Image2Image', ar: 'صورة→صورة' },
       'background-removal': { en: 'BG Removal', ar: 'إزالة خلفية' },
       draw: { en: 'Draw', ar: 'رسم' },
+      'pro-studio': { en: 'Pro Studio', ar: 'برو' },
     };
     const entry = map[s];
     return entry ? (language === 'ar' ? entry.ar : entry.en) : s;
@@ -530,14 +584,30 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
               <div className="p-2 space-y-1.5">
                 {/* Meta row */}
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-100/80 dark:bg-orange-900/20 px-1.5 py-0.5 rounded">
-                    {submodeLabel(img.submode)}
-                  </span>
+                  {img.submode === 'pro-studio' ? (
+                    <span className="text-[10px] font-bold text-white bg-gradient-to-r from-blue-600 to-sky-500 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(59,130,246,0.4)]">
+                      💎 {language === 'ar' ? 'برو' : 'Pro Studio'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-100/80 dark:bg-orange-900/20 px-1.5 py-0.5 rounded">
+                      {submodeLabel(img.submode)}
+                    </span>
+                  )}
                   <span className="text-[10px] text-muted-foreground">{formatDate(img.created_at)}</span>
                 </div>
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-1">
+                  {img.submode === 'pro-studio' && (img.meta?.kie_task_id as string) && (((img.meta?.edit_history as string[]) || []).length < 5) && (
+                    <button
+                      onClick={() => setEditTarget(img)}
+                      aria-label={language === 'ar' ? 'تعديل الصورة' : 'Edit image'}
+                      title={language === 'ar' ? 'تعديل الصورة' : 'Edit image'}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium bg-blue-500/15 border border-blue-400/40 text-blue-600 dark:text-sky-300 active:scale-95 transition-transform"
+                    >
+                      <Wand2 className="h-3 w-3" />
+                    </button>
+                  )}
                   <button
                     onClick={() => setLightboxImage(img)}
                     aria-label={language === 'ar' ? 'توسيع الصورة' : 'Expand image'}
@@ -604,6 +674,17 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
         onClose={() => setShareImageTarget(null)}
         onSent={() => setShareImageTarget(null)}
       />
+      {editTarget && (editTarget.meta?.kie_task_id as string) && (
+        <ImageEditPanel
+          open={!!editTarget}
+          imageUrl={editTarget.image_url.replace(/%20/g, ' ').trim()}
+          kieTaskId={editTarget.meta!.kie_task_id as string}
+          language={language}
+          editHistory={(editTarget.meta?.edit_history as string[]) || []}
+          onClose={() => setEditTarget(null)}
+          onEdited={handleEditedFromSaved}
+        />
+      )}
     </>
   );
 }

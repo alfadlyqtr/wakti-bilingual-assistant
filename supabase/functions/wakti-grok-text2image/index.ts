@@ -19,8 +19,14 @@ const KIE_API_KEY = (
   || Deno.env.get("KIE_BEARER_TOKEN")
   || ""
 ).trim();
-const MODEL = "grok-imagine/text-to-image";
+// Quick tier = Nano Banana 2 Lite (fast: ~11-16s). Grok 2.0 moved to its own upcoming mode.
+// Set KIE_GROK_T2I_MODEL in Supabase secrets to override without redeploying.
+const MODEL = (Deno.env.get("KIE_GROK_T2I_MODEL") || "nano-banana-2-lite").trim();
+const MODEL_FALLBACK_1X = "grok-imagine/text-to-image";
+// Kie's 2.0 docs point to /api/v1/client/tasks but that endpoint returns 404 (docs ahead
+// of their rollout). jobs/createTask is Kie's unified entry point for ALL Market models.
 const KIE_CREATE_TASK_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
+// recordInfo is Kie's unified query endpoint — works for all Market models, 1.x and 2.0.
 const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 const NANO_BANANA_SUPPORTED_RATIOS = new Set([
   "1:1",
@@ -42,8 +48,16 @@ const NANO_BANANA_SUPPORTED_RATIOS = new Set([
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-function normalizeAspectRatio(rawValue: unknown): string {
+const GROK_2_SUPPORTED_RATIOS = new Set(["1:1", "2:3", "3:2", "9:16", "16:9"]);
+// Pro Image Studio requests Grok 2.0 explicitly via body.model — only this model may override.
+const ALLOWED_MODEL_OVERRIDES = new Set(["grok-imagine-image-2-0/text-to-image"]);
+
+function normalizeAspectRatio(rawValue: unknown, model: string): string {
   const value = String(rawValue || "auto").trim();
+  // 2.0 has no "auto" and a tighter ratio list — fall back to 1:1
+  if (model.startsWith("grok-imagine-image-2-0/")) {
+    return GROK_2_SUPPORTED_RATIOS.has(value) ? value : "1:1";
+  }
   if (NANO_BANANA_SUPPORTED_RATIOS.has(value)) {
     return value;
   }
@@ -91,7 +105,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const prompt: string = (body?.prompt || "").toString().trim();
     const userId: string = body?.user_id || "";
-    const aspectRatio = normalizeAspectRatio(body?.aspect_ratio);
+    const requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
+    const requestModel = ALLOWED_MODEL_OVERRIDES.has(requestedModel) ? requestedModel : MODEL;
+    const aspectRatio = normalizeAspectRatio(body?.aspect_ratio, requestModel);
     const callbackUrlFromBody = typeof body?.callBackUrl === "string" ? body.callBackUrl.trim() : "";
     const callbackUrlFromEnv = (Deno.env.get("KIE_NANO_BANANA_CALLBACK_URL") || "").trim();
     const callBackUrl = callbackUrlFromBody || callbackUrlFromEnv || undefined;
@@ -154,6 +170,7 @@ Deno.serve(async (req) => {
           model: MODEL,
           status: "success",
           durationMs: Date.now() - startTime,
+          metadata: { taskId, imageCount: imageUrls.length },
         });
         return new Response(
           JSON.stringify({ success: true, status: "done", urls: imageUrls, count: imageUrls.length, trial: trialPayload }),
@@ -194,20 +211,34 @@ Deno.serve(async (req) => {
     const finalPrompt = promptSafety.normalizedPrompt;
     console.log(`[grok-t2i] submit prompt="${finalPrompt.slice(0, 100)}" aspect=${aspectRatio}`);
 
-    const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        ...(callBackUrl ? { callBackUrl } : {}),
-        input: {
-          prompt: finalPrompt,
-          aspect_ratio: aspectRatio,
-        },
-      }),
-    });
-    const submitText = await submitResp.text();
-    console.log(`[grok-t2i] submit HTTP:${submitResp.status} body:${submitText.slice(0, 400)}`);
+    const submitToKie = async (model: string) => {
+      const resp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          ...(callBackUrl ? { callBackUrl } : {}),
+          input: {
+            prompt: finalPrompt,
+            aspect_ratio: aspectRatio,
+          },
+        }),
+      });
+      return { resp, text: await resp.text() };
+    };
+
+    let activeModel = requestModel;
+    let { resp: submitResp, text: submitText } = await submitToKie(activeModel);
+    console.log(`[grok-t2i] submit model=${activeModel} HTTP:${submitResp.status} body:${submitText.slice(0, 400)}`);
+
+    // Safety net: if Kie rejects the 2.0 model, retry once with the proven 1.x model
+    // so Quick mode never breaks for users while Kie finishes their 2.0 rollout.
+    if (!submitResp.ok && activeModel !== MODEL_FALLBACK_1X) {
+      console.warn(`[grok-t2i] 2.0 submit failed (HTTP ${submitResp.status}), falling back to ${MODEL_FALLBACK_1X}`);
+      activeModel = MODEL_FALLBACK_1X;
+      ({ resp: submitResp, text: submitText } = await submitToKie(activeModel));
+      console.log(`[grok-t2i] fallback submit HTTP:${submitResp.status} body:${submitText.slice(0, 400)}`);
+    }
 
     if (!submitResp.ok) {
       throw new Error(`KIE submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);

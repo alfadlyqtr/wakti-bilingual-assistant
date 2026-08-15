@@ -40,6 +40,7 @@ export default function AppleSignInCallback() {
         await finalizeAppleSignInSession({
           session,
           applyManualLoginRecovery,
+          loginId: searchParams.get('lid'),
         });
         clearStoredAppleRedirect();
         setStatus('success');
