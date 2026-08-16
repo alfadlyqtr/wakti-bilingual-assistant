@@ -289,8 +289,8 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           style={{ letterSpacing: "0.05em" }}
         >
           {isArabic 
-            ? "أذكى . أسرع . أسهل"
-            : "SMARTER . FASTER . EASIER"
+            ? "الكل في واحد"
+            : "ALL IN ONE"
           }
         </motion.p>
 
