@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { setActiveScopedUserId } from '@/utils/userScopedStorage';
 import { clearHandoffPending, markHandoffPending, startHandoffPolling } from '@/utils/oauthHandoff';
+import { dlog } from '@/utils/debugLog';
 import type { Session, User } from '@supabase/supabase-js';
 
 const PRODUCTION_ORIGIN = 'https://wakti.qa';
@@ -157,6 +158,11 @@ export async function finalizeGoogleSignInSession(params: {
       refresh_token: session.refresh_token,
     });
   } catch {}
+
+  dlog('finalize-google', {
+    rt: !!session.refresh_token,
+    stored: (() => { try { return !!localStorage.getItem('wakti-auth'); } catch { return null; } })(),
+  });
 
   // Stamp the shared ceremony login_id BEFORE waking AuthContext, so the
   // single-device monitor arms with the correct id (no self-kick race).

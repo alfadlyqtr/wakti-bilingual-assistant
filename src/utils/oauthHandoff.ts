@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { dlog } from '@/utils/debugLog';
 import type { Session } from '@supabase/supabase-js';
 
 /**
@@ -81,16 +82,24 @@ export async function handoffSessionToMainWindow(
   refreshToken: string,
 ): Promise<'claimed' | 'unclaimed' | 'failed'> {
   const deposited = await deposit(ticket, refreshToken);
-  if (!deposited) return 'failed';
+  if (!deposited) {
+    dlog('handoff-deposit-failed');
+    return 'failed';
+  }
+  dlog('handoff-deposited');
 
   const started = Date.now();
   while (Date.now() - started < SECONDARY_WINDOW_WAIT_MS) {
     await delay(1500);
-    if ((await peek(ticket)) === 'gone') return 'claimed';
+    if ((await peek(ticket)) === 'gone') {
+      dlog('handoff-collected-by-main');
+      return 'claimed';
+    }
   }
 
   // Nobody collected — withdraw the deposit (claim deletes it) and keep the session here.
   await claim(ticket);
+  dlog('handoff-unclaimed-kept-here');
   return 'unclaimed';
 }
 
@@ -117,11 +126,18 @@ export function startHandoffPolling(params: {
     if (!refreshToken) return;
     window.clearInterval(timer);
     clearHandoffPending();
+    dlog('handoff-claimed-by-main');
 
     try {
       const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-      if (error || !data.session) return;
+      if (error || !data.session) {
+        dlog('handoff-refresh-failed', { err: error?.message ?? 'no-session' });
+        return;
+      }
       await onSession(data.session);
+      try {
+        dlog('handoff-stored', { auth: !!localStorage.getItem('wakti-auth') });
+      } catch {}
 
       // Soft redirect — a hard reload risks the Natively WebView error page.
       try {

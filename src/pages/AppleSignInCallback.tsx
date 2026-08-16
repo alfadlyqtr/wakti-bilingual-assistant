@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getPendingHandoffTicket, handoffSessionToMainWindow } from '@/utils/oauthHandoff';
+import { dlog } from '@/utils/debugLog';
 import {
   clearStoredAppleRedirect,
   finalizeAppleSignInSession,
@@ -50,6 +51,7 @@ export default function AppleSignInCallback() {
             clearStoredAppleRedirect();
             // Discard this window's copy so it can never fight the main
             // window over token refresh (which would kill both sessions).
+            dlog('temp-window-signing-out');
             try { await supabase.auth.signOut({ scope: 'local' as any }); } catch {}
             setStatus('success');
             setMessage('Signed in — you can return to the Wakti app now');

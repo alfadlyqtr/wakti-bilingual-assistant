@@ -7,6 +7,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { LoginForm } from "@/components/LoginForm";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getDebugLog } from "@/utils/debugLog";
 
 // Define the type for location state
 interface LocationState {
@@ -70,6 +71,19 @@ export default function Login() {
             />
           </div>
         </div>
+      </div>
+
+      {/* TEMP diagnostics readout (black box) — remove once OAuth session-loss bug is solved */}
+      <div className="fixed bottom-1 left-0 right-0 px-2 text-center text-[10px] leading-4 text-muted-foreground/50 select-none">
+        {getDebugLog().slice(-6).map((e, i) => (
+          <div key={i}>
+            {new Date(e.t).toLocaleTimeString()} · {e.tag}
+            {Object.entries(e)
+              .filter(([k]) => k !== 't' && k !== 'tag')
+              .map(([k, v]) => ` ${k}:${String(v)}`)
+              .join('')}
+          </div>
+        ))}
       </div>
 
     </div>

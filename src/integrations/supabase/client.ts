@@ -58,6 +58,18 @@ function createSafeStorage(): MinimalStorage {
 
 const safeStorage = createSafeStorage();
 
+// TEMP diagnostics (black box): record boot state for the OAuth session-loss bug
+import('@/utils/debugLog').then(({ dlog }) => {
+  try {
+    const raw = safeStorage.getItem('wakti-auth');
+    dlog('boot', {
+      store: safeStorage === window.localStorage ? 'local' : 'other',
+      auth: !!raw,
+      exp: raw ? (JSON.parse(raw)?.expires_at ?? null) : null,
+    });
+  } catch {}
+}).catch(() => {});
+
 /**
  * Pre-validate and clear stale auth tokens to prevent 400 errors
  * This runs BEFORE Supabase SDK tries to auto-refresh invalid tokens
