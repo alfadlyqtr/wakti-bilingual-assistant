@@ -1117,6 +1117,103 @@ export default function DeenStudy() {
     return { streakDays: streak, thisWeekCount: weekCount };
   }, [memorizedItems]);
 
+  const reviewWeekdayTrend = useMemo(() => {
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Array.from({ length: 7 }).map((_, index) => {
+      const d = new Date(dayStart);
+      d.setDate(dayStart.getDate() - (6 - index));
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const label = new Intl.DateTimeFormat(isAr ? "ar" : "en", { weekday: "short" }).format(d);
+      return { key, label, count: 0 };
+    });
+    const indexByKey = new Map(days.map((day, index) => [day.key, index]));
+
+    memorizedItems.forEach((item) => {
+      if (!item.updated_at) return;
+      const d = new Date(item.updated_at);
+      const t = d.getTime();
+      if (Number.isNaN(t)) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const idx = indexByKey.get(key);
+      if (idx === undefined) return;
+      days[idx].count += 1;
+    });
+
+    const maxCount = Math.max(1, ...days.map((day) => day.count));
+    return { days, maxCount };
+  }, [memorizedItems, isAr]);
+
+  const reviewTimeSlotTrend = useMemo(() => {
+    const slotRows = Array.from({ length: 24 }).map((_, hour) => {
+      const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
+      const suffix = hour < 12 ? "am" : "pm";
+      const axisLabel = `${normalizedHour}${suffix}`;
+      return {
+        id: `h${String(hour).padStart(2, "0")}`,
+        hour,
+        axisLabel,
+        showAxisLabel: hour % 3 === 0,
+        count: 0,
+      };
+    });
+    const now = new Date();
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - 6 * 24 * 60 * 60 * 1000;
+
+    memorizedItems.forEach((item) => {
+      if (!item.updated_at) return;
+      const d = new Date(item.updated_at);
+      const t = d.getTime();
+      if (Number.isNaN(t) || t < weekStart) return;
+      const hour = d.getHours();
+      slotRows[hour].count += 1;
+    });
+
+    const maxCount = Math.max(1, ...slotRows.map((slot) => slot.count));
+    return { slots: slotRows, maxCount };
+  }, [memorizedItems, isAr]);
+
+  const reviewTimeSlotChartPoints = useMemo(() => {
+    const slotCount = Math.max(reviewTimeSlotTrend.slots.length - 1, 1);
+    return reviewTimeSlotTrend.slots.map((slot, index) => {
+      const x = 24 + (index * (288 / slotCount));
+      const y = 100 - ((slot.count / reviewTimeSlotTrend.maxCount) * 72);
+      return { x, y };
+    });
+  }, [reviewTimeSlotTrend]);
+
+  const reviewTimeSlotLinePath = useMemo(() => {
+    if (reviewTimeSlotChartPoints.length === 0) return "";
+    if (reviewTimeSlotChartPoints.length === 1) {
+      const onlyPoint = reviewTimeSlotChartPoints[0];
+      return `M ${onlyPoint.x},${onlyPoint.y}`;
+    }
+
+    let path = `M ${reviewTimeSlotChartPoints[0].x},${reviewTimeSlotChartPoints[0].y}`;
+    for (let i = 0; i < reviewTimeSlotChartPoints.length - 1; i += 1) {
+      const p0 = i === 0 ? reviewTimeSlotChartPoints[0] : reviewTimeSlotChartPoints[i - 1];
+      const p1 = reviewTimeSlotChartPoints[i];
+      const p2 = reviewTimeSlotChartPoints[i + 1];
+      const p3 = i + 2 < reviewTimeSlotChartPoints.length ? reviewTimeSlotChartPoints[i + 2] : p2;
+
+      const cp1x = p1.x + ((p2.x - p0.x) / 6);
+      const cp1y = p1.y + ((p2.y - p0.y) / 6);
+      const cp2x = p2.x - ((p3.x - p1.x) / 6);
+      const cp2y = p2.y - ((p3.y - p1.y) / 6);
+
+      path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+    }
+
+    return path;
+  }, [reviewTimeSlotChartPoints]);
+
+  const reviewTimeSlotAreaPath = useMemo(() => {
+    if (!reviewTimeSlotLinePath || reviewTimeSlotChartPoints.length === 0) return "";
+    const firstPoint = reviewTimeSlotChartPoints[0];
+    const lastPoint = reviewTimeSlotChartPoints[reviewTimeSlotChartPoints.length - 1];
+    return `${reviewTimeSlotLinePath} L ${lastPoint.x},100 L ${firstPoint.x},100 Z`;
+  }, [reviewTimeSlotLinePath, reviewTimeSlotChartPoints]);
+
   useEffect(() => {
     if (expandedSurah !== null && !memorizedBySurah.some((g) => g.surahNumber === expandedSurah)) {
       setExpandedSurah(null);
@@ -1526,6 +1623,101 @@ export default function DeenStudy() {
                 </div>
               </div>
             </div>
+            <div className="rounded-xl p-3" style={{ background: surface, border: `1px solid ${bdr}` }}>
+              <p className="text-xs font-bold" style={{ color: textPri }}>
+                {isAr ? "حفظ آخر ٧ أيام" : "Last 7 Days Memorization"}
+              </p>
+              <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
+                {isAr ? "عدد الآيات المحفوظة يوميًا" : "Ayahs memorized each day"}
+              </p>
+              <div className="mt-3 h-24 flex items-end justify-between gap-1.5">
+                {reviewWeekdayTrend.days.map((day) => {
+                  const heightPercent = (day.count / reviewWeekdayTrend.maxCount) * 100;
+                  return (
+                    <div key={day.key} className="flex-1 min-w-0 flex flex-col items-center gap-1">
+                      <span className="text-[9px] font-semibold leading-none" style={{ color: textSec }}>{day.count}</span>
+                      <div className="w-full h-14 rounded-md flex items-end" style={{ background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.04)" }}>
+                        <div
+                          className="w-full rounded-md transition-all duration-500"
+                          style={{
+                            height: day.count === 0 ? "6px" : `${Math.max(heightPercent, 14)}%`,
+                            background: dark
+                              ? "linear-gradient(180deg, hsla(142,76%,55%,0.85) 0%, hsla(160,75%,55%,0.45) 100%)"
+                              : "linear-gradient(180deg, hsla(142,76%,45%,0.82) 0%, hsla(160,75%,40%,0.44) 100%)",
+                          }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-semibold leading-none truncate" style={{ color: textSec }}>{day.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ background: surface, border: `1px solid ${bdr}` }}>
+              <p className="text-xs font-bold" style={{ color: textPri }}>
+                {isAr ? "أفضل أوقات الحفظ (٧ أيام)" : "Best Memorization Time (7 days)"}
+              </p>
+              <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
+                {isAr ? "اتجاه الحفظ عبر ساعات اليوم" : "Memorization trend across day hours"}
+              </p>
+              <div className="mt-3 rounded-lg px-2 py-2" style={{ background: dark ? "rgba(255,255,255,0.02)" : "rgba(6,5,65,0.02)" }}>
+                <div className="relative">
+                  <svg viewBox="0 0 320 120" className="w-full h-28" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="mem-line-stroke" x1="24" y1="100" x2="312" y2="28" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor={dark ? "hsla(205,100%,68%,0.92)" : "hsla(210,100%,48%,0.92)"} />
+                        <stop offset="100%" stopColor={dark ? "hsla(175,85%,65%,0.94)" : "hsla(185,90%,40%,0.92)"} />
+                      </linearGradient>
+                      <linearGradient id="mem-line-fill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={dark ? "hsla(205,100%,68%,0.16)" : "hsla(210,100%,50%,0.12)"} />
+                        <stop offset="100%" stopColor={dark ? "hsla(205,100%,68%,0.01)" : "hsla(210,100%,50%,0.00)"} />
+                      </linearGradient>
+                    </defs>
+                    <line x1="24" y1="100" x2="312" y2="100" stroke={dark ? "rgba(255,255,255,0.12)" : "rgba(6,5,65,0.14)"} strokeWidth="1" strokeDasharray="2 3" />
+                    <line x1="24" y1="64" x2="312" y2="64" stroke={dark ? "rgba(255,255,255,0.10)" : "rgba(6,5,65,0.12)"} strokeWidth="1" strokeDasharray="2 3" />
+                    <line x1="24" y1="28" x2="312" y2="28" stroke={dark ? "rgba(255,255,255,0.10)" : "rgba(6,5,65,0.12)"} strokeWidth="1" strokeDasharray="2 3" />
+                    {reviewTimeSlotTrend.slots.map((_, index) => {
+                      const x = 24 + (index * (288 / Math.max(reviewTimeSlotTrend.slots.length - 1, 1)));
+                      return (
+                        <line
+                          key={`grid-x-${index}`}
+                          x1={x}
+                          y1="28"
+                          x2={x}
+                          y2="100"
+                          stroke={dark ? "rgba(255,255,255,0.07)" : "rgba(6,5,65,0.08)"}
+                          strokeWidth="1"
+                          strokeDasharray="2 3"
+                        />
+                      );
+                    })}
+                    <path
+                      d={reviewTimeSlotAreaPath}
+                      fill="url(#mem-line-fill)"
+                    />
+                  <path
+                    fill="none"
+                    stroke="url(#mem-line-stroke)"
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d={reviewTimeSlotLinePath}
+                  />
+                    <text x="18" y="103" textAnchor="end" fontSize="10" fill={dark ? "#8b8d93" : "#606062"}>0</text>
+                    <text x="18" y="67" textAnchor="end" fontSize="10" fill={dark ? "#8b8d93" : "#606062"}>{Math.ceil(reviewTimeSlotTrend.maxCount / 2)}</text>
+                    <text x="18" y="31" textAnchor="end" fontSize="10" fill={dark ? "#8b8d93" : "#606062"}>{reviewTimeSlotTrend.maxCount}</text>
+                  </svg>
+                </div>
+                <div className="mt-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${reviewTimeSlotTrend.slots.length}, minmax(0, 1fr))` }}>
+                  {reviewTimeSlotTrend.slots.map((slot) => (
+                    <span key={slot.id} className="text-[9px] font-semibold text-center" style={{ color: textSec }}>
+                      {slot.showAxisLabel ? slot.axisLabel : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
             {loading ? <Loader /> : memorizedItems.length === 0 ? (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: surface, border: `1px solid ${bdr}` }}>
@@ -1539,127 +1731,136 @@ export default function DeenStudy() {
                 </p>
               </div>
             ) : (
-              memorizedBySurah.map((group) => {
-                const isExpanded = expandedSurah === group.surahNumber;
-                const firstAyah = group.items[0]?.ayah_number;
-                const lastAyah = group.items[group.items.length - 1]?.ayah_number;
-                const dropdownRows: SurahViewAllRow[] = [];
-                let dropdownCursor = 1;
-                group.items.forEach((item) => {
-                  if (item.ayah_number > dropdownCursor) {
-                    dropdownRows.push({ type: "gap", startAyah: dropdownCursor, endAyah: item.ayah_number - 1 });
-                  }
-                  dropdownRows.push({ type: "ayah", ayahNumber: item.ayah_number });
-                  dropdownCursor = item.ayah_number + 1;
-                });
-                return (
-                  <div
-                    key={group.surahNumber}
-                    className="rounded-xl p-2"
-                    style={{ background: surface, border: `1px solid ${bdr}` }}
-                  >
-                    <button
-                      onClick={() => setExpandedSurah((prev) => prev === group.surahNumber ? null : group.surahNumber)}
-                      className="w-full rounded-lg px-2 py-2 flex items-center gap-2 active:scale-[0.99] transition-all"
-                      style={{ background: dark ? "rgba(255,255,255,0.02)" : "rgba(6,5,65,0.02)" }}
-                      dir={isAr ? "rtl" : "ltr"}
+              <>
+                <div className="mt-1 mb-0.5 flex items-center gap-2" dir={isAr ? "rtl" : "ltr"}>
+                  <div className="h-px flex-1" style={{ background: dark ? "rgba(255,255,255,0.10)" : "rgba(6,5,65,0.12)" }} />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.10em]" style={{ color: textSec }}>
+                    {isAr ? "السور المحفوظة" : "Memorized Surahs"}
+                  </p>
+                  <div className="h-px flex-1" style={{ background: dark ? "rgba(255,255,255,0.10)" : "rgba(6,5,65,0.12)" }} />
+                </div>
+                {memorizedBySurah.map((group) => {
+                  const isExpanded = expandedSurah === group.surahNumber;
+                  const firstAyah = group.items[0]?.ayah_number;
+                  const lastAyah = group.items[group.items.length - 1]?.ayah_number;
+                  const dropdownRows: SurahViewAllRow[] = [];
+                  let dropdownCursor = 1;
+                  group.items.forEach((item) => {
+                    if (item.ayah_number > dropdownCursor) {
+                      dropdownRows.push({ type: "gap", startAyah: dropdownCursor, endAyah: item.ayah_number - 1 });
+                    }
+                    dropdownRows.push({ type: "ayah", ayahNumber: item.ayah_number });
+                    dropdownCursor = item.ayah_number + 1;
+                  });
+                  return (
+                    <div
+                      key={group.surahNumber}
+                      className="rounded-xl p-2"
+                      style={{ background: surface, border: `1px solid ${bdr}` }}
                     >
-                      <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
-                        <p className="text-sm font-bold truncate" style={{ color: textPri }}>
-                          {surahName(group.surahNumber, isAr)}
-                        </p>
-                        <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
-                          {isAr
-                            ? `${group.items.length} آيات محفوظة`
-                            : `${group.items.length} memorized ayahs`}
-                        </p>
-                      </div>
-                      <div
-                        className="px-2 py-1 rounded-full text-[10px] font-bold flex-shrink-0"
-                        style={{ background: dark ? "hsla(142,76%,55%,0.14)" : "hsla(142,76%,45%,0.12)", color: "#22c55e", border: "1px solid hsla(142,76%,55%,0.28)" }}
+                      <button
+                        onClick={() => setExpandedSurah((prev) => prev === group.surahNumber ? null : group.surahNumber)}
+                        className="w-full rounded-lg px-2 py-2 flex items-center gap-2 active:scale-[0.99] transition-all"
+                        style={{ background: dark ? "rgba(255,255,255,0.02)" : "rgba(6,5,65,0.02)" }}
+                        dir={isAr ? "rtl" : "ltr"}
                       >
-                        {firstAyah === lastAyah ? `${firstAyah}` : `${firstAyah}-${lastAyah}`}
-                      </div>
-                      <ChevronRight
-                        className="w-4 h-4 flex-shrink-0"
-                        style={{ color: textSec, transform: isExpanded ? "rotate(90deg)" : isAr ? "rotate(180deg)" : undefined }}
-                      />
-                    </button>
-
-                    {isExpanded && (
-                      <div className="mt-2 flex flex-col gap-2">
-                        <button
-                          onClick={() => openSurahViewAll(group)}
-                          className="rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition-all"
-                          style={{ background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)", border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)"}` }}
+                        <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                          <p className="text-sm font-bold truncate" style={{ color: textPri }}>
+                            {surahName(group.surahNumber, isAr)}
+                          </p>
+                          <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
+                            {isAr
+                              ? `${group.items.length} آيات محفوظة`
+                              : `${group.items.length} memorized ayahs`}
+                          </p>
+                        </div>
+                        <div
+                          className="px-2 py-1 rounded-full text-[10px] font-bold flex-shrink-0"
+                          style={{ background: dark ? "hsla(142,76%,55%,0.14)" : "hsla(142,76%,45%,0.12)", color: "#22c55e", border: "1px solid hsla(142,76%,55%,0.28)" }}
                         >
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: dark ? "hsla(210,100%,65%,0.12)" : "hsla(210,100%,65%,0.10)", border: "1px solid hsla(210,100%,65%,0.25)", color: "#60a5fa" }}
-                          >
-                            <BookOpen className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
-                            <p className="text-xs font-semibold" style={{ color: textPri }}>
-                              {isAr ? "عرض الكل" : "Review All"}
-                            </p>
-                            <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
-                              {isAr ? "عرض المحفوظ مع الفجوات" : "Show all memorized ayahs from this surah"}
-                            </p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
-                        </button>
-                        {dropdownRows.map((row, idx) => {
-                          if (row.type === "gap") {
-                            const gapKey = `${group.surahNumber}:${row.startAyah}-${row.endAyah}`;
-                            const isOpeningGap = openingGapKey === gapKey;
-                            return (
-                              <button
-                                key={`review-gap:${group.surahNumber}:${row.startAyah}:${row.endAyah}:${idx}`}
-                                className="w-full rounded-xl px-4 h-[60px] text-center active:scale-[0.99] transition-all"
-                                style={{
-                                  background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)",
-                                  border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)"}`,
-                                }}
-                                disabled={!!openingGapKey}
-                                onClick={() => { void openGapSession(group.surahNumber, row.startAyah, row.endAyah); }}
-                              >
-                                <div className="h-full flex items-center gap-3">
-                                  <div className="w-4 h-4 flex-shrink-0" />
-                                  <p className="text-xs font-semibold flex-1 text-center" style={{ color: dark ? "#d4a63a" : "#8a5a14" }}>
-                                    {isAr
-                                      ? (row.startAyah === row.endAyah ? `الآية ${row.startAyah} غير محفوظة بعد` : `الآيات ${row.startAyah} - ${row.endAyah} غير محفوظة بعد`)
-                                      : (row.startAyah === row.endAyah ? `Ayah ${row.startAyah} not memorized yet` : `Ayah ${row.startAyah} - ${row.endAyah} not memorized yet`)}
-                                  </p>
-                                  {isOpeningGap ? (
-                                    <div className="w-4 h-4 border-2 rounded-full animate-spin flex-shrink-0" style={{ borderColor: dark ? "rgba(212,166,58,0.32)" : "rgba(138,90,20,0.32)", borderTopColor: dark ? "#d4a63a" : "#8a5a14" }} />
-                                  ) : (
-                                    <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: dark ? "#d4a63a" : "#8a5a14", transform: isAr ? "rotate(180deg)" : undefined }} />
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          }
+                          {firstAyah === lastAyah ? `${firstAyah}` : `${firstAyah}-${lastAyah}`}
+                        </div>
+                        <ChevronRight
+                          className="w-4 h-4 flex-shrink-0"
+                          style={{ color: textSec, transform: isExpanded ? "rotate(90deg)" : isAr ? "rotate(180deg)" : undefined }}
+                        />
+                      </button>
 
-                          const ayahItem = group.items.find((m) => m.ayah_number === row.ayahNumber);
-                          if (!ayahItem) return null;
-                          return (
-                            <MemorizationRow
-                              key={ayahItem.id}
-                              item={ayahItem}
-                              isAr={isAr}
-                              dark={dark}
-                              onUpdate={updateMemorizationStatus}
-                              loading={openingReviewItemId === ayahItem.id}
-                              onTap={() => openReviewSession(ayahItem, "review")}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                      {isExpanded && (
+                        <div className="mt-2 flex flex-col gap-2">
+                          <button
+                            onClick={() => openSurahViewAll(group)}
+                            className="rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition-all"
+                            style={{ background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)", border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)"}` }}
+                          >
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: dark ? "hsla(210,100%,65%,0.12)" : "hsla(210,100%,65%,0.10)", border: "1px solid hsla(210,100%,65%,0.25)", color: "#60a5fa" }}
+                            >
+                              <BookOpen className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                              <p className="text-xs font-semibold" style={{ color: textPri }}>
+                                {isAr ? "عرض الكل" : "Review All"}
+                              </p>
+                              <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
+                                {isAr ? "عرض المحفوظ مع الفجوات" : "Show all memorized ayahs from this surah"}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
+                          </button>
+                          {dropdownRows.map((row, idx) => {
+                            if (row.type === "gap") {
+                              const gapKey = `${group.surahNumber}:${row.startAyah}-${row.endAyah}`;
+                              const isOpeningGap = openingGapKey === gapKey;
+                              return (
+                                <button
+                                  key={`review-gap:${group.surahNumber}:${row.startAyah}:${row.endAyah}:${idx}`}
+                                  className="w-full rounded-xl px-4 h-[60px] text-center active:scale-[0.99] transition-all"
+                                  style={{
+                                    background: dark ? "rgba(255,255,255,0.03)" : "rgba(6,5,65,0.03)",
+                                    border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)"}`,
+                                  }}
+                                  disabled={!!openingGapKey}
+                                  onClick={() => { void openGapSession(group.surahNumber, row.startAyah, row.endAyah); }}
+                                >
+                                  <div className="h-full flex items-center gap-3">
+                                    <div className="w-4 h-4 flex-shrink-0" />
+                                    <p className="text-xs font-semibold flex-1 text-center" style={{ color: dark ? "#d4a63a" : "#8a5a14" }}>
+                                      {isAr
+                                        ? (row.startAyah === row.endAyah ? `الآية ${row.startAyah} غير محفوظة بعد` : `الآيات ${row.startAyah} - ${row.endAyah} غير محفوظة بعد`)
+                                        : (row.startAyah === row.endAyah ? `Ayah ${row.startAyah} not memorized yet` : `Ayah ${row.startAyah} - ${row.endAyah} not memorized yet`)}
+                                    </p>
+                                    {isOpeningGap ? (
+                                      <div className="w-4 h-4 border-2 rounded-full animate-spin flex-shrink-0" style={{ borderColor: dark ? "rgba(212,166,58,0.32)" : "rgba(138,90,20,0.32)", borderTopColor: dark ? "#d4a63a" : "#8a5a14" }} />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: dark ? "#d4a63a" : "#8a5a14", transform: isAr ? "rotate(180deg)" : undefined }} />
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            }
+
+                            const ayahItem = group.items.find((m) => m.ayah_number === row.ayahNumber);
+                            if (!ayahItem) return null;
+                            return (
+                              <MemorizationRow
+                                key={ayahItem.id}
+                                item={ayahItem}
+                                isAr={isAr}
+                                dark={dark}
+                                onUpdate={updateMemorizationStatus}
+                                loading={openingReviewItemId === ayahItem.id}
+                                onTap={() => openReviewSession(ayahItem, "review")}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
             )}
           </div>
         )}
