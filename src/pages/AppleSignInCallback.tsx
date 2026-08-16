@@ -53,9 +53,12 @@ export default function AppleSignInCallback() {
             return; // stay on this screen; the main app window continues
           }
         }
-        setStatus('error');
-        setMessage('Could not reach the Wakti app — please go back and try again.');
-        return;
+        // Nobody collected the code — this window may actually BE the main app
+        // window (e.g. iOS relaunched the app onto this URL, so the start-flag
+        // is gone but the code verifier is still here). Fall through and try to
+        // finish locally; in a plain browser without the verifier this fails
+        // cleanly into the normal error screen below.
+        dlog('handoff-not-collected-trying-local');
       }
 
       try {

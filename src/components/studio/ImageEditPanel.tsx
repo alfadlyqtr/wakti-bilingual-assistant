@@ -8,6 +8,8 @@ import { EditSegment, fetchSegmentsForTask } from '@/components/studio/imageEdit
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const FN_NAME = 'wakti-grok-image-edit';
 const MAX_PART_CARDS = 8;
+// Kie-proven limit: 3+ mask indexes make the edit task fail — 2 is the max.
+const MAX_MASK_INDEXES = 2;
 
 /** Kie segment masks are 128px thumbnails of the part itself (no position data),
  *  so identical names (e.g. 7x "water droplets") are grouped into one card that
@@ -63,6 +65,9 @@ export default function ImageEditPanel({ open, imageUrl, kieTaskId, language, pr
     editsExhausted: ar
       ? 'تم تعديل هذه الصورة ٥ مرات — الحد الأقصى للتعديلات. أنشئ صورة جديدة لمواصلة التعديل.'
       : 'This image has been edited 5 times — edit limit reached. Generate a fresh image to keep editing.',
+    maxParts: ar
+      ? 'يمكنك تعديل جزءين كحد أقصى في كل مرة'
+      : 'You can edit up to 2 parts at a time',
   };
 
   // ─── Group segments by name → visual part cards ───
@@ -118,18 +123,25 @@ export default function ImageEditPanel({ open, imageUrl, kieTaskId, language, pr
   }, [open, kieTaskId, preloadedSegments]);
 
   const toggleGroup = (group: PartGroup) => {
-    const allSelected = group.indexes.every((i) => selected.includes(i));
-    setSelected((prev) =>
-      allSelected
-        ? prev.filter((i) => !group.indexes.includes(i))
-        : [...prev, ...group.indexes.filter((i) => !prev.includes(i))]
-    );
+    const anySelected = group.indexes.some((i) => selected.includes(i));
+    if (anySelected) {
+      setSelected((prev) => prev.filter((i) => !group.indexes.includes(i)));
+      return;
+    }
+    const room = MAX_MASK_INDEXES - selected.length;
+    if (room <= 0) {
+      toast.error(t.maxParts);
+      return;
+    }
+    // A group with many indexes (e.g. 7x "water droplets") only contributes up to the room left
+    const toAdd = group.indexes.filter((i) => !selected.includes(i)).slice(0, room);
+    setSelected((prev) => [...prev, ...toAdd]);
   };
 
   // ─── Apply edit: submit + poll ───
   const handleApply = async () => {
     // Parts picked → each part has its own instruction; otherwise one whole-image prompt
-    const selectedGroupsNow = partGroups.filter((g) => g.indexes.every((i) => selected.includes(i)));
+    const selectedGroupsNow = partGroups.filter((g) => g.indexes.some((i) => selected.includes(i)));
     let cleanPrompt = editPrompt.trim();
     if (selectedGroupsNow.length > 0) {
       const lines: string[] = [];
@@ -216,8 +228,8 @@ export default function ImageEditPanel({ open, imageUrl, kieTaskId, language, pr
   const editCount = Array.isArray(editHistory) ? editHistory.length : 0;
   const editLimitReached = editCount >= 5;
 
-  // Groups whose every index is selected — each gets its own mini prompt row
-  const selectedGroups = partGroups.filter((g) => g.indexes.every((i) => selected.includes(i)));
+  // Groups with any index selected — each gets its own mini prompt row
+  const selectedGroups = partGroups.filter((g) => g.indexes.some((i) => selected.includes(i)));
   const canApply = selectedGroups.length > 0
     ? selectedGroups.every((g) => (partPrompts[g.name] || '').trim().length > 0)
     : editPrompt.trim().length > 0;
@@ -278,7 +290,7 @@ export default function ImageEditPanel({ open, imageUrl, kieTaskId, language, pr
             <p className="text-xs text-white/60 text-center">{t.pickParts}</p>
             <div className="grid grid-cols-4 gap-2">
               {partGroups.map((group) => {
-                const isSel = group.indexes.every((i) => selected.includes(i));
+                const isSel = group.indexes.some((i) => selected.includes(i));
                 return (
                   <button
                     key={group.name}
