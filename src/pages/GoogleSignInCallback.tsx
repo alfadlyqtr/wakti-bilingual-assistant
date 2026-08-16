@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { getPendingHandoffTicket, handoffSessionToMainWindow } from '@/utils/oauthHandoff';
+import { getPendingHandoffTicket, handoffCodeToMainWindow } from '@/utils/oauthHandoff';
 import { dlog } from '@/utils/debugLog';
 import {
   clearStoredGoogleRedirect,
@@ -28,6 +27,7 @@ export default function GoogleSignInCallback() {
     const run = async () => {
       const providerError = searchParams.get('error_description') || searchParams.get('error');
       const code = searchParams.get('code');
+      const loginId = searchParams.get('lid');
       const next = sanitizeGoogleRedirectPath(searchParams.get('next') || getStoredGoogleRedirect('/dashboard'));
 
       if (providerError) {
@@ -38,27 +38,28 @@ export default function GoogleSignInCallback() {
         return;
       }
 
-      try {
-        const session = await waitForGoogleSession(code);
-        const loginId = searchParams.get('lid');
-
-        // If this window did not start the sign-in, it's a secondary window
-        // (external browser / temp WebView) whose storage is temporary.
-        // Hand the session to the main app window instead of keeping it here.
-        if (loginId && getPendingHandoffTicket() !== loginId && session.refresh_token) {
-          const outcome = await handoffSessionToMainWindow(loginId, session.refresh_token);
+      // If this window did not start the sign-in, it's a secondary window
+      // (external browser / temp WebView). It holds the auth code but can
+      // never exchange it — the code verifier lives in the main app window.
+      // Hand the code over and stop here.
+      if (loginId && getPendingHandoffTicket() !== loginId) {
+        clearStoredGoogleRedirect();
+        if (code) {
+          const outcome = await handoffCodeToMainWindow(loginId, code);
           if (outcome === 'claimed') {
-            clearStoredGoogleRedirect();
-            // Discard this window's copy so it can never fight the main
-            // window over token refresh (which would kill both sessions).
-            dlog('temp-window-signing-out');
-            try { await supabase.auth.signOut({ scope: 'local' as any }); } catch {}
+            dlog('temp-window-handed-off');
             setStatus('success');
             setMessage('Signed in — you can return to the Wakti app now');
             return; // stay on this screen; the main app window continues
           }
-          // 'unclaimed' / 'failed' → this window is effectively the app: keep going.
         }
+        setStatus('error');
+        setMessage('Could not reach the Wakti app — please go back and try again.');
+        return;
+      }
+
+      try {
+        const session = await waitForGoogleSession(code);
 
         await finalizeGoogleSignInSession({
           session,
