@@ -67,7 +67,7 @@ export default function Deen() {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden"
+      className="h-full min-h-0 flex flex-col overflow-hidden"
       style={{
         background: isDark ? "#0c0f14" : "#fcfefd",
         paddingBottom: bottomSafe,
@@ -155,7 +155,7 @@ export default function Deen() {
 
       {/* Cards Grid - fills remaining space */}
       <div className="px-5 flex-1 min-h-0">
-        <div className="grid grid-cols-2 gap-3 h-full">
+        <div className="grid h-full grid-cols-2 grid-rows-3 gap-3 2xl:grid-cols-3 2xl:grid-rows-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -228,4 +228,3 @@ export default function Deen() {
     </div>
   );
 }
-
