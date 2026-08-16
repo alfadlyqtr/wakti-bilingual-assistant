@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { setActiveScopedUserId } from '@/utils/userScopedStorage';
+import { clearHandoffPending, markHandoffPending, startHandoffPolling } from '@/utils/oauthHandoff';
 import type { Session, User } from '@supabase/supabase-js';
 
 const PRODUCTION_ORIGIN = 'https://wakti.qa';
@@ -66,6 +67,7 @@ export async function startAppleSignIn(redirectTo = '/dashboard'): Promise<{ err
   try { sessionStorage.setItem('wakti_login_id', loginId); } catch {}
 
   setStoredAppleRedirect(nextPath);
+  markHandoffPending(loginId);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'apple',
@@ -77,17 +79,26 @@ export async function startAppleSignIn(redirectTo = '/dashboard'): Promise<{ err
 
   if (error) {
     clearStoredAppleRedirect();
+    clearHandoffPending();
     return { error };
   }
 
   if (!data?.url) {
     clearStoredAppleRedirect();
+    clearHandoffPending();
     return { error: new Error('Failed to start Apple sign in') };
   }
 
   const nativelyObj = (window as any).natively || (window as any).Natively;
   if (inNatively && isMobile && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
     nativelyObj.openExternalURL(data.url, true);
+    // The login completes in an external window whose storage is temporary.
+    // Collect the session here so it lands in this window's permanent storage.
+    startHandoffPolling({
+      ticket: loginId,
+      nextPath,
+      onSession: (session) => finalizeAppleSignInSession({ session, loginId }),
+    });
   } else {
     window.location.href = data.url;
   }

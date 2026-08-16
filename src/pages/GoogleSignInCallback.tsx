@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { getPendingHandoffTicket, handoffSessionToMainWindow } from '@/utils/oauthHandoff';
 import {
   clearStoredGoogleRedirect,
   finalizeGoogleSignInSession,
@@ -37,10 +39,29 @@ export default function GoogleSignInCallback() {
 
       try {
         const session = await waitForGoogleSession(code);
+        const loginId = searchParams.get('lid');
+
+        // If this window did not start the sign-in, it's a secondary window
+        // (external browser / temp WebView) whose storage is temporary.
+        // Hand the session to the main app window instead of keeping it here.
+        if (loginId && getPendingHandoffTicket() !== loginId && session.refresh_token) {
+          const outcome = await handoffSessionToMainWindow(loginId, session.refresh_token);
+          if (outcome === 'claimed') {
+            clearStoredGoogleRedirect();
+            // Discard this window's copy so it can never fight the main
+            // window over token refresh (which would kill both sessions).
+            try { await supabase.auth.signOut({ scope: 'local' as any }); } catch {}
+            setStatus('success');
+            setMessage('Signed in — you can return to the Wakti app now');
+            return; // stay on this screen; the main app window continues
+          }
+          // 'unclaimed' / 'failed' → this window is effectively the app: keep going.
+        }
+
         await finalizeGoogleSignInSession({
           session,
           applyManualLoginRecovery,
-          loginId: searchParams.get('lid'),
+          loginId,
         });
         clearStoredGoogleRedirect();
         setStatus('success');
