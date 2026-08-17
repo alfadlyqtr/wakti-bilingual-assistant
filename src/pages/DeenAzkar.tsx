@@ -73,6 +73,7 @@ export default function DeenAzkar() {
   const [tasbihLimit, setTasbihLimit] = useState(33);
   const [goalPanelOpen, setGoalPanelOpen] = useState(false);
   const [goalDraft, setGoalDraft] = useState("33");
+  const [hapticDebug, setHapticDebug] = useState("");
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -267,6 +268,7 @@ export default function DeenAzkar() {
   };
 
   const triggerGoalHaptic = () => {
+    setHapticDebug("Goal reached: trying haptic...");
     console.log("[TasbihHaptic] Goal reached — trying to trigger haptic");
 
     if (typeof window !== "undefined") {
@@ -280,6 +282,7 @@ export default function DeenAzkar() {
         };
       };
       const natively = nativelyWindow.natively || nativelyWindow.Natively;
+      setHapticDebug(`Bridge: natively=${Boolean(natively)} webkit=${Boolean(nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage)}`);
       console.log("[TasbihHaptic] Environment", {
         hasNatively: Boolean(natively),
         hasWindowNatively: Boolean(nativelyWindow.natively),
@@ -302,12 +305,14 @@ export default function DeenAzkar() {
           try {
             console.log(`[TasbihHaptic] Trying native candidate #${index + 1} with medium style`);
             candidate("medium");
+            setHapticDebug(`Haptic OK via candidate #${index + 1} (medium)`);
             console.log(`[TasbihHaptic] Native candidate #${index + 1} succeeded with medium style`);
             return;
           } catch {
             try {
               console.log(`[TasbihHaptic] Candidate #${index + 1} medium style failed, retrying without args`);
               candidate();
+              setHapticDebug(`Haptic OK via candidate #${index + 1} (no args)`);
               console.log(`[TasbihHaptic] Native candidate #${index + 1} succeeded without args`);
               return;
             } catch {
@@ -321,6 +326,7 @@ export default function DeenAzkar() {
         if (nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage) {
           console.log("[TasbihHaptic] Trying webkit.messageHandlers.haptic.postMessage");
           nativelyWindow.webkit.messageHandlers.haptic.postMessage({ type: "impact", style: "medium" });
+          setHapticDebug("Haptic OK via webkit message handler");
           console.log("[TasbihHaptic] Webkit haptic postMessage succeeded");
           return;
         }
@@ -332,9 +338,11 @@ export default function DeenAzkar() {
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       console.log("[TasbihHaptic] Falling back to navigator.vibrate(120)");
       navigator.vibrate(120);
+      setHapticDebug("Using navigator.vibrate fallback");
       return;
     }
 
+    setHapticDebug("No haptic path found");
     console.warn("[TasbihHaptic] No supported haptic/vibration path found");
   };
 
@@ -453,6 +461,11 @@ export default function DeenAzkar() {
                 </button>
               </div>
             </div>
+          )}
+          {hapticDebug && (
+            <p className="mt-2 text-[11px] text-center" style={{ color: textMuted }}>
+              {hapticDebug}
+            </p>
           )}
         </div>
 
