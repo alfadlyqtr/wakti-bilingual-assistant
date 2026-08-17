@@ -439,7 +439,7 @@ async function tryGemini(
   // Regular Vision stays fast regardless of the engine toggle — per product decision.
   const wantsStudyIntelligence =
     chatSubmode === 'study' && (personalTouch?.engineTier === 'intelligence');
-  const GEMINI_MODEL = wantsStudyIntelligence ? "gemini-3.1-pro-preview" : "gemini-2.5-flash";
+  const GEMINI_MODEL = wantsStudyIntelligence ? "gemini-3.1-pro-preview" : "gemini-3.7-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${key}`;
 
   const enableGrounding = (Deno.env.get("GEMINI_ENABLE_GROUNDING") || "").toLowerCase() === "true";

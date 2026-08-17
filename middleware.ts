@@ -19,7 +19,12 @@ export const config = {
 export default function middleware(request: Request) {
   const url = new URL(request.url);
   const hostname = request.headers.get('host') || '';
-  
+
+  // Temporary redirect: /ahzm → Apple offer code redemption
+  if (url.pathname === '/ahzm') {
+    return Response.redirect('https://apps.apple.com/redeem?ctx=offercodes&id=6755150700&code=AHZM', 307);
+  }
+
   // Handle localhost for development
   if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
     return; // Pass through to main app

@@ -1699,7 +1699,7 @@ async function streamGemini3FlashChat(
   onToken: (token: string) => void,
   language: string = 'en',
   onSignal?: (meta: Record<string, unknown>) => void,
-  model: string = 'gemini-2.5-flash'
+  model: string = 'gemini-3.1-flash-lite'
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
@@ -7116,7 +7116,7 @@ If you are running out of space, keep this order and drop the rest:
           let selectedModel: string;
           let engineLabel: string;
           if (engineTier === 'intelligence') {
-            selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
+            selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3.7-flash';
             engineLabel = isDeepWork ? 'Intelligence Engine (Pro)' : 'Intelligence Engine (Flash)';
           } else {
             selectedModel = 'gemini-3.1-flash-lite';
