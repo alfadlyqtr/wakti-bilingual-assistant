@@ -50,6 +50,9 @@ export default function DeenAzkar() {
   const [errorItems, setErrorItems] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [showTasbih, setShowTasbih] = useState(false);
+  const [tasbihCount, setTasbihCount] = useState(0);
+  const [tasbihLimit, setTasbihLimit] = useState(30);
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -242,6 +245,105 @@ export default function DeenAzkar() {
     const cached = cacheRef.current[cat.slug];
     return cached && cached.length > 0 && cached.every((_, idx) => completed.has(counterKey(cat.slug, idx)));
   };
+
+  const incrementTasbih = () => {
+    setTasbihCount((prev) => {
+      const next = prev + 1;
+      if (
+        tasbihLimit > 0
+        && next % tasbihLimit === 0
+        && typeof navigator !== "undefined"
+        && "vibrate" in navigator
+      ) {
+        navigator.vibrate(120);
+      }
+      return next;
+    });
+  };
+
+  if (showTasbih) {
+    return (
+      <div
+        className="h-screen flex flex-col overflow-hidden"
+        style={{ background: bg, paddingBottom: bottomSafe }}
+        dir={isAr ? "rtl" : "ltr"}
+      >
+        <div className="px-4 pt-4 pb-3 shrink-0 flex items-center justify-between gap-3">
+          <button
+            onClick={() => setShowTasbih(false)}
+            className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+            style={{ background: cardBg, border: `1px solid ${cardBorder}` }}
+            aria-label={isAr ? "رجوع" : "Back"}
+          >
+            <ArrowLeft className="w-4 h-4" style={{ color: textSecondary, transform: isAr ? "rotate(180deg)" : undefined }} />
+          </button>
+          <div className="flex-1 text-center">
+            <p className="text-[15px] font-bold" style={{ color: textPrimary }}>
+              {isAr ? "عداد التسبيح" : "Tasbih Counter"}
+            </p>
+          </div>
+          <div className="w-9 h-9" aria-hidden />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-8">
+          <div className="w-full flex flex-col items-center pt-16">
+            <div className="w-full max-w-[220px] mb-8">
+              <label
+                htmlFor="tasbih-limit"
+                className="block text-[12px] font-semibold mb-2 text-center"
+                style={{ color: textSecondary }}
+              >
+                {isAr ? "حدّ الاهتزاز" : "Vibration limit"}
+              </label>
+              <input
+                id="tasbih-limit"
+                type="number"
+                min={1}
+                step={1}
+                value={tasbihLimit}
+                onChange={(e) => {
+                  const parsed = Number.parseInt(e.target.value, 10);
+                  if (Number.isFinite(parsed) && parsed > 0) setTasbihLimit(parsed);
+                }}
+                className="w-full h-11 rounded-xl px-3 text-center text-base font-semibold outline-none"
+                style={{
+                  background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.06)",
+                  border: `1px solid ${cardBorder}`,
+                  color: textPrimary,
+                }}
+                aria-label={isAr ? "حد الاهتزاز" : "Vibration limit"}
+              />
+            </div>
+
+            <span className="text-6xl font-bold tabular-nums mb-16" style={{ color: textPrimary }}>
+              {tasbihCount}
+            </span>
+
+            <button
+              onClick={incrementTasbih}
+              className="w-44 h-44 rounded-full text-xl font-bold active:scale-95 transition-all shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+              style={{
+                background: "#ffffff",
+                border: isDark ? "1px solid rgba(255,255,255,0.5)" : "1px solid rgba(6,5,65,0.15)",
+                color: "#060541",
+              }}
+            >
+              {isAr ? "تسبيح" : "Count"}
+            </button>
+
+            <button
+              onClick={() => setTasbihCount(0)}
+              className="mt-6 px-5 py-2.5 rounded-xl text-sm font-semibold active:scale-95 transition-all flex items-center gap-2"
+              style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.06)", border: `1px solid ${cardBorder}`, color: textSecondary }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>{isAr ? "إعادة" : "Reset"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Detail view ───────────────────────────────────────────────────
   if (selectedCat) {
@@ -579,6 +681,32 @@ export default function DeenAzkar() {
 
       {/* Category cards */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+        <button
+          onClick={() => setShowTasbih(true)}
+          className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl active:scale-[0.99] transition-all"
+          style={{
+            background: cardBg,
+            border: `1px solid ${cardBorder}`,
+            boxShadow: isDark ? "none" : "0 2px 8px rgba(6,5,65,0.05)",
+          }}
+        >
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 text-xl"
+            style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)" }}
+          >
+            🔢
+          </div>
+          <div className={`flex-1 min-w-0 ${isAr ? "text-right" : "text-left"}`} dir={isAr ? "rtl" : "ltr"}>
+            <p className="text-[14px] font-bold truncate" style={{ color: textPrimary }}>
+              {isAr ? "عداد التسبيح" : "Tasbih Counter"}
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: textMuted }}>
+              {isAr ? "عداد حرّ للذكر" : "Free dhikr counter"}
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 shrink-0 opacity-30" style={{ color: textSecondary, transform: isAr ? "rotate(180deg)" : undefined }} />
+        </button>
+
         {CATEGORIES.map((cat) => {
           const done = allDone(cat);
           const cached = cacheRef.current[cat.slug];
