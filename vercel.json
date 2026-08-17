@@ -10,6 +10,13 @@
       "memory": 512
     }
   },
+  "redirects": [
+    {
+      "source": "/ahzm",
+      "destination": "https://apps.apple.com/redeem?ctx=offercodes&id=6755150700&code=AHZM",
+      "statusCode": 307
+    }
+  ],
   "headers": [
     {
       "source": "/api/video/stitch",
