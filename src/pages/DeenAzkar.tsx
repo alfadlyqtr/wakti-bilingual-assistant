@@ -267,6 +267,8 @@ export default function DeenAzkar() {
   };
 
   const triggerGoalHaptic = () => {
+    console.log("[TasbihHaptic] Goal reached — trying to trigger haptic");
+
     if (typeof window !== "undefined") {
       const nativelyWindow = window as Window & {
         natively?: NativelyLike;
@@ -278,6 +280,12 @@ export default function DeenAzkar() {
         };
       };
       const natively = nativelyWindow.natively || nativelyWindow.Natively;
+      console.log("[TasbihHaptic] Environment", {
+        hasNatively: Boolean(natively),
+        hasWindowNatively: Boolean(nativelyWindow.natively),
+        hasWindowNativelyCapital: Boolean(nativelyWindow.Natively),
+        hasWebkitHapticHandler: Boolean(nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage),
+      });
 
       const hapticCandidates = [
         natively?.haptics?.impact,
@@ -289,17 +297,21 @@ export default function DeenAzkar() {
         natively?.selectionHaptic,
       ];
 
-      for (const candidate of hapticCandidates) {
+      for (const [index, candidate] of hapticCandidates.entries()) {
         if (typeof candidate === "function") {
           try {
+            console.log(`[TasbihHaptic] Trying native candidate #${index + 1} with medium style`);
             candidate("medium");
+            console.log(`[TasbihHaptic] Native candidate #${index + 1} succeeded with medium style`);
             return;
           } catch {
             try {
+              console.log(`[TasbihHaptic] Candidate #${index + 1} medium style failed, retrying without args`);
               candidate();
+              console.log(`[TasbihHaptic] Native candidate #${index + 1} succeeded without args`);
               return;
             } catch {
-              // Try next candidate.
+              console.warn(`[TasbihHaptic] Native candidate #${index + 1} failed`);
             }
           }
         }
@@ -307,17 +319,23 @@ export default function DeenAzkar() {
 
       try {
         if (nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage) {
+          console.log("[TasbihHaptic] Trying webkit.messageHandlers.haptic.postMessage");
           nativelyWindow.webkit.messageHandlers.haptic.postMessage({ type: "impact", style: "medium" });
+          console.log("[TasbihHaptic] Webkit haptic postMessage succeeded");
           return;
         }
       } catch {
-        // Fall through to Web Vibration API.
+        console.warn("[TasbihHaptic] Webkit haptic postMessage failed");
       }
     }
 
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      console.log("[TasbihHaptic] Falling back to navigator.vibrate(120)");
       navigator.vibrate(120);
+      return;
     }
+
+    console.warn("[TasbihHaptic] No supported haptic/vibration path found");
   };
 
   const incrementTasbih = () => {
