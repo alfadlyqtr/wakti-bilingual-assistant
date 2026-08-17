@@ -73,7 +73,6 @@ export default function DeenAzkar() {
   const [tasbihLimit, setTasbihLimit] = useState(33);
   const [goalPanelOpen, setGoalPanelOpen] = useState(false);
   const [goalDraft, setGoalDraft] = useState("33");
-  const [hapticDebug, setHapticDebug] = useState("");
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -268,9 +267,6 @@ export default function DeenAzkar() {
   };
 
   const triggerGoalHaptic = () => {
-    setHapticDebug("Goal reached: trying haptic...");
-    console.log("[TasbihHaptic] Goal reached — trying to trigger haptic");
-
     if (typeof window !== "undefined") {
       const nativelyWindow = window as Window & {
         natively?: NativelyLike;
@@ -282,13 +278,6 @@ export default function DeenAzkar() {
         };
       };
       const natively = nativelyWindow.natively || nativelyWindow.Natively;
-      setHapticDebug(`Bridge: natively=${Boolean(natively)} webkit=${Boolean(nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage)}`);
-      console.log("[TasbihHaptic] Environment", {
-        hasNatively: Boolean(natively),
-        hasWindowNatively: Boolean(nativelyWindow.natively),
-        hasWindowNativelyCapital: Boolean(nativelyWindow.Natively),
-        hasWebkitHapticHandler: Boolean(nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage),
-      });
 
       const hapticCandidates = [
         natively?.haptics?.impact,
@@ -303,20 +292,14 @@ export default function DeenAzkar() {
       for (const [index, candidate] of hapticCandidates.entries()) {
         if (typeof candidate === "function") {
           try {
-            console.log(`[TasbihHaptic] Trying native candidate #${index + 1} with medium style`);
             candidate("medium");
-            setHapticDebug(`Haptic OK via candidate #${index + 1} (medium)`);
-            console.log(`[TasbihHaptic] Native candidate #${index + 1} succeeded with medium style`);
             return;
           } catch {
             try {
-              console.log(`[TasbihHaptic] Candidate #${index + 1} medium style failed, retrying without args`);
               candidate();
-              setHapticDebug(`Haptic OK via candidate #${index + 1} (no args)`);
-              console.log(`[TasbihHaptic] Native candidate #${index + 1} succeeded without args`);
               return;
             } catch {
-              console.warn(`[TasbihHaptic] Native candidate #${index + 1} failed`);
+              // Try next candidate.
             }
           }
         }
@@ -324,26 +307,18 @@ export default function DeenAzkar() {
 
       try {
         if (nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage) {
-          console.log("[TasbihHaptic] Trying webkit.messageHandlers.haptic.postMessage");
           nativelyWindow.webkit.messageHandlers.haptic.postMessage({ type: "impact", style: "medium" });
-          setHapticDebug("Haptic OK via webkit message handler");
-          console.log("[TasbihHaptic] Webkit haptic postMessage succeeded");
           return;
         }
       } catch {
-        console.warn("[TasbihHaptic] Webkit haptic postMessage failed");
+        // Fall through to Web Vibration API.
       }
     }
 
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      console.log("[TasbihHaptic] Falling back to navigator.vibrate(120)");
       navigator.vibrate(120);
-      setHapticDebug("Using navigator.vibrate fallback");
       return;
     }
-
-    setHapticDebug("No haptic path found");
-    console.warn("[TasbihHaptic] No supported haptic/vibration path found");
   };
 
   const incrementTasbih = () => {
@@ -355,19 +330,25 @@ export default function DeenAzkar() {
       return next;
     });
   };
+  const completedRingCycles = tasbihLimit > 0 ? Math.floor(tasbihCount / tasbihLimit) : 0;
   const goalProgress = tasbihLimit > 0 ? Math.min(tasbihCount / tasbihLimit, 1) : 0;
+  const activeRingColor = green;
+  const glowFromHsl = (hsl: string, alpha: number) => hsl.replace("hsl(", "hsla(").replace(")", `,${alpha})`);
   const goalRingSize = 192;
-  const goalRingStroke = 4;
+  const goalRingStroke = 3.5;
   const goalRingRadius = (goalRingSize - goalRingStroke) / 2;
   const goalRingCircumference = 2 * Math.PI * goalRingRadius;
-  const goalRingOffset = goalRingCircumference * (1 - goalProgress);
-  const goalRingTrack = isDark ? "rgba(16,185,129,0.16)" : "rgba(22,163,74,0.18)";
+  const goalRingTrack = isDark ? "hsla(142,76%,55%,0.16)" : "hsla(142,76%,38%,0.18)";
 
   if (showTasbih) {
     return (
       <div
-        className="h-screen flex flex-col overflow-hidden"
-        style={{ background: bg, paddingBottom: bottomSafe }}
+        className="flex flex-col overflow-hidden"
+        style={{
+          background: bg,
+          height: "100dvh",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
         dir={isAr ? "rtl" : "ltr"}
       >
         <div className="px-4 pt-4 pb-3 shrink-0 flex items-center justify-between gap-3">
@@ -462,31 +443,28 @@ export default function DeenAzkar() {
               </div>
             </div>
           )}
-          {hapticDebug && (
-            <p className="mt-2 text-[11px] text-center" style={{ color: textMuted }}>
-              {hapticDebug}
-            </p>
-          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-8">
-          <div className="w-full flex flex-col items-center pt-16">
-            <span className="text-6xl font-bold tabular-nums mb-16" style={{ color: textPrimary }}>
+        <div className="flex-1 overflow-hidden px-4 pb-6">
+          <div className="h-full w-full flex flex-col items-center pt-8">
+            <span className="text-6xl font-bold tabular-nums mb-10" style={{ color: textPrimary }}>
               {tasbihCount}
             </span>
 
             <div
-              className="relative w-[192px] h-[192px]"
+              className="relative aspect-square"
               style={{
+                width: "calc(100% - 8px)",
+                maxWidth: "calc(100vw - 40px)",
                 filter: isDark
-                  ? "drop-shadow(0 0 8px hsla(142,76%,55%,0.30)) drop-shadow(0 0 18px hsla(160,80%,55%,0.16))"
-                  : "drop-shadow(0 0 7px hsla(142,76%,40%,0.22)) drop-shadow(0 0 14px hsla(160,80%,40%,0.12))",
+                  ? `drop-shadow(0 0 8px ${glowFromHsl(activeRingColor, 0.22)}) drop-shadow(0 0 16px ${glowFromHsl(activeRingColor, 0.12)})`
+                  : `drop-shadow(0 0 6px ${glowFromHsl(activeRingColor, 0.16)}) drop-shadow(0 0 12px ${glowFromHsl(activeRingColor, 0.08)})`,
               }}
             >
               <svg
                 className="absolute inset-0 -rotate-90"
-                width={goalRingSize}
-                height={goalRingSize}
+                width="100%"
+                height="100%"
                 viewBox={`0 0 ${goalRingSize} ${goalRingSize}`}
                 aria-hidden
               >
@@ -503,18 +481,18 @@ export default function DeenAzkar() {
                   cy={goalRingSize / 2}
                   r={goalRingRadius}
                   fill="none"
-                  stroke={green}
+                  stroke={activeRingColor}
                   strokeWidth={goalRingStroke}
                   strokeLinecap="round"
                   strokeDasharray={goalRingCircumference}
-                  strokeDashoffset={goalRingOffset}
+                  strokeDashoffset={goalRingCircumference * (1 - goalProgress)}
                   style={{ transition: "stroke-dashoffset 320ms cubic-bezier(0.22, 1, 0.36, 1)" }}
                 />
               </svg>
 
               <button
                 onClick={incrementTasbih}
-                className="absolute inset-[8px] rounded-full text-xl font-bold transition-all"
+                className="absolute inset-[8px] rounded-full transition-all flex flex-col items-center justify-center gap-1"
                 style={{
                   background: "linear-gradient(180deg, #ffffff 0%, #f7f8fc 100%)",
                   border: isDark ? "1px solid rgba(255,255,255,0.45)" : "1px solid rgba(6,5,65,0.12)",
@@ -522,18 +500,23 @@ export default function DeenAzkar() {
                   color: "#060541",
                 }}
               >
-                {isAr ? "تسبيح" : "Count"}
+                <span className="text-xl font-bold">{isAr ? "تسبيح" : "Count"}</span>
+                <span className="text-sm font-semibold opacity-75">
+                  {isAr ? `الحلقات: ${completedRingCycles}` : `Rings: ${completedRingCycles}`}
+                </span>
               </button>
             </div>
 
-            <button
-              onClick={() => setTasbihCount(0)}
-              className="mt-5 px-2 py-1 text-[22px] font-semibold transition-opacity active:opacity-70 flex items-center gap-2"
-              style={{ color: textSecondary }}
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="text-[18px]">{isAr ? "إعادة" : "Reset"}</span>
-            </button>
+            <div className="mt-5 flex items-center gap-4">
+              <button
+                onClick={() => setTasbihCount(0)}
+                className="px-2 py-1 text-[22px] font-semibold transition-opacity active:opacity-70 flex items-center gap-2"
+                style={{ color: textSecondary }}
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span className="text-[18px]">{isAr ? "إعادة" : "Reset"}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
