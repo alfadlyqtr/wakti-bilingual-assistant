@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronRight, RotateCcw, RefreshCw, Check, BookOpen, Info, Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, RotateCcw, RefreshCw, Check, BookOpen, Info, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 
 // ── Data source: fitrahive/dua-dhikr (MIT licence) ────────────────────────────
@@ -22,6 +22,24 @@ interface Category {
   nameAr: string;
   emoji: string;
 }
+
+type NativelyLike = {
+  haptics?: {
+    impact?: (style?: string) => void;
+    selection?: () => void;
+  };
+  haptic?: {
+    impact?: (style?: string) => void;
+  };
+  impact?: (style?: string) => void;
+  triggerHaptic?: (style?: string) => void;
+  vibrate?: (duration?: number | string) => void;
+  selectionHaptic?: () => void;
+};
+
+type WebkitHapticHandler = {
+  postMessage?: (payload: { type: string; style?: string }) => void;
+};
 
 const CATEGORIES: Category[] = [
   { slug: "morning-dhikr",    nameEn: "Morning Dhikr",    nameAr: "أذكار الصباح",      emoji: "☀️" },
@@ -52,7 +70,9 @@ export default function DeenAzkar() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [showTasbih, setShowTasbih] = useState(false);
   const [tasbihCount, setTasbihCount] = useState(0);
-  const [tasbihLimit, setTasbihLimit] = useState(30);
+  const [tasbihLimit, setTasbihLimit] = useState(33);
+  const [goalPanelOpen, setGoalPanelOpen] = useState(false);
+  const [goalDraft, setGoalDraft] = useState("33");
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -246,20 +266,76 @@ export default function DeenAzkar() {
     return cached && cached.length > 0 && cached.every((_, idx) => completed.has(counterKey(cat.slug, idx)));
   };
 
+  const triggerGoalHaptic = () => {
+    if (typeof window !== "undefined") {
+      const nativelyWindow = window as Window & {
+        natively?: NativelyLike;
+        Natively?: NativelyLike;
+        webkit?: {
+          messageHandlers?: {
+            haptic?: WebkitHapticHandler;
+          };
+        };
+      };
+      const natively = nativelyWindow.natively || nativelyWindow.Natively;
+
+      const hapticCandidates = [
+        natively?.haptics?.impact,
+        natively?.haptic?.impact,
+        natively?.impact,
+        natively?.triggerHaptic,
+        natively?.vibrate,
+        natively?.haptics?.selection,
+        natively?.selectionHaptic,
+      ];
+
+      for (const candidate of hapticCandidates) {
+        if (typeof candidate === "function") {
+          try {
+            candidate("medium");
+            return;
+          } catch {
+            try {
+              candidate();
+              return;
+            } catch {
+              // Try next candidate.
+            }
+          }
+        }
+      }
+
+      try {
+        if (nativelyWindow.webkit?.messageHandlers?.haptic?.postMessage) {
+          nativelyWindow.webkit.messageHandlers.haptic.postMessage({ type: "impact", style: "medium" });
+          return;
+        }
+      } catch {
+        // Fall through to Web Vibration API.
+      }
+    }
+
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(120);
+    }
+  };
+
   const incrementTasbih = () => {
     setTasbihCount((prev) => {
       const next = prev + 1;
-      if (
-        tasbihLimit > 0
-        && next % tasbihLimit === 0
-        && typeof navigator !== "undefined"
-        && "vibrate" in navigator
-      ) {
-        navigator.vibrate(120);
+      if (tasbihLimit > 0 && next % tasbihLimit === 0) {
+        triggerGoalHaptic();
       }
       return next;
     });
   };
+  const goalProgress = tasbihLimit > 0 ? Math.min(tasbihCount / tasbihLimit, 1) : 0;
+  const goalRingSize = 192;
+  const goalRingStroke = 4;
+  const goalRingRadius = (goalRingSize - goalRingStroke) / 2;
+  const goalRingCircumference = 2 * Math.PI * goalRingRadius;
+  const goalRingOffset = goalRingCircumference * (1 - goalProgress);
+  const goalRingTrack = isDark ? "rgba(16,185,129,0.16)" : "rgba(22,163,74,0.18)";
 
   if (showTasbih) {
     return (
@@ -285,59 +361,147 @@ export default function DeenAzkar() {
           <div className="w-9 h-9" aria-hidden />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-8">
-          <div className="w-full flex flex-col items-center pt-16">
-            <div className="w-full max-w-[220px] mb-8">
-              <label
-                htmlFor="tasbih-limit"
-                className="block text-[12px] font-semibold mb-2 text-center"
-                style={{ color: textSecondary }}
-              >
-                {isAr ? "حدّ الاهتزاز" : "Vibration limit"}
-              </label>
+        <div className="px-4 pb-2 shrink-0">
+          <button
+            onClick={() => {
+              setGoalPanelOpen((prev) => {
+                const next = !prev;
+                if (next) setGoalDraft(String(tasbihLimit));
+                return next;
+              });
+            }}
+            className="inline-flex items-center gap-2 py-1 active:scale-[0.99] transition-all"
+            aria-expanded={goalPanelOpen}
+            aria-label={isAr ? "فتح إعداد الهدف" : "Open goal settings"}
+          >
+            <span className="text-[13px] font-semibold" style={{ color: textSecondary }}>
+              {isAr ? "الهدف:" : "Goal:"}
+            </span>
+            <span className="text-[14px] font-bold" style={{ color: textPrimary }}>
+              {tasbihLimit}
+            </span>
+            {goalPanelOpen
+              ? <ChevronUp className="w-4 h-4 shrink-0" style={{ color: textSecondary }} />
+              : <ChevronDown className="w-4 h-4 shrink-0" style={{ color: textSecondary }} />}
+          </button>
+
+          {goalPanelOpen && (
+            <div
+              className="mt-2 rounded-xl p-3 space-y-2"
+              style={{
+                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.05)",
+                border: `1px solid ${cardBorder}`,
+              }}
+            >
               <input
-                id="tasbih-limit"
                 type="number"
-                min={1}
+                min={0}
                 step={1}
-                value={tasbihLimit}
-                onChange={(e) => {
-                  const parsed = Number.parseInt(e.target.value, 10);
-                  if (Number.isFinite(parsed) && parsed > 0) setTasbihLimit(parsed);
-                }}
-                className="w-full h-11 rounded-xl px-3 text-center text-base font-semibold outline-none"
+                value={goalDraft}
+                onChange={(e) => setGoalDraft(e.target.value)}
+                className="w-full h-10 rounded-lg px-3 text-center text-base font-bold outline-none"
                 style={{
-                  background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.06)",
+                  background: isDark ? "rgba(255,255,255,0.08)" : "rgba(6,5,65,0.10)",
                   border: `1px solid ${cardBorder}`,
                   color: textPrimary,
                 }}
-                aria-label={isAr ? "حد الاهتزاز" : "Vibration limit"}
+                aria-label={isAr ? "أدخل الهدف" : "Enter goal"}
               />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setGoalDraft(String(tasbihLimit));
+                    setGoalPanelOpen(false);
+                  }}
+                  className="flex-1 h-9 rounded-lg text-sm font-semibold active:scale-95 transition-all"
+                  style={{
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.08)",
+                    border: `1px solid ${cardBorder}`,
+                    color: textSecondary,
+                  }}
+                >
+                  {isAr ? "إلغاء" : "Cancel"}
+                </button>
+                <button
+                  onClick={() => {
+                    const parsed = Number.parseInt(goalDraft, 10);
+                    if (Number.isFinite(parsed) && parsed >= 0) setTasbihLimit(parsed);
+                    setGoalPanelOpen(false);
+                  }}
+                  className="flex-1 h-9 rounded-lg text-sm font-semibold active:scale-95 transition-all"
+                  style={{ background: blueFaint, border: `1px solid ${blueGlow}`, color: blue }}
+                >
+                  {isAr ? "تأكيد" : "Set"}
+                </button>
+              </div>
             </div>
+          )}
+        </div>
 
+        <div className="flex-1 overflow-y-auto px-4 pb-8">
+          <div className="w-full flex flex-col items-center pt-16">
             <span className="text-6xl font-bold tabular-nums mb-16" style={{ color: textPrimary }}>
               {tasbihCount}
             </span>
 
-            <button
-              onClick={incrementTasbih}
-              className="w-44 h-44 rounded-full text-xl font-bold active:scale-95 transition-all shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+            <div
+              className="relative w-[192px] h-[192px]"
               style={{
-                background: "#ffffff",
-                border: isDark ? "1px solid rgba(255,255,255,0.5)" : "1px solid rgba(6,5,65,0.15)",
-                color: "#060541",
+                filter: isDark
+                  ? "drop-shadow(0 0 8px hsla(142,76%,55%,0.30)) drop-shadow(0 0 18px hsla(160,80%,55%,0.16))"
+                  : "drop-shadow(0 0 7px hsla(142,76%,40%,0.22)) drop-shadow(0 0 14px hsla(160,80%,40%,0.12))",
               }}
             >
-              {isAr ? "تسبيح" : "Count"}
-            </button>
+              <svg
+                className="absolute inset-0 -rotate-90"
+                width={goalRingSize}
+                height={goalRingSize}
+                viewBox={`0 0 ${goalRingSize} ${goalRingSize}`}
+                aria-hidden
+              >
+                <circle
+                  cx={goalRingSize / 2}
+                  cy={goalRingSize / 2}
+                  r={goalRingRadius}
+                  fill="none"
+                  stroke={goalRingTrack}
+                  strokeWidth={goalRingStroke}
+                />
+                <circle
+                  cx={goalRingSize / 2}
+                  cy={goalRingSize / 2}
+                  r={goalRingRadius}
+                  fill="none"
+                  stroke={green}
+                  strokeWidth={goalRingStroke}
+                  strokeLinecap="round"
+                  strokeDasharray={goalRingCircumference}
+                  strokeDashoffset={goalRingOffset}
+                  style={{ transition: "stroke-dashoffset 320ms cubic-bezier(0.22, 1, 0.36, 1)" }}
+                />
+              </svg>
+
+              <button
+                onClick={incrementTasbih}
+                className="absolute inset-[8px] rounded-full text-xl font-bold transition-all"
+                style={{
+                  background: "linear-gradient(180deg, #ffffff 0%, #f7f8fc 100%)",
+                  border: isDark ? "1px solid rgba(255,255,255,0.45)" : "1px solid rgba(6,5,65,0.12)",
+                  boxShadow: "0 10px 26px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -2px 10px rgba(6,5,65,0.05)",
+                  color: "#060541",
+                }}
+              >
+                {isAr ? "تسبيح" : "Count"}
+              </button>
+            </div>
 
             <button
               onClick={() => setTasbihCount(0)}
-              className="mt-6 px-5 py-2.5 rounded-xl text-sm font-semibold active:scale-95 transition-all flex items-center gap-2"
-              style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(6,5,65,0.06)", border: `1px solid ${cardBorder}`, color: textSecondary }}
+              className="mt-5 px-2 py-1 text-[22px] font-semibold transition-opacity active:opacity-70 flex items-center gap-2"
+              style={{ color: textSecondary }}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{isAr ? "إعادة" : "Reset"}</span>
+              <RefreshCw className="w-4 h-4" />
+              <span className="text-[18px]">{isAr ? "إعادة" : "Reset"}</span>
             </button>
           </div>
         </div>
