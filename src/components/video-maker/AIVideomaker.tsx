@@ -374,6 +374,7 @@ const SCENE_DURATION_OPTIONS = [6, 10] as const;
 
 type ImageToVideoReferenceRole = 'character' | 'scene' | 'product' | 'object' | 'style' | 'logo' | 'text';
 type ImageToVideoReferenceSlot = 1 | 2 | 3 | 4;
+const IMAGE_TO_VIDEO_REFERENCE_SLOTS: ImageToVideoReferenceSlot[] = [1, 2, 3, 4];
 
 const IMAGE_TO_VIDEO_REFERENCE_ROLE_OPTIONS: Array<{ value: ImageToVideoReferenceRole; en: string; ar: string }> = [
   { value: 'character', en: 'Character', ar: 'شخصية' },
@@ -390,6 +391,27 @@ const DEFAULT_IMAGE_TO_VIDEO_ROLE_BY_SLOT: Record<ImageToVideoReferenceSlot, Ima
   2: 'scene',
   3: 'object',
   4: 'style',
+};
+
+const getCharacterLabelForRoleChoice = (
+  slot: ImageToVideoReferenceSlot,
+  roleBySlot: Record<ImageToVideoReferenceSlot, ImageToVideoReferenceRole>,
+  nextRole: ImageToVideoReferenceRole,
+): { index: number; total: number } => {
+  let total = 0;
+  let index = 1;
+
+  for (const currentSlot of IMAGE_TO_VIDEO_REFERENCE_SLOTS) {
+    const role = currentSlot === slot ? nextRole : roleBySlot[currentSlot];
+    if (role === 'character') {
+      total += 1;
+      if (currentSlot === slot) {
+        index = total;
+      }
+    }
+  }
+
+  return { index, total };
 };
 
 const sceneArray = <T,>(sceneCount: number, value: T): T[] => Array.from({ length: sceneCount }, () => value);
@@ -1219,6 +1241,20 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
   const handleImageToVideoRoleChange = (slot: ImageToVideoReferenceSlot, role: ImageToVideoReferenceRole) => {
     setImageToVideoRoleBySlot((prev) => ({ ...prev, [slot]: role }));
+  };
+
+  const getImageToVideoRoleOptionLabel = (
+    slot: ImageToVideoReferenceSlot,
+    roleValue: ImageToVideoReferenceRole,
+    roleLabelEn: string,
+    roleLabelAr: string,
+  ) => {
+    const baseLabel = language === 'ar' ? roleLabelAr : roleLabelEn;
+    if (roleValue !== 'character') return baseLabel;
+
+    const { index, total } = getCharacterLabelForRoleChoice(slot, imageToVideoRoleBySlot, roleValue);
+    if (total <= 1) return baseLabel;
+    return `${baseLabel} ${index}`;
   };
 
   const handleImageSelectForImageToVideoReference = (
@@ -3517,7 +3553,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   >
                     {IMAGE_TO_VIDEO_REFERENCE_ROLE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {language === 'ar' ? option.ar : option.en}
+                        {getImageToVideoRoleOptionLabel(1, option.value, option.en, option.ar)}
                       </option>
                     ))}
                   </select>
@@ -3601,7 +3637,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             >
                               {IMAGE_TO_VIDEO_REFERENCE_ROLE_OPTIONS.map((option) => (
                                 <option key={`${slot}-${option.value}`} value={option.value}>
-                                  {language === 'ar' ? option.ar : option.en}
+                                  {getImageToVideoRoleOptionLabel(slot, option.value, option.en, option.ar)}
                                 </option>
                               ))}
                             </select>

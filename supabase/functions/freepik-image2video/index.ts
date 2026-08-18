@@ -785,12 +785,23 @@ function buildTaggedImageToVideoPrompt(
 ): string {
   if (!references.length) return prompt;
 
-  const roleLines = references.map((ref, idx) => `- Image ${idx + 1}: ${ref.role}`);
+  let characterIndex = 0;
+  const characterCount = references.filter((ref) => ref.role === "character").length;
+  const roleLines = references.map((ref, idx) => {
+    if (ref.role === "character") {
+      characterIndex += 1;
+      return `- Image ${idx + 1}: character ${characterIndex}`;
+    }
+    return `- Image ${idx + 1}: ${ref.role}`;
+  });
   const tagBlock = [
     "REFERENCE IMAGE TAGS (follow strictly):",
     ...roleLines,
     "Tag rules:",
     "- character: keep the same person/identity details.",
+    ...(characterCount > 1
+      ? ["- if there are multiple characters, keep each numbered identity separate (character 1, character 2, ...)."]
+      : []),
     "- scene: use as environment/background anchor.",
     "- product/object/logo/text: preserve key visual details and clarity.",
     "- style: transfer only visual style and mood, not identity.",
