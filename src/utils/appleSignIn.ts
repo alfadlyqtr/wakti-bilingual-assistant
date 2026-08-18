@@ -1,11 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { setActiveScopedUserId } from '@/utils/userScopedStorage';
-import { clearHandoffPending, markHandoffPending, startHandoffPolling } from '@/utils/oauthHandoff';
+import { clearHandoffPending, markHandoffPending, oauthPkce, startHandoffPolling } from '@/utils/oauthHandoff';
 import { dlog } from '@/utils/debugLog';
 import type { Session, User } from '@supabase/supabase-js';
 
-const PRODUCTION_ORIGIN = 'https://wakti.qa';
 const APPLE_SIGN_IN_REDIRECT_KEY = 'wakti_apple_sign_in_redirect';
 export const APPLE_SIGN_IN_CALLBACK_PATH = '/auth/apple/sign-in';
 
@@ -56,7 +55,11 @@ export async function startAppleSignIn(redirectTo = '/dashboard'): Promise<{ err
   const nextPath = sanitizeAppleRedirectPath(redirectTo);
   const inNatively = isNativelyApp();
   const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const origin = inNatively && isMobile ? PRODUCTION_ORIGIN : window.location.origin;
+  // Always use the origin the app is actually running on, so the session is
+  // saved in the same storage partition the app boots from (proven by device
+  // logs: the app runs on www.wakti.qa — the old hardcoded non-www callback
+  // saved sessions into a different partition that reopen never reads).
+  const origin = window.location.origin;
   const callbackUrl = new URL(APPLE_SIGN_IN_CALLBACK_PATH, origin);
   callbackUrl.searchParams.set('next', nextPath);
 
@@ -70,12 +73,15 @@ export async function startAppleSignIn(redirectTo = '/dashboard'): Promise<{ err
   setStoredAppleRedirect(nextPath);
   markHandoffPending(loginId);
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  // PKCE: the auth code comes back in the ?query, which survives the iOS
+  // handoff from Safari to the app (the #fragment used by implicit flow gets
+  // stripped — the core of the lost-session bug).
+  const { data, error } = await oauthPkce.auth.signInWithOAuth({
     provider: 'apple',
     options: {
       redirectTo: callbackUrl.toString(),
       skipBrowserRedirect: true,
-    } as any,
+    },
   });
 
   if (error) {

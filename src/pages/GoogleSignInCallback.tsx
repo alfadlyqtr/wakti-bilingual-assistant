@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { getPendingHandoffTicket, getTokensFromUrlHash, handoffSessionToMainWindow } from '@/utils/oauthHandoff';
+import { handoffCodeToMainWindow, tryExchangeCode } from '@/utils/oauthHandoff';
 import { dlog } from '@/utils/debugLog';
 import {
   clearStoredGoogleRedirect,
@@ -39,33 +38,49 @@ export default function GoogleSignInCallback() {
         return;
       }
 
-      // If this window did not start the sign-in, it's a secondary window
-      // (external browser / temp WebView) whose storage is temporary. The
-      // sign-in tokens are in this window's URL hash (implicit flow) — hand
-      // them to the main app window so the session is born in permanent storage.
-      if (loginId && getPendingHandoffTicket() !== loginId) {
-        clearStoredGoogleRedirect();
-        const tokens = getTokensFromUrlHash();
-        if (tokens) {
-          const outcome = await handoffSessionToMainWindow(loginId, tokens);
-          if (outcome === 'claimed') {
-            dlog('temp-window-handed-off');
-            // Discard this window's copy so the two windows can never fight
-            // over token refresh (which would kill both sessions).
-            try { (supabase.auth as any).stopAutoRefresh?.(); } catch {}
-            try { await supabase.auth.signOut({ scope: 'local' as any }); } catch {}
-            setStatus('success');
-            setMessage('Signed in — you can return to the Wakti app now');
-            return; // stay on this screen; the main app window continues
-          }
-        }
-        // Nobody collected — this window may actually BE the main app window
-        // (e.g. iOS relaunched the app onto this URL, so the start-flag is
-        // gone). Fall through and finish locally.
-        dlog('handoff-not-collected-trying-local');
-      }
-
       try {
+        if (code) {
+          // PKCE flow: the code rides in the ?query, which survives the iOS
+          // handoff from Safari to the app. This window can redeem it only if
+          // the code verifier is in this window's storage (i.e. this window
+          // started the sign-in or shares that partition).
+          let session = await tryExchangeCode(code);
+
+          if (!session && loginId) {
+            // No verifier here — external browser window. Courier the code to
+            // the main app window, which redeems it into permanent storage.
+            clearStoredGoogleRedirect();
+            const outcome = await handoffCodeToMainWindow(loginId, code);
+            if (outcome === 'claimed') {
+              dlog('temp-window-handed-off');
+              setStatus('success');
+              setMessage('Signed in — you can return to the Wakti app now');
+              return; // the main app window continues
+            }
+            // Nobody collected — iOS may have relaunched the app onto this URL
+            // (fresh window, but same permanent partition with the verifier).
+            // Try once more locally.
+            dlog('handoff-not-collected-trying-local');
+            session = await tryExchangeCode(code);
+          }
+
+          if (!session) {
+            throw new Error('Could not finish sign in — please go back and try again.');
+          }
+
+          await finalizeGoogleSignInSession({
+            session,
+            applyManualLoginRecovery,
+            loginId,
+          });
+          clearStoredGoogleRedirect();
+          setStatus('success');
+          setMessage(session.user.email || 'Google sign in successful');
+          window.setTimeout(() => navigate(next, { replace: true }), 1500);
+          return;
+        }
+
+        // Legacy fallback: no ?code in the URL (old implicit/hash links)
         const session = await waitForGoogleSession(code);
 
         await finalizeGoogleSignInSession({

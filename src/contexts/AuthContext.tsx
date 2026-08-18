@@ -552,7 +552,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const resetPassword = async (email: string) => {
     // Determine the correct redirect URL based on environment
     const baseUrl = window.location.origin;
-    const redirectTo = `${baseUrl}/auth/confirm`;
+    // Add an explicit mode flag so AuthConfirm can reliably identify
+    // recovery flow even when provider callbacks omit `type=recovery`.
+    const redirectTo = `${baseUrl}/auth/confirm?mode=recovery`;
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,

@@ -1,11 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { setActiveScopedUserId } from '@/utils/userScopedStorage';
-import { clearHandoffPending, markHandoffPending, startHandoffPolling } from '@/utils/oauthHandoff';
+import { clearHandoffPending, markHandoffPending, oauthPkce, startHandoffPolling } from '@/utils/oauthHandoff';
 import { dlog } from '@/utils/debugLog';
 import type { Session, User } from '@supabase/supabase-js';
 
-const PRODUCTION_ORIGIN = 'https://wakti.qa';
 const GOOGLE_SIGN_IN_REDIRECT_KEY = 'wakti_google_sign_in_redirect';
 export const GOOGLE_SIGN_IN_CALLBACK_PATH = '/auth/google/sign-in';
 
@@ -56,7 +55,7 @@ export async function startGoogleSignIn(redirectTo = '/dashboard'): Promise<{ er
   const nextPath = sanitizeGoogleRedirectPath(redirectTo);
   const inNatively = isNativelyApp();
   const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const origin = inNatively && isMobile ? PRODUCTION_ORIGIN : window.location.origin;
+  const origin = window.location.origin;
   const callbackUrl = new URL(GOOGLE_SIGN_IN_CALLBACK_PATH, origin);
   callbackUrl.searchParams.set('next', nextPath);
 
@@ -70,12 +69,15 @@ export async function startGoogleSignIn(redirectTo = '/dashboard'): Promise<{ er
   setStoredGoogleRedirect(nextPath);
   markHandoffPending(loginId);
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  // PKCE: the auth code comes back in the ?query, which survives the iOS
+  // handoff from Safari to the app (the #fragment used by implicit flow gets
+  // stripped — the core of the lost-session bug).
+  const { data, error } = await oauthPkce.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: callbackUrl.toString(),
       skipBrowserRedirect: true,
-    } as any,
+    },
   });
 
   if (error) {

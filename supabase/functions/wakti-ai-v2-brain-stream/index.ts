@@ -1312,7 +1312,7 @@ async function classifySearchIntent(message: string, language: string): Promise<
 }
 
 type GeminiRole = 'user' | 'model';
-type GeminiContentPart = { text: string } | { inline_data: { mime_type: string; data: string } };
+type GeminiContentPart = { text: string } | { inline_data: { mime_type: string; data: string } } | { file_data: { file_uri: string } };
 type GeminiContent = { role: GeminiRole; parts: GeminiContentPart[] };
 
 type NormalizedImageAttachment = {
@@ -1691,6 +1691,13 @@ function buildMapsGroundingQuery(
 const chatSearchCache = new Map<string, { result: string; ts: number }>();
 const CHAT_SEARCH_CACHE_TTL_MS = 60_000;
 
+// YouTube link support: normalize any pasted YouTube URL (watch / shorts / youtu.be / live)
+// to the canonical watch URL that Gemini's file_data video understanding accepts.
+function extractYouTubeWatchUrl(text: string): string | null {
+  const match = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?\S*?v=|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/i.exec(text || '');
+  return match ? `https://www.youtube.com/watch?v=${match[1]}` : null;
+}
+
 // Chat mode: model is determined by engineTier at the call site
 async function streamGemini3FlashChat(
   query: string,
@@ -1699,12 +1706,13 @@ async function streamGemini3FlashChat(
   onToken: (token: string) => void,
   language: string = 'en',
   onSignal?: (meta: Record<string, unknown>) => void,
-  model: string = 'gemini-3.1-flash-lite'
+  model: string = 'gemini-3.1-flash-lite',
+  youTubeWatchUrl: string | null = null
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
-  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string } | { file_data: { file_uri: string } }> }> = [];
   try {
     if (Array.isArray(recentMessages) && recentMessages.length > 0) {
       const msgs = recentMessages
@@ -1741,7 +1749,9 @@ async function streamGemini3FlashChat(
     }
   }
   // ALWAYS push the full, untruncated query as the final user message
-  contents.push({ role: 'user', parts: [{ text: query }] });
+  const queryParts: Array<{ text: string } | { file_data: { file_uri: string } }> = [{ text: query }];
+  if (youTubeWatchUrl) queryParts.push({ file_data: { file_uri: youTubeWatchUrl } });
+  contents.push({ role: 'user', parts: queryParts });
 
   const cacheKey = query.trim().toLowerCase();
   if (cacheKey) {
@@ -1759,8 +1769,11 @@ async function streamGemini3FlashChat(
   const body: Record<string, unknown> = {
     contents,
     generationConfig: { temperature: 0.4, maxOutputTokens: 3200 },
-    tools: [{ google_search: {} }],
   };
+  // Grounding is skipped when a YouTube video is attached — the video itself is the source.
+  if (!youTubeWatchUrl) {
+    body.tools = [{ google_search: {} }];
+  }
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
@@ -6769,7 +6782,10 @@ If you are running out of space, keep this order and drop the rest:
 
             try {
               // Chat early-return path: respect engineTier for model selection
-              const chatModel = 'gemini-3.1-flash-lite';
+              // YouTube links need real video understanding — Flash-Lite can't be trusted
+              // with file_data video parts, so those requests ride the full Flash model.
+              const youTubeWatchUrl = extractYouTubeWatchUrl(message || '');
+              const chatModel = youTubeWatchUrl ? 'gemini-3.7-flash' : 'gemini-3.1-flash-lite';
               const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (Flash)';
               modelUsedOuter = chatEngineLabel;
               let fullResponseText = '';
@@ -6789,7 +6805,8 @@ If you are running out of space, keep this order and drop the rest:
                 (meta: Record<string, unknown>) => {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
                 },
-                chatModel
+                chatModel,
+                youTubeWatchUrl
               );
 
               if (!fullResponseText) {
@@ -7109,7 +7126,20 @@ If you are running out of space, keep this order and drop the rest:
             }
           }
           appendGeminiImagesToContents(contents);
-          
+
+          // Attach pasted YouTube link as a real video input (Gemini watches the video).
+          const youTubeWatchUrl = extractYouTubeWatchUrl(message || '');
+          if (youTubeWatchUrl) {
+            const videoPart: GeminiContentPart = { file_data: { file_uri: youTubeWatchUrl } };
+            const lastUserIdx = [...contents].reverse().findIndex((item) => item.role === 'user');
+            const targetIdx = lastUserIdx === -1 ? -1 : (contents.length - 1 - lastUserIdx);
+            if (targetIdx >= 0) {
+              contents[targetIdx].parts.push(videoPart);
+            } else {
+              contents.push({ role: 'user', parts: [videoPart] });
+            }
+          }
+
           aiProvider = 'gemini';
           // Tiered Engine Router ΓÇö based on user's engineTier preference (speed | intelligence)
           const isDeepWork = chatSubmode === 'study' || effectiveTrigger === 'search';
@@ -7121,6 +7151,10 @@ If you are running out of space, keep this order and drop the rest:
           } else {
             selectedModel = 'gemini-3.1-flash-lite';
             engineLabel = isDeepWork ? 'Speed Engine (Flash/Deep)' : 'Speed Engine (Flash)';
+          }
+          // YouTube video parts ride the full Flash model (Flash-Lite video support is unreliable).
+          if (youTubeWatchUrl && selectedModel === 'gemini-3.1-flash-lite') {
+            selectedModel = 'gemini-3.7-flash';
           }
           modelUsed = engineLabel;
           modelUsedOuter = engineLabel;
@@ -7145,7 +7179,7 @@ If you are running out of space, keep this order and drop the rest:
           // Study mode wants grounding AND code execution. If this model/API build refuses that
           // tool combination we step down rather than lose verified computation silently:
           // grounding+code -> code only -> plain. Chat/search behaviour is a single attempt as before.
-          const searchAllowed = normalizedImageAttachments.length === 0;
+          const searchAllowed = normalizedImageAttachments.length === 0 && !youTubeWatchUrl;
           const attempts: Array<{ search: boolean; code: boolean }> = [];
           if (isStudyMode) {
             attempts.push({ search: searchAllowed, code: true });
