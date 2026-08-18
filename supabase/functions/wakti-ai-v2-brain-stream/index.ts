@@ -1698,6 +1698,19 @@ function extractYouTubeWatchUrl(text: string): string | null {
   return match ? `https://www.youtube.com/watch?v=${match[1]}` : null;
 }
 
+// Transcript intent: user wants the video's spoken content written out verbatim, not a summary.
+function isTranscriptRequest(text: string): boolean {
+  const t = text || '';
+  return /\b(transcribe|transcript|transcription|transcribed)\b/i.test(t)
+    || /(تفريغ|فرّغ|النص الكامل|ترانسكربت|نص حرفي)/.test(t);
+}
+
+// Forced verbatim transcript behavior — overrides brevity/style/language rules for this request.
+const YOUTUBE_TRANSCRIPT_INSTRUCTION = {
+  en: `[TRANSCRIPT MODE — MUST COMPLY]: The user asked for a TRANSCRIPT of the attached video. Output the full spoken content as a verbatim transcript with timestamped section headers like [00:00 - 01:23]. Do NOT summarize, do NOT paraphrase, do NOT add commentary or analysis. Write the transcript in the exact language spoken in the video — this overrides any response-language rule. Completeness overrides any brevity or style preference. If the video is too long for one response, transcribe as much as possible and end with "[... continues]".`,
+  ar: `[وضع التفريغ — إلزامي]: طلب المستخدم تفريغاً نصياً للفيديو المرفق. أخرج المحتوى المنطوق كاملاً كنص حرفي مع عناوين زمنية مثل [00:00 - 01:23]. لا تلخّص، لا تعِد الصياغة، لا تضف تعليقات أو تحليلاً. اكتب التفريغ بلغة الفيديو المنطوقة نفسها — هذا يتجاوز أي قاعدة للغة الرد. الاكتمال يتجاوز أي تفضيل للاختصار أو الأسلوب. إذا كان الفيديو أطول من رد واحد، فرّغ أكبر قدر ممكن وانهِ بـ "[... يتبع]".`,
+} as const;
+
 // Chat mode: model is determined by engineTier at the call site
 async function streamGemini3FlashChat(
   query: string,
@@ -1707,7 +1720,8 @@ async function streamGemini3FlashChat(
   language: string = 'en',
   onSignal?: (meta: Record<string, unknown>) => void,
   model: string = 'gemini-3.1-flash-lite',
-  youTubeWatchUrl: string | null = null
+  youTubeWatchUrl: string | null = null,
+  maxOutputTokens: number = 3200
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
@@ -1768,7 +1782,7 @@ async function streamGemini3FlashChat(
 
   const body: Record<string, unknown> = {
     contents,
-    generationConfig: { temperature: 0.4, maxOutputTokens: 3200 },
+    generationConfig: { temperature: 0.4, maxOutputTokens },
   };
   // Grounding is skipped when a YouTube video is attached — the video itself is the source.
   if (!youTubeWatchUrl) {
@@ -6788,6 +6802,8 @@ If you are running out of space, keep this order and drop the rest:
               // with file_data video parts, so those requests ride the full Flash model.
               const youTubeWatchUrl = extractYouTubeWatchUrl(message || '');
               const chatModel = youTubeWatchUrl ? 'gemini-3.7-flash' : 'gemini-3.1-flash-lite';
+              // Transcript intent on a video link: force verbatim transcript, no summarizing.
+              const transcriptRequested = !!youTubeWatchUrl && isTranscriptRequest(message || '');
               const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (Flash)';
               modelUsedOuter = chatEngineLabel;
               let fullResponseText = '';
@@ -6795,8 +6811,11 @@ If you are running out of space, keep this order and drop the rest:
               const reminderAugmentedMessage = messageHasReminderKeyword
                 ? `${effectiveMessage}\n\n[SYSTEM OVERRIDE ΓÇö MUST COMPLY]: Append this exact JSON on its own line at the very end of your response, no code fences, no extra text after it:\n{"action":"set_reminder","time":"REPLACE_WITH_ISO8601_DATETIME${formattedOffset}","text":"REPLACE_WITH_REMINDER_TEXT"}`
                 : effectiveMessage;
+              const outgoingMessage = transcriptRequested
+                ? `${reminderAugmentedMessage}\n\n${language === 'ar' ? YOUTUBE_TRANSCRIPT_INSTRUCTION.ar : YOUTUBE_TRANSCRIPT_INSTRUCTION.en}`
+                : reminderAugmentedMessage;
               await streamGemini3FlashChat(
-                reminderAugmentedMessage,
+                outgoingMessage,
                 systemPrompt,
                 recentMessages,
                 (token: string) => {
@@ -6808,7 +6827,8 @@ If you are running out of space, keep this order and drop the rest:
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
                 },
                 chatModel,
-                youTubeWatchUrl
+                youTubeWatchUrl,
+                transcriptRequested ? 16000 : 3200
               );
 
               if (!fullResponseText) {
@@ -7131,6 +7151,7 @@ If you are running out of space, keep this order and drop the rest:
 
           // Attach pasted YouTube link as a real video input (Gemini watches the video).
           const youTubeWatchUrl = extractYouTubeWatchUrl(message || '');
+          const transcriptRequested = !!youTubeWatchUrl && isTranscriptRequest(message || '');
           if (youTubeWatchUrl) {
             const videoPart: GeminiContentPart = { file_data: { file_uri: youTubeWatchUrl } };
             const lastUserIdx = [...contents].reverse().findIndex((item) => item.role === 'user');
@@ -7139,6 +7160,14 @@ If you are running out of space, keep this order and drop the rest:
               contents[targetIdx].parts.push(videoPart);
             } else {
               contents.push({ role: 'user', parts: [videoPart] });
+            }
+            if (transcriptRequested) {
+              const transcriptPart: GeminiContentPart = { text: language === 'ar' ? YOUTUBE_TRANSCRIPT_INSTRUCTION.ar : YOUTUBE_TRANSCRIPT_INSTRUCTION.en };
+              if (targetIdx >= 0) {
+                contents[targetIdx].parts.push(transcriptPart);
+              } else {
+                contents.push({ role: 'user', parts: [transcriptPart] });
+              }
             }
           }
 
@@ -7173,7 +7202,7 @@ If you are running out of space, keep this order and drop the rest:
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
             },
             sysMsg,
-            { temperature: effectiveTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: effectiveTrigger === 'search' ? 6000 : 8000 },
+            { temperature: effectiveTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: transcriptRequested ? 16000 : (effectiveTrigger === 'search' ? 6000 : 8000) },
             withSearch,
             withCodeExecution
           );

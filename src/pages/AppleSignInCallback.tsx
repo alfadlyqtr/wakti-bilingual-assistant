@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { handoffCodeToMainWindow, tryExchangeCode } from '@/utils/oauthHandoff';
-import { dlog } from '@/utils/debugLog';
 import {
   clearStoredAppleRedirect,
   finalizeAppleSignInSession,
@@ -27,7 +25,6 @@ export default function AppleSignInCallback() {
     const run = async () => {
       const providerError = searchParams.get('error_description') || searchParams.get('error');
       const code = searchParams.get('code');
-      const loginId = searchParams.get('lid');
       const next = sanitizeAppleRedirectPath(searchParams.get('next') || getStoredAppleRedirect('/dashboard'));
 
       if (providerError) {
@@ -39,54 +36,10 @@ export default function AppleSignInCallback() {
       }
 
       try {
-        if (code) {
-          // PKCE flow: the code rides in the ?query, which survives the iOS
-          // handoff from Safari to the app. This window can redeem it only if
-          // the code verifier is in this window's storage (i.e. this window
-          // started the sign-in or shares that partition).
-          let session = await tryExchangeCode(code);
-
-          if (!session && loginId) {
-            // No verifier here — external browser window. Courier the code to
-            // the main app window, which redeems it into permanent storage.
-            clearStoredAppleRedirect();
-            const outcome = await handoffCodeToMainWindow(loginId, code);
-            if (outcome === 'claimed') {
-              dlog('temp-window-handed-off');
-              setStatus('success');
-              setMessage('Signed in — you can return to the Wakti app now');
-              return; // the main app window continues
-            }
-            // Nobody collected — iOS may have relaunched the app onto this URL
-            // (fresh window, but same permanent partition with the verifier).
-            // Try once more locally.
-            dlog('handoff-not-collected-trying-local');
-            session = await tryExchangeCode(code);
-          }
-
-          if (!session) {
-            throw new Error('Could not finish sign in — please go back and try again.');
-          }
-
-          await finalizeAppleSignInSession({
-            session,
-            applyManualLoginRecovery,
-            loginId,
-          });
-          clearStoredAppleRedirect();
-          setStatus('success');
-          setMessage(session.user.email || 'Apple sign in successful');
-          window.setTimeout(() => navigate(next, { replace: true }), 1500);
-          return;
-        }
-
-        // Legacy fallback: no ?code in the URL (old implicit/hash links)
         const session = await waitForAppleSession(code);
-
         await finalizeAppleSignInSession({
           session,
           applyManualLoginRecovery,
-          loginId,
         });
         clearStoredAppleRedirect();
         setStatus('success');

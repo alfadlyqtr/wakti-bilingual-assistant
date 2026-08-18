@@ -1,8 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { setActiveScopedUserId } from '@/utils/userScopedStorage';
-import { clearHandoffPending, markHandoffPending, oauthPkce, startHandoffPolling } from '@/utils/oauthHandoff';
-import { dlog } from '@/utils/debugLog';
 import type { Session, User } from '@supabase/supabase-js';
 
 const APPLE_SIGN_IN_REDIRECT_KEY = 'wakti_apple_sign_in_redirect';
@@ -55,58 +53,34 @@ export async function startAppleSignIn(redirectTo = '/dashboard'): Promise<{ err
   const nextPath = sanitizeAppleRedirectPath(redirectTo);
   const inNatively = isNativelyApp();
   const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  // Pin the callback to the canonical origin (www.wakti.qa) — the same storage
-  // partition the app boots from (proven by device logs: sessions saved on the
-  // non-www partition are invisible at reopen). localhost stays for dev.
-  const origin = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
-    ? window.location.origin
-    : 'https://www.wakti.qa';
+  // Always use the exact origin the app is running on
+  const origin = window.location.origin;
   const callbackUrl = new URL(APPLE_SIGN_IN_CALLBACK_PATH, origin);
   callbackUrl.searchParams.set('next', nextPath);
 
-  // One login ceremony = one shared login_id, passed through the OAuth round trip.
-  // Both the WebView and the external browser stamp the SAME id, so the
-  // single-device guard never treats them as two different devices fighting.
-  const loginId = crypto.randomUUID();
-  callbackUrl.searchParams.set('lid', loginId);
-  try { sessionStorage.setItem('wakti_login_id', loginId); } catch {}
-
   setStoredAppleRedirect(nextPath);
-  markHandoffPending(loginId);
 
-  // PKCE: the auth code comes back in the ?query, which survives the iOS
-  // handoff from Safari to the app (the #fragment used by implicit flow gets
-  // stripped — the core of the lost-session bug).
-  const { data, error } = await oauthPkce.auth.signInWithOAuth({
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'apple',
     options: {
       redirectTo: callbackUrl.toString(),
       skipBrowserRedirect: true,
-    },
+    } as any,
   });
 
   if (error) {
     clearStoredAppleRedirect();
-    clearHandoffPending();
     return { error };
   }
 
   if (!data?.url) {
     clearStoredAppleRedirect();
-    clearHandoffPending();
     return { error: new Error('Failed to start Apple sign in') };
   }
 
   const nativelyObj = (window as any).natively || (window as any).Natively;
   if (inNatively && isMobile && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
     nativelyObj.openExternalURL(data.url, true);
-    // The login completes in an external window whose storage is temporary.
-    // Collect the session here so it lands in this window's permanent storage.
-    startHandoffPolling({
-      ticket: loginId,
-      nextPath,
-      onSession: (session) => finalizeAppleSignInSession({ session, loginId }),
-    });
   } else {
     window.location.href = data.url;
   }
@@ -148,9 +122,8 @@ export async function waitForAppleSession(code?: string | null): Promise<Session
 export async function finalizeAppleSignInSession(params: {
   session: Session;
   applyManualLoginRecovery?: ManualLoginRecovery;
-  loginId?: string | null;
 }): Promise<void> {
-  const { session, applyManualLoginRecovery, loginId } = params;
+  const { session, applyManualLoginRecovery } = params;
   const loginTimestamp = Date.now();
 
   try {
@@ -167,16 +140,9 @@ export async function finalizeAppleSignInSession(params: {
     });
   } catch {}
 
-  dlog('finalize-apple', {
-    rt: !!session.refresh_token,
-    stored: (() => { try { return !!localStorage.getItem('wakti-auth'); } catch { return null; } })(),
-  });
-
-  // Stamp the shared ceremony login_id BEFORE waking AuthContext, so the
-  // single-device monitor arms with the correct id (no self-kick race).
-  const effectiveLoginId = loginId || crypto.randomUUID();
+  const loginId = crypto.randomUUID();
   try {
-    sessionStorage.setItem('wakti_login_id', effectiveLoginId);
+    sessionStorage.setItem('wakti_login_id', loginId);
   } catch {}
 
   try {
@@ -190,7 +156,7 @@ export async function finalizeAppleSignInSession(params: {
         .upsert({
           user_id: session.user.id,
           session_id: session.access_token,
-          login_id: effectiveLoginId,
+          login_id: loginId,
           last_login: new Date().toISOString(),
           device_info: navigator.userAgent || 'Unknown Device',
         })

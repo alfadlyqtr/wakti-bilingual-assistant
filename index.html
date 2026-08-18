@@ -3,14 +3,6 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      // Canonical origin: wakti.qa and www.wakti.qa have separate storage
-      // partitions — sessions saved on one are invisible on the other (the
-      // proven root of the OAuth re-login bug). Unify everything to www.
-      if (location.hostname === 'wakti.qa') {
-        location.replace('https://www.wakti.qa' + location.pathname + location.search + location.hash);
-      }
-    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>WAKTI</title>
     <meta name="description" content="Wakti AI" />

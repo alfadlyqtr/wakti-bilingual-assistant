@@ -133,10 +133,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       supabase.auth.getSession()
         .then(({ data: { session } }) => {
           console.log('AuthContext: getSession() succeeded.');
-          import('@/utils/debugLog').then(({ dlog }) => dlog('startup-session', {
-            found: !!session,
-            provider: session?.user?.app_metadata?.provider ?? null,
-          })).catch(() => {});
           window.clearTimeout(loadingTimer);
           if (session?.user?.id) setActiveScopedUserId(session.user.id);
           setSession(session);

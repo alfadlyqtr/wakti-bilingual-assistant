@@ -627,6 +627,61 @@ ${priorSection}`;
     return [...verifiedReported, ...additionalActualDiffs];
   }, [normalizeFilePathForDiff]);
 
+  const getUiOutcomeMissingRequirements = useCallback((userMsg: string, files: Record<string, string>): string[] => {
+    const msg = (userMsg || '').toLowerCase();
+    const corpus = Object.entries(files || {})
+      .filter(([path]) => !/(_wakti_|__wakti_)/i.test(path))
+      .map(([, content]) => String(content || '').toLowerCase())
+      .join('\n');
+
+    const missing: string[] = [];
+
+    const wantsThemeToggle =
+      msg.includes('dark mode')
+      || msg.includes('light mode')
+      || msg.includes('theme toggle')
+      || msg.includes('mode toggle')
+      || (msg.includes('toggle') && (msg.includes('dark') || msg.includes('light')));
+
+    if (wantsThemeToggle) {
+      const hasToggleState = /(isdarkmode|darkmode|thememode|colorMode)/i.test(corpus);
+      const hasToggleUi = /(aria-label=.*(dark|light|theme)|title=.*(dark|light|theme)|sun|moon)/i.test(corpus);
+      const hasThemeSwitching = /(document\.documentelement\.classlist|classlist\.(add|remove|toggle)\(['"`]dark|localstorage\.setitem\(['"`]theme|settheme\()/i.test(corpus);
+
+      if (!hasToggleState || !hasToggleUi || !hasThemeSwitching) {
+        missing.push('Requested light/dark mode toggle is not fully implemented and visible in the app code.');
+      }
+    }
+
+    const wantsAnimations = msg.includes('animation') || msg.includes('animate') || msg.includes('motion');
+    if (wantsAnimations) {
+      const hasAnimationSignals = /(framer-motion|motion\.|animate-|transition-|@keyframes|keyframes\s)/i.test(corpus);
+      if (!hasAnimationSignals) {
+        missing.push('Requested animations were requested but no animation implementation was detected.');
+      }
+    }
+
+    const wantsStyleRefresh =
+      msg.includes('change the look')
+      || msg.includes('look and feel')
+      || msg.includes('different colors')
+      || msg.includes('diff colors')
+      || msg.includes('restyle')
+      || msg.includes('redesign')
+      || msg.includes('new style')
+      || msg.includes('theme');
+
+    if (wantsStyleRefresh) {
+      const hasThemeVariables = /(--primary|--accent|--background|--card|--muted)/i.test(corpus);
+      const hasStyleSystem = /(tailwind|className=|\.css|:root)/i.test(corpus);
+      if (!hasThemeVariables && !hasStyleSystem) {
+        missing.push('Requested visual restyle was not detected in app styling code.');
+      }
+    }
+
+    return missing;
+  }, []);
+
   const {
     currentPlan: sharedAgentPlan,
     isRunning: sharedAgentRunning,
@@ -6177,15 +6232,27 @@ ${fixInstructions}
           })));
 
           const hasVerifiedChanges = executionStatus === 'applied' && verifiedChangedFiles.length > 0;
-          const finalSummary = hasVerifiedChanges
+          const uiOutcomeMissing = hasVerifiedChanges
+            ? getUiOutcomeMissingRequirements(userMessage, finalFiles)
+            : [];
+          const hasVerifiedOutcome = hasVerifiedChanges && uiOutcomeMissing.length === 0;
+          const outcomeStatus: ExecutionResultStatus = hasVerifiedOutcome
+            ? 'applied'
+            : (executionStatus === 'blocked' ? 'blocked' : 'not_applied');
+
+          const finalSummary = hasVerifiedOutcome
             ? finalSummaryText
             : executionStatus === 'blocked'
               ? (blockedReason || (isRTL ? 'أوقفت التنفيذ لأن الطلب يحتاج مسارًا أكثر أمانًا على الكود الحالي.' : 'I held off because this request needs a safer path on the current code.'))
-              : (isRTL
-                ? 'تحققت من الملفات لكن لم تصل أي تغييرات آمنة ومؤكدة بعد.'
-                : 'I checked the files, but no safe verified change landed yet.');
+              : (uiOutcomeMissing.length > 0
+                ? (isRTL
+                  ? `راجعت النتيجة لكن لم أتحقق من اكتمال طلبك المرئي بالكامل: ${uiOutcomeMissing.join(' | ')}`
+                  : `I reviewed the result, but I could not verify your requested visible outcome yet: ${uiOutcomeMissing.join(' | ')}`)
+                : (isRTL
+                  ? 'تحققت من الملفات لكن لم تصل أي تغييرات آمنة ومؤكدة بعد.'
+                  : 'I checked the files, but no safe verified change landed yet.'));
 
-          if (hasVerifiedChanges) {
+          if (hasVerifiedOutcome) {
             setDynamicSuggestions(generateCodeModeSuggestions(verifiedChangedFiles, userMessage));
           } else if (isLikelyCodeEditRequest(userMessage)) {
             toast.warning(isRTL ? 'لم تصل أي تغييرات آمنة بعد. جرّب متابعة أوضح قليلًا.' : 'No safe verified change landed yet. Try a slightly clearer follow-up.');
@@ -6198,18 +6265,18 @@ ${fixInstructions}
 
           assistantMsg = JSON.stringify({
             type: 'execution_result',
-            status: executionStatus,
-            title: hasVerifiedChanges
+            status: outcomeStatus,
+            title: hasVerifiedOutcome
               ? (isRTL ? 'تم التطبيق' : 'Applied')
               : executionStatus === 'blocked'
                 ? (isRTL ? 'يحتاج مسارًا أكثر أمانًا' : 'Needs a safer pass')
                 : (isRTL ? 'لا توجد نتيجة مؤكدة بعد' : 'No verified change yet'),
-            response: hasVerifiedChanges
+            response: hasVerifiedOutcome
               ? generateFriendlyResponse(finalSummary, verifiedChangedFiles, userMessage)
               : undefined,
             summary: finalSummary,
             files: verifiedChangedFiles,
-            noChanges: !hasVerifiedChanges,
+            noChanges: !hasVerifiedOutcome,
             attempts: attemptCount,
             retryUsed: attemptCount > 1,
           });
