@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, RotateCcw, RefreshCw, Check, BookOpen, Info, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -221,6 +221,39 @@ export default function DeenAzkar() {
     }
   }, [selectedCat, loadCategory]);
 
+  useEffect(() => {
+    if (!showTasbih || typeof document === "undefined") return;
+
+    const targets = [
+      document.documentElement,
+      document.body,
+      ...(Array.from(document.querySelectorAll(".app-main-scroll, .app-layout-mobile")) as HTMLElement[]),
+    ];
+    const prevStyles = targets.map((el) => ({
+      el,
+      overflow: el.style.overflow,
+      overflowY: el.style.overflowY,
+      overscrollBehavior: el.style.overscrollBehavior,
+      touchAction: el.style.touchAction,
+    }));
+
+    targets.forEach((el) => {
+      el.style.overflow = "hidden";
+      el.style.overflowY = "hidden";
+      el.style.overscrollBehavior = "none";
+      el.style.touchAction = "none";
+    });
+
+    return () => {
+      prevStyles.forEach(({ el, overflow, overflowY, overscrollBehavior, touchAction }) => {
+        el.style.overflow = overflow;
+        el.style.overflowY = overflowY;
+        el.style.overscrollBehavior = overscrollBehavior;
+        el.style.touchAction = touchAction;
+      });
+    };
+  }, [showTasbih]);
+
   const tap = (slug: string, idx: number) => {
     const key = counterKey(slug, idx);
     setCounts((prev) => {
@@ -330,30 +363,44 @@ export default function DeenAzkar() {
       return next;
     });
   };
-  const completedRingCycles = tasbihLimit > 0 ? Math.floor(tasbihCount / tasbihLimit) : 0;
+
+  const handleTasbihPageTap = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-tasbih-control="true"]')) return;
+    incrementTasbih();
+  };
   const goalProgress = tasbihLimit > 0 ? Math.min(tasbihCount / tasbihLimit, 1) : 0;
-  const activeRingColor = green;
+  const activeRingColor = isDark ? "hsl(45,100%,60%)" : "hsl(42,88%,46%)";
   const glowFromHsl = (hsl: string, alpha: number) => hsl.replace("hsl(", "hsla(").replace(")", `,${alpha})`);
   const goalRingSize = 192;
   const goalRingStroke = 3.5;
   const goalRingRadius = (goalRingSize - goalRingStroke) / 2;
   const goalRingCircumference = 2 * Math.PI * goalRingRadius;
-  const goalRingTrack = isDark ? "hsla(142,76%,55%,0.16)" : "hsla(142,76%,38%,0.18)";
+  const goalRingTrack = isDark ? "hsla(45,100%,60%,0.16)" : "hsla(42,88%,46%,0.18)";
 
   if (showTasbih) {
     return (
       <div
-        className="flex flex-col overflow-hidden"
+        className="relative flex flex-col overflow-hidden"
         style={{
           background: bg,
-          height: "100dvh",
+          position: "fixed",
+          top: "var(--app-header-h, 64px)",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100%",
+          height: "calc(100dvh - var(--app-header-h, 64px))",
           paddingBottom: "env(safe-area-inset-bottom)",
+          zIndex: 20,
         }}
+        onClick={handleTasbihPageTap}
         dir={isAr ? "rtl" : "ltr"}
       >
         <div className="px-4 pt-4 pb-3 shrink-0 flex items-center justify-between gap-3">
           <button
             onClick={() => setShowTasbih(false)}
+            data-tasbih-control="true"
             className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all"
             style={{ background: cardBg, border: `1px solid ${cardBorder}` }}
             aria-label={isAr ? "رجوع" : "Back"}
@@ -377,6 +424,7 @@ export default function DeenAzkar() {
                 return next;
               });
             }}
+            data-tasbih-control="true"
             className="inline-flex items-center gap-2 py-1 active:scale-[0.99] transition-all"
             aria-expanded={goalPanelOpen}
             aria-label={isAr ? "فتح إعداد الهدف" : "Open goal settings"}
@@ -394,6 +442,7 @@ export default function DeenAzkar() {
 
           {goalPanelOpen && (
             <div
+              data-tasbih-control="true"
               className="mt-2 rounded-xl p-3 space-y-2"
               style={{
                 background: isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.05)",
@@ -445,71 +494,85 @@ export default function DeenAzkar() {
           )}
         </div>
 
-        <div className="flex-1 overflow-hidden px-4 pb-6">
-          <div className="h-full w-full flex flex-col items-center pt-8">
-            <span className="text-6xl font-bold tabular-nums mb-10" style={{ color: textPrimary }}>
-              {tasbihCount}
-            </span>
-
+        <div className="flex-1 overflow-hidden px-4 pb-4">
+          <div className="h-full w-full flex flex-col items-center pt-3">
             <div
-              className="relative aspect-square"
-              style={{
-                width: "calc(100% - 8px)",
-                maxWidth: "calc(100vw - 40px)",
-                filter: isDark
-                  ? `drop-shadow(0 0 8px ${glowFromHsl(activeRingColor, 0.22)}) drop-shadow(0 0 16px ${glowFromHsl(activeRingColor, 0.12)})`
-                  : `drop-shadow(0 0 6px ${glowFromHsl(activeRingColor, 0.16)}) drop-shadow(0 0 12px ${glowFromHsl(activeRingColor, 0.08)})`,
-              }}
+              className="w-full flex flex-col items-center"
             >
-              <svg
-                className="absolute inset-0 -rotate-90"
-                width="100%"
-                height="100%"
-                viewBox={`0 0 ${goalRingSize} ${goalRingSize}`}
-                aria-hidden
-              >
-                <circle
-                  cx={goalRingSize / 2}
-                  cy={goalRingSize / 2}
-                  r={goalRingRadius}
-                  fill="none"
-                  stroke={goalRingTrack}
-                  strokeWidth={goalRingStroke}
-                />
-                <circle
-                  cx={goalRingSize / 2}
-                  cy={goalRingSize / 2}
-                  r={goalRingRadius}
-                  fill="none"
-                  stroke={activeRingColor}
-                  strokeWidth={goalRingStroke}
-                  strokeLinecap="round"
-                  strokeDasharray={goalRingCircumference}
-                  strokeDashoffset={goalRingCircumference * (1 - goalProgress)}
-                  style={{ transition: "stroke-dashoffset 320ms cubic-bezier(0.22, 1, 0.36, 1)" }}
-                />
-              </svg>
-
-              <button
-                onClick={incrementTasbih}
-                className="absolute inset-[8px] rounded-full transition-all flex flex-col items-center justify-center gap-1"
+              <span
+                className="font-bold tabular-nums"
                 style={{
-                  background: "linear-gradient(180deg, #ffffff 0%, #f7f8fc 100%)",
-                  border: isDark ? "1px solid rgba(255,255,255,0.45)" : "1px solid rgba(6,5,65,0.12)",
-                  boxShadow: "0 10px 26px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -2px 10px rgba(6,5,65,0.05)",
-                  color: "#060541",
+                  color: textPrimary,
+                  fontSize: "clamp(56px, 10vh, 74px)",
+                  lineHeight: 1,
+                  marginBottom: "clamp(12px, 3vh, 36px)",
                 }}
               >
-                <span className="text-xl font-bold">{isAr ? "تسبيح" : "Count"}</span>
-                <span className="text-sm font-semibold opacity-75">
-                  {isAr ? `الحلقات: ${completedRingCycles}` : `Rings: ${completedRingCycles}`}
-                </span>
-              </button>
+                {tasbihCount}
+              </span>
+
+              <div
+                className="relative aspect-square"
+                style={{
+                  width: "min(calc(100vw - 40px), calc(100dvh - var(--app-header-h, 64px) - 360px))",
+                  maxWidth: "calc(100vw - 40px)",
+                  minWidth: "220px",
+                  filter: isDark
+                    ? `drop-shadow(0 0 6px ${glowFromHsl(activeRingColor, 0.16)}) drop-shadow(0 0 12px ${glowFromHsl(activeRingColor, 0.09)})`
+                    : `drop-shadow(0 0 4px ${glowFromHsl(activeRingColor, 0.12)}) drop-shadow(0 0 10px ${glowFromHsl(activeRingColor, 0.06)})`,
+                }}
+              >
+                <svg
+                  className="absolute inset-0 -rotate-90"
+                  width="100%"
+                  height="100%"
+                  viewBox={`0 0 ${goalRingSize} ${goalRingSize}`}
+                  aria-hidden
+                >
+                  <circle
+                    cx={goalRingSize / 2}
+                    cy={goalRingSize / 2}
+                    r={goalRingRadius}
+                    fill="none"
+                    stroke={goalRingTrack}
+                    strokeWidth={goalRingStroke}
+                  />
+                  <circle
+                    cx={goalRingSize / 2}
+                    cy={goalRingSize / 2}
+                    r={goalRingRadius}
+                    fill="none"
+                    stroke={activeRingColor}
+                    strokeWidth={goalRingStroke}
+                    strokeLinecap="round"
+                    strokeDasharray={goalRingCircumference}
+                    strokeDashoffset={goalRingCircumference * (1 - goalProgress)}
+                    style={{ transition: "stroke-dashoffset 320ms cubic-bezier(0.22, 1, 0.36, 1)" }}
+                  />
+                </svg>
+
+                <div
+                  className="absolute inset-[8px] rounded-full transition-all flex flex-col items-center justify-center gap-1"
+                  style={{
+                    background: isDark
+                      ? "linear-gradient(180deg, #f2f4f8 0%, #e9edf4 100%)"
+                      : "linear-gradient(180deg, #fdfefe 0%, #f6f8fc 100%)",
+                    border: isDark ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(6,5,65,0.10)",
+                    boxShadow: isDark
+                      ? "0 8px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.60), inset 0 -2px 8px rgba(6,5,65,0.06)"
+                      : "0 8px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -2px 8px rgba(6,5,65,0.04)",
+                    color: "#060541",
+                  }}
+                >
+                  <span className="text-xl font-bold">{isAr ? "تسبيح" : "Count"}</span>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-5 flex items-center gap-4">
+            <div className="mt-7 flex items-center gap-4">
               <button
                 onClick={() => setTasbihCount(0)}
+                data-tasbih-control="true"
                 className="px-2 py-1 text-[22px] font-semibold transition-opacity active:opacity-70 flex items-center gap-2"
                 style={{ color: textSecondary }}
               >
@@ -519,6 +582,17 @@ export default function DeenAzkar() {
             </div>
           </div>
         </div>
+
+        <p
+          className="absolute left-1/2 -translate-x-1/2 text-center text-[18px] italic font-medium select-none pointer-events-none"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom) + 50px)",
+            color: isDark ? "rgba(242,242,242,0.38)" : "rgba(6,5,65,0.36)",
+            letterSpacing: "0.01em",
+          }}
+        >
+          {isAr ? "اضغط في أي مكان للعد" : "Press anywhere to count"}
+        </p>
       </div>
     );
   }
