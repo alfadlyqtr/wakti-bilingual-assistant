@@ -122,8 +122,8 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
   const tip = BUILD_TIPS[tipIndex];
 
   return (
-    <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center overflow-hidden p-6 sm:p-10">
-      <div className="w-full max-w-2xl">
+    <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 sm:p-10">
+      <div className="w-full max-w-2xl my-auto">
         {/* Mock browser chrome — sets the scene: a real page is being assembled */}
         <div className="rounded-t-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-red-400/40" />
@@ -137,7 +137,7 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent animate-shimmer pointer-events-none" />
 
           {/* Nav bar */}
-          <div className="relative flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <div className="relative flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-white/5">
             <div className="h-3 w-20 rounded bg-gradient-to-r from-[hsl(210,100%,65%)]/50 to-[hsl(280,70%,65%)]/50" />
             <div className="flex items-center gap-3">
               <div className="h-2 w-10 rounded bg-white/10" />
@@ -147,19 +147,19 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
           </div>
 
           {/* Hero block */}
-          <div className="relative px-6 py-9 flex flex-col items-center text-center gap-3">
+          <div className="relative px-4 py-5 sm:px-6 sm:py-9 flex flex-col items-center text-center gap-2.5 sm:gap-3">
             <div className="h-3.5 w-3/4 max-w-sm rounded bg-white/20" />
             <div className="h-3.5 w-1/2 max-w-xs rounded bg-white/20" />
             <div className="h-2 w-2/3 max-w-md rounded bg-white/10 mt-3" />
             <div className="h-2 w-1/2 max-w-sm rounded bg-white/10" />
-            <div className="flex gap-3 mt-5">
-              <div className="h-8 w-28 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)]/60 to-[hsl(280,70%,65%)]/60" />
-              <div className="h-8 w-28 rounded-full border border-white/15" />
+            <div className="flex gap-3 mt-3 sm:mt-5">
+              <div className="h-7 w-24 sm:h-8 sm:w-28 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)]/60 to-[hsl(280,70%,65%)]/60" />
+              <div className="h-7 w-24 sm:h-8 sm:w-28 rounded-full border border-white/15" />
             </div>
           </div>
 
           {/* Card row — echoes real section cards materializing */}
-          <div className="relative grid grid-cols-3 gap-3 px-6 pb-8">
+          <div className="relative grid grid-cols-3 gap-2 sm:gap-3 px-4 pb-5 sm:px-6 sm:pb-8">
             {[0, 1, 2].map((i) => (
               <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">
                 <div
@@ -174,7 +174,7 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
         </div>
 
         {/* Progress bar - driven by real step completion, RTL-aware */}
-        <div className="w-full h-1 bg-gray-800 rounded-full mt-8 mb-2 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
+        <div className="w-full h-1 bg-gray-800 rounded-full mt-5 sm:mt-8 mb-2 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
           <div
             className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] rounded-full transition-all duration-700 ease-out`}
             style={{ width: `${progressPercent}%` }}

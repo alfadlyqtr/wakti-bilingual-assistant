@@ -301,21 +301,28 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
     if (rcSyncedUserRef.current === user.id) return; // already synced this user
     rcSyncedUserRef.current = user.id;
 
-    if (IS_DEV) console.log('[UserProfileContext] Checking subscription status with RevenueCat...');
-    supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
-      .then(({ data, error }) => {
-        if (error) {
-          console.warn('[UserProfileContext] Subscription check failed:', error);
-          return;
-        }
-        if (IS_DEV) console.log('[UserProfileContext] Subscription check result:', data);
-        // If RC confirmed subscribed, refetch the profile so any DB update lands in UI.
-        // (Realtime will usually fire too; refetch is belt-and-suspenders.)
-        if (data?.isSubscribed) fetchProfile();
-      })
-      .catch((err) => {
-        console.warn('[UserProfileContext] Subscription check error:', err);
-      });
+    // Delay the first check ~2.5s so purchasesLogin (AuthContext) can link any
+    // anonymous RevenueCat purchase (offer-code redeemers pay before signup)
+    // to this user before we ask RC for their entitlement status.
+    const timer = setTimeout(() => {
+      if (IS_DEV) console.log('[UserProfileContext] Checking subscription status with RevenueCat...');
+      supabase.functions.invoke('check-subscription', { body: { userId: user.id } })
+        .then(({ data, error }) => {
+          if (error) {
+            console.warn('[UserProfileContext] Subscription check failed:', error);
+            return;
+          }
+          if (IS_DEV) console.log('[UserProfileContext] Subscription check result:', data);
+          // If RC confirmed subscribed, refetch the profile so any DB update lands in UI.
+          // (Realtime will usually fire too; refetch is belt-and-suspenders.)
+          if (data?.isSubscribed) fetchProfile();
+        })
+        .catch((err) => {
+          console.warn('[UserProfileContext] Subscription check error:', err);
+        });
+    }, 2500);
+
+    return () => clearTimeout(timer);
   }, [isGuest, user?.id, IS_DEV, fetchProfile]);
 
   // Single Realtime channel for profile changes — one per app lifetime

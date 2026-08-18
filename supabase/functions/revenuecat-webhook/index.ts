@@ -93,6 +93,7 @@ serve(async (req) => {
     const currency = event.currency || body.currency || event.purchased_currency || "USD";
     const purchasedAtMs = event.purchased_at_ms || body.purchased_at_ms || event.purchase_date_ms || Date.now();
     const expirationAtMs = event.expiration_at_ms || body.expiration_at_ms || event.expires_date_ms || null;
+    const transactionId = event.transaction_id || body.transaction_id || null;
     
     // For TRANSFER events, get the transferred_to IDs
     const transferredTo: string[] = event.transferred_to || body.transferred_to || [];
@@ -257,7 +258,35 @@ serve(async (req) => {
     }
 
     if (!updated) {
-      console.warn(`[revenuecat-webhook] No profile found for provided IDs`);
+      console.warn(`[revenuecat-webhook] No profile found for provided IDs — parking event in pending_rc_events`);
+      // Never drop a paid event: park it so support can reconcile later
+      // (common for offer-code redemptions purchased under anonymous RC IDs
+      // before the user has a Wakti account)
+      try {
+        const { error: parkError } = await supabase
+          .from("pending_rc_events")
+          .insert({
+            event_type: type || null,
+            app_user_id: appUserId || null,
+            rc_customer_id: rcCustomerId,
+            store: store || null,
+            product_id: productId || null,
+            price: price || null,
+            currency: currency || null,
+            purchased_at: purchasedAtMs ? new Date(purchasedAtMs).toISOString() : null,
+            expiration_at: expirationAtMs ? new Date(expirationAtMs).toISOString() : null,
+            transaction_id: transactionId,
+            raw_payload: event && Object.keys(event).length > 0 ? event : body,
+            status: "pending"
+          });
+        if (parkError) {
+          console.error(`[revenuecat-webhook] Failed to park event:`, parkError);
+        } else {
+          console.log(`[revenuecat-webhook] Parked unmatched event (type=${type})`);
+        }
+      } catch (parkErr) {
+        console.error(`[revenuecat-webhook] Park error:`, parkErr);
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -64,58 +64,101 @@ serve(async (req) => {
       });
     }
 
-    // Call RevenueCat REST API to get subscriber info
-    const response = await fetch(
-      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`,
-      {
-        headers: {
-          "Authorization": `Bearer ${RC_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Handle RevenueCat API errors
-    if (!response.ok) {
-      console.log(`[check-subscription] RevenueCat API status: ${response.status}`);
-      
+    // Fetch profile once — drives new-account retry window + downgrade protection
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("created_at, is_subscribed, payment_method, next_billing_date")
+      .eq("id", userId)
+      .maybeSingle();
+
+    // Brand-new accounts can race RevenueCat's anonymous→identified linking
+    // (offer-code flow: redeem → pay → install → sign up). Ask RC a few times
+    // over ~10s before believing "not subscribed" for these accounts.
+    const isNewAccount = !profile?.created_at ||
+      (Date.now() - new Date(profile.created_at).getTime()) < 24 * 60 * 60 * 1000;
+    const maxAttempts = isNewAccount ? 4 : 1;
+
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    // Call RevenueCat REST API to get subscriber info (with retry for new accounts)
+    let response: Response | null = null;
+    // deno-lint-ignore no-explicit-any
+    let data: any = null;
+    let isSubscribed = false;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      response = await fetch(
+        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${RC_API_KEY}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (response.ok) {
+        data = await response.json();
+        const ents = data?.subscriber?.entitlements || {};
+        const checkTime = new Date();
+        isSubscribed = Object.values(ents).some((e) => {
+          const ent = e as { expires_date?: string | null };
+          return !ent.expires_date || new Date(ent.expires_date) > checkTime;
+        });
+      }
+
+      if (isSubscribed) break;
+
+      // Worth another ask only for new accounts when RC said "no" or "never heard of them"
+      const worthRetry = isNewAccount && attempt < maxAttempts &&
+        (response.status === 404 || response.ok);
+      if (!worthRetry) break;
+
+      console.log(`[check-subscription] Attempt ${attempt}/${maxAttempts}: not subscribed yet (RC status ${response.status}) — retrying in 2.5s`);
+      await sleep(2500);
+    }
+
+    // Handle RevenueCat API errors (after retries)
+    if (!response || !response.ok) {
+      const status = response?.status ?? 0;
+      console.log(`[check-subscription] RevenueCat API status: ${status}`);
+
       // 404 means user doesn't exist in RC yet - that's OK
-      if (response.status === 404) {
+      if (status === 404) {
         return new Response(JSON.stringify({ isSubscribed: false, reason: "user_not_found" }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
-      
+
       return new Response(JSON.stringify({ isSubscribed: false, error: "rc_api_error" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const data = await response.json();
     const subscriber = data?.subscriber || {};
     const entitlements = subscriber?.entitlements || {};
     const subscriptions = subscriber?.subscriptions || {};
-    
+
     // Check for any active entitlement
     const now = new Date();
-    const activeEntitlements = Object.entries(entitlements).filter(([key, e]: [string, any]) => {
+    const activeEntitlements = Object.entries(entitlements).filter(([, e]) => {
+      const ent = e as { expires_date?: string | null };
       // Lifetime entitlements have no expiration
-      if (!e.expires_date) return true;
+      if (!ent.expires_date) return true;
       // Check if expiration is in the future
-      return new Date(e.expires_date) > now;
+      return new Date(ent.expires_date) > now;
     });
 
-    const isSubscribed = activeEntitlements.length > 0;
     const entitlementIds = activeEntitlements.map(([key]) => key);
-    
+
     const userIdShort = userId.substring(0, 8);
     console.log(`[check-subscription] User ${userIdShort}...: isSubscribed=${isSubscribed}, entitlements=${entitlementIds.join(',')}`);
 
@@ -176,12 +219,6 @@ serve(async (req) => {
     // Task 5: Free Ride Fix — if RC confirms no active entitlements, actively downgrade the profile
     if (!isSubscribed) {
       // Admin Gift Protection: check if this user has an active manual gift before downgrading
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("payment_method, next_billing_date")
-        .eq("id", userId)
-        .single();
-
       const isManualGift = profile?.payment_method === "manual";
       const giftStillActive = isManualGift && profile?.next_billing_date && new Date(profile.next_billing_date) > now;
 
@@ -192,6 +229,22 @@ serve(async (req) => {
           entitlements: [],
           subscriptions: [],
           reason: "admin_gift"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Never stamp "expired" on an account that was never subscribed.
+      // Brand-new users (esp. offer-code redeemers whose purchase raced the
+      // account link) must keep a clean state, not a false "expired" label.
+      if (profile?.is_subscribed !== true) {
+        console.log(`[check-subscription] User ${userId.substring(0, 8)}... was not previously subscribed — leaving profile untouched`);
+        return new Response(JSON.stringify({
+          isSubscribed: false,
+          entitlements: [],
+          subscriptions: [],
+          reason: "never_subscribed"
         }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }

@@ -861,7 +861,7 @@ async function createVideoTask(
   const isGrokImageToVideoModel = !isTwoImages && model === KIE_IMAGE2VIDEO_MODEL;
   const validDuration = isTwoImages
     ? (["6", "8"].includes(duration || "") ? duration! : "8")
-    : (["4", "6", "8", "10"].includes(duration || "") ? duration! : "6");
+    : (["4", "6", "8", "10", "15"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = isTwoImages
     ? (["16:9", "9:16", "Auto"].includes(aspectRatio || "")
       ? aspectRatio!

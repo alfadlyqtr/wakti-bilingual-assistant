@@ -1967,21 +1967,39 @@ Apply these styles consistently throughout the entire design.`;
     }
   };
 
+  const buildLanguageRequirementBlock = (langs: string[]): string => {
+    const hasEn = langs.includes('en');
+    const hasAr = langs.includes('ar');
+
+    if (hasEn && hasAr) {
+      return `\n\n=== SITE LANGUAGES (MANDATORY — USER SELECTED BOTH) ===\nThe user explicitly selected BOTH English and Arabic. Build the site fully bilingual from the very first version:\n- Set up react-i18next correctly: an i18n setup file that calls i18n.use(initReactI18next).init(...) with COMPLETE en + ar translation resources, and a proper default export, so i18n.changeLanguage works.\n- Import that i18n setup in the entry file before rendering.\n- EVERY visible string in every component must use t('key') — zero hardcoded English/Arabic text in JSX.\n- Add a visible language toggle (EN | عربي) in the header/nav that calls i18n.changeLanguage and updates direction: RTL for Arabic, LTR for English (use i18n.dir() and document.documentElement.dir).\n- All layouts, spacing, and directional classes must look correct in BOTH directions.`;
+    }
+    if (hasAr) {
+      return `\n\n=== SITE LANGUAGE (MANDATORY — USER SELECTED) ===\nThe user explicitly selected Arabic ONLY. Build the ENTIRE site in Arabic with a full RTL layout (dir="rtl" on the root). Every visible text must be Arabic — no English placeholder text anywhere.`;
+    }
+    return `\n\n=== SITE LANGUAGE (MANDATORY — USER SELECTED) ===\nThe user explicitly selected English ONLY. Build the entire site in English (LTR). Every visible text must be English.`;
+  };
+
   const handleContextFormSubmit = async (data: BusinessContextData) => {
     setContextFormData(null);
     const originalPrompt = pendingPromptRef.current;
 
+    const langs = (data.languages && data.languages.length > 0)
+      ? data.languages
+      : [isRTL ? 'ar' : 'en'];
+    const languageBlock = buildLanguageRequirementBlock(langs);
+
     if (data.uploadedFile) {
       // File uploaded — attach it and proceed directly, AI reads it from the uploaded asset
       setAttachedFiles(prev => [...prev, data.uploadedFile!]);
-      createProject(originalPrompt);
+      createProject(originalPrompt + languageBlock);
       return;
     }
 
     // Build context block from filled fields
     const filledEntries = Object.entries(data.fields).filter(([, v]) => v.trim());
     if (filledEntries.length === 0) {
-      createProject(originalPrompt);
+      createProject(originalPrompt + languageBlock);
       return;
     }
 
@@ -2099,7 +2117,7 @@ Apply these styles consistently throughout the entire design.`;
       usageInstructions = 'Use this information in the tool header, description, result labels, and about section. Never use placeholder tool names or fake features.';
     }
 
-    const enriched = `${originalPrompt}\n\n=== ${contextLabel} (USE AS REAL CONTENT — NOT PLACEHOLDERS) ===\n${contextBlock}\n\n${usageInstructions}`;
+    const enriched = `${originalPrompt}\n\n=== ${contextLabel} (USE AS REAL CONTENT — NOT PLACEHOLDERS) ===\n${contextBlock}\n\n${usageInstructions}${languageBlock}`;
     createProject(enriched);
   };
 

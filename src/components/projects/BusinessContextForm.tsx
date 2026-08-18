@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, FileText, Sparkles, Building2, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Upload, FileText, Sparkles, Building2, ChevronDown, ChevronUp, Check, Languages } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface ContextField {
@@ -13,6 +13,7 @@ export interface ContextField {
 export interface BusinessContextData {
   fields: Record<string, string>;
   uploadedFile?: File | null;
+  languages?: string[];
 }
 
 interface BusinessContextFormProps {
@@ -40,6 +41,7 @@ export default function BusinessContextForm({
 }: BusinessContextFormProps) {
   const [values, setValues] = useState<Record<string, string>>(() => initialValues || {});
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => [isRTL ? 'ar' : 'en']);
   // Auto-expand "Add more details" when a hidden field was already prefilled,
   // so the user sees what was detected instead of it being hidden by default.
   const [showMoreFields, setShowMoreFields] = useState(
@@ -56,8 +58,18 @@ export default function BusinessContextForm({
     if (file) setUploadedFile(file);
   };
 
+  const toggleLanguage = (lang: string) => {
+    setSelectedLanguages(prev => {
+      if (prev.includes(lang)) {
+        if (prev.length === 1) return prev;
+        return prev.filter(l => l !== lang);
+      }
+      return [...prev, lang];
+    });
+  };
+
   const handleSubmit = () => {
-    onSubmit({ fields: values, uploadedFile });
+    onSubmit({ fields: values, uploadedFile, languages: selectedLanguages });
   };
 
   const hasUpload = !!uploadedFile;
@@ -77,7 +89,7 @@ export default function BusinessContextForm({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
     >
       <motion.div
@@ -86,14 +98,15 @@ export default function BusinessContextForm({
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className={cn(
-          "w-full max-w-md rounded-2xl overflow-hidden shadow-2xl",
+          "w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col",
+          "max-h-[calc(100dvh-2rem)]",
           "bg-[#13171f] border border-white/20"
         )}
         style={{ boxShadow: '0 0 60px hsla(210,100%,65%,0.25), 0 0 120px hsla(280,70%,65%,0.15), 0 25px 50px rgba(0,0,0,0.8)' }}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-white/15">
+        <div className="px-6 pt-6 pb-4 border-b border-white/15 flex-shrink-0">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg, hsl(210,100%,65%), hsl(280,70%,65%))' }}>
@@ -113,7 +126,7 @@ export default function BusinessContextForm({
           </p>
         </div>
 
-        <div className="px-6 py-4 space-y-3 max-h-[50vh] overflow-y-auto">
+        <div className="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
           {!hasUpload && primaryFields.map((field) => (
             <div key={field.id}>
               <label className="block text-xs font-medium mb-1.5 text-white/70">
@@ -148,6 +161,47 @@ export default function BusinessContextForm({
               )}
             </div>
           ))}
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Languages size={14} style={{ color: 'hsl(210,100%,65%)' }} />
+              <p className="text-xs font-medium text-white/70">
+                {isRTL ? 'لغات الموقع' : 'Site Languages'}
+              </p>
+            </div>
+            <p className="text-[11px] text-white/40 mb-3">
+              {isRTL
+                ? 'اختر لغة واحدة على الأقل — اختر الاثنتين معًا لإضافة مبدّل لغة داخل الموقع'
+                : 'Pick at least one — pick both to add a language toggle inside your site'}
+            </p>
+            <div className="flex gap-2">
+              {[
+                { id: 'en', label: 'English' },
+                { id: 'ar', label: 'العربية' },
+              ].map((opt) => {
+                const active = selectedLanguages.includes(opt.id);
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => toggleLanguage(opt.id)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-all border active:scale-95",
+                      active
+                        ? "border-transparent text-white"
+                        : "border-white/15 text-white/60 hover:border-white/30 hover:text-white/80"
+                    )}
+                    style={active
+                      ? { background: 'linear-gradient(135deg, hsl(210,100%,65%), hsl(280,70%,65%))', boxShadow: '0 2px 12px hsla(210,100%,65%,0.35)' }
+                      : { background: 'rgba(255,255,255,0.06)' }}
+                  >
+                    {active && <Check size={14} />}
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {!hasUpload && extraFields.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
@@ -266,7 +320,7 @@ export default function BusinessContextForm({
           />
         </div>
 
-        <div className="px-6 pb-6 pt-2">
+        <div className="px-6 pb-6 pt-2 flex-shrink-0">
           <button
             onClick={handleSubmit}
             className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all active:scale-95"

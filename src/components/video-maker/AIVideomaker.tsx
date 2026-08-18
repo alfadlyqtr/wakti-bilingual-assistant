@@ -181,8 +181,8 @@ const getResolutionSpeedHint = (
   if (generationMode === 'image_to_video') {
     if (isKidsContentMode) {
       return language === 'ar'
-        ? '480p متاح دائمًا • 720p متاح فقط لمدة 4ث و6ث'
-        : '480p is always available • 720p is only for 4s and 6s';
+        ? '720p حتى 10 ثوانٍ • 15 ثانية متاحة بدقة 480p فقط'
+        : '720p up to 10s • 15s is 480p only';
     }
 
     return language === 'ar'
@@ -430,7 +430,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [imagePreview2, setImagePreview2] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<'4' | '5' | '6' | '8' | '10'>('6');
+  const [duration, setDuration] = useState<'4' | '5' | '6' | '8' | '10' | '15'>('6');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
   const [isKidsContentMode, setIsKidsContentMode] = useState(true);
@@ -594,7 +594,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       if (mode === 'cinema') setCinemaVision(promptValue);
     }
     const durationValue = value('duration');
-    if (durationValue === '4' || durationValue === '5' || durationValue === '6' || durationValue === '8' || durationValue === '10') {
+    if (durationValue === '4' || durationValue === '5' || durationValue === '6' || durationValue === '8' || durationValue === '10' || durationValue === '15') {
       setDuration(durationValue);
     }
     const resolutionValue = value('resolution');
@@ -717,7 +717,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       imagePreview: string | null;
       imagePreview2: string | null;
       prompt: string;
-      duration: '4' | '5' | '6' | '8' | '10';
+      duration: '4' | '5' | '6' | '8' | '10' | '15';
       aspectRatio: string;
       resolution: '480p' | '720p' | '1080p';
       isKidsContentMode: boolean;
@@ -762,7 +762,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       return;
     }
 
-    if (resolution === '720p' && !['4', '6'].includes(duration)) {
+    if (resolution === '720p' && duration === '15') {
       setResolution('480p');
     }
   }, [generationMode, isKidsContentMode, duration, resolution]);
@@ -3059,31 +3059,40 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     >
                       {language === 'ar' ? '6 ث' : '6s'}
                     </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('8')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '8'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '8 ث' : '8s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('10')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '10'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '10 ث' : '10s'}
+                    </button>
                     {resolution === '480p' && (
-                      <>
-                        <button
-                          onClick={() => !isGenerating && setDuration('8')}
-                          disabled={isGenerating}
-                          className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                            duration === '8'
-                              ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                              : 'text-muted-foreground hover:text-primary'
-                          }`}
-                        >
-                          {language === 'ar' ? '8 ث' : '8s'}
-                        </button>
-                        <button
-                          onClick={() => !isGenerating && setDuration('10')}
-                          disabled={isGenerating}
-                          className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                            duration === '10'
-                              ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                              : 'text-muted-foreground hover:text-primary'
-                          }`}
-                        >
-                          {language === 'ar' ? '10 ث' : '10s'}
-                        </button>
-                      </>
+                      <button
+                        onClick={() => !isGenerating && setDuration('15')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '15'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '15 ث' : '15s'}
+                      </button>
                     )}
                   </>
                 ) : (
@@ -5155,11 +5164,11 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       </button>
                       <button
                         onClick={() => {
-                          if (!isGenerating && ['4', '6'].includes(duration)) {
+                          if (!isGenerating && duration !== '15') {
                             setResolution('720p');
                           }
                         }}
-                        disabled={isGenerating || !['4', '6'].includes(duration)}
+                        disabled={isGenerating || duration === '15'}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                           resolution === '720p'
                             ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
