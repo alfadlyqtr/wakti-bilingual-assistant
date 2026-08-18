@@ -370,6 +370,7 @@ export default function DeenAzkar() {
     incrementTasbih();
   };
   const goalProgress = tasbihLimit > 0 ? Math.min(tasbihCount / tasbihLimit, 1) : 0;
+  const isGoalCompleted = tasbihLimit > 0 && tasbihCount >= tasbihLimit;
   const activeRingColor = isDark ? "hsl(45,100%,60%)" : "hsl(42,88%,46%)";
   const glowFromHsl = (hsl: string, alpha: number) => hsl.replace("hsl(", "hsla(").replace(")", `,${alpha})`);
   const goalRingSize = 192;
@@ -522,6 +523,18 @@ export default function DeenAzkar() {
                     : `drop-shadow(0 0 4px ${glowFromHsl(activeRingColor, 0.12)}) drop-shadow(0 0 10px ${glowFromHsl(activeRingColor, 0.06)})`,
                 }}
               >
+                <div
+                  className="absolute rounded-full pointer-events-none transition-all duration-300"
+                  style={{
+                    inset: "-7px",
+                    border: `2px solid ${isDark ? "hsla(45,100%,72%,0.72)" : "hsla(42,88%,46%,0.55)"}`,
+                    boxShadow: isDark
+                      ? "0 0 16px hsla(45,100%,65%,0.38)"
+                      : "0 0 12px hsla(42,88%,46%,0.24)",
+                    opacity: isGoalCompleted ? 1 : 0,
+                    transform: isGoalCompleted ? "scale(1)" : "scale(0.985)",
+                  }}
+                />
                 <svg
                   className="absolute inset-0 -rotate-90"
                   width="100%"
@@ -555,13 +568,13 @@ export default function DeenAzkar() {
                   className="absolute inset-[8px] rounded-full transition-all flex flex-col items-center justify-center gap-1"
                   style={{
                     background: isDark
-                      ? "linear-gradient(180deg, #f2f4f8 0%, #e9edf4 100%)"
+                      ? "linear-gradient(180deg, #1a1f2b 0%, #141a24 100%)"
                       : "linear-gradient(180deg, #fdfefe 0%, #f6f8fc 100%)",
-                    border: isDark ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(6,5,65,0.10)",
+                    border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(6,5,65,0.10)",
                     boxShadow: isDark
-                      ? "0 8px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.60), inset 0 -2px 8px rgba(6,5,65,0.06)"
+                      ? "0 8px 20px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 10px rgba(0,0,0,0.35)"
                       : "0 8px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.92), inset 0 -2px 8px rgba(6,5,65,0.04)",
-                    color: "#060541",
+                    color: isDark ? "#f2f2f2" : "#060541",
                   }}
                 >
                   <span className="text-xl font-bold">{isAr ? "تسبيح" : "Count"}</span>
@@ -946,14 +959,14 @@ export default function DeenAzkar() {
             className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 text-xl"
             style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)" }}
           >
-            🔢
+            �
           </div>
           <div className={`flex-1 min-w-0 ${isAr ? "text-right" : "text-left"}`} dir={isAr ? "rtl" : "ltr"}>
             <p className="text-[14px] font-bold truncate" style={{ color: textPrimary }}>
               {isAr ? "عداد التسبيح" : "Tasbih Counter"}
             </p>
             <p className="text-[10px] mt-0.5" style={{ color: textMuted }}>
-              {isAr ? "عداد حرّ للذكر" : "Free dhikr counter"}
+              {isAr ? "تابع وِردك اليومي" : "Track your daily dhikr"}
             </p>
           </div>
           <ChevronRight className="w-4 h-4 shrink-0 opacity-30" style={{ color: textSecondary, transform: isAr ? "rotate(180deg)" : undefined }} />
