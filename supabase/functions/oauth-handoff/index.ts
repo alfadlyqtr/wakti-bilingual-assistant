@@ -30,7 +30,17 @@ Deno.serve(async (req) => {
   )
 
   try {
-    const { action, ticket, access_token, refresh_token, code } = await req.json()
+    const body = await req.json()
+    const { action, ticket, access_token, refresh_token, code, tag, data: logData } = body
+
+    // Temporary diagnostics: devices mirror their black-box events here so the
+    // OAuth session-loss story can be read from the database. No tokens allowed.
+    if (action === 'log') {
+      if (!isString(tag, 64)) return json({ error: 'Invalid tag' }, 400)
+      const safe = JSON.stringify(logData ?? {}).slice(0, 2000)
+      await admin.from('client_debug_logs').insert({ tag, data: JSON.parse(safe) })
+      return json({ ok: true })
+    }
 
     if (!isString(ticket, 64)) {
       return json({ error: 'Invalid ticket' }, 400)
