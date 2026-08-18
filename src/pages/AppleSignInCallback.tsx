@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getPendingHandoffTicket, handoffCodeToMainWindow } from '@/utils/oauthHandoff';
+import { supabase } from '@/integrations/supabase/client';
+import { getPendingHandoffTicket, getTokensFromUrlHash, handoffSessionToMainWindow } from '@/utils/oauthHandoff';
 import { dlog } from '@/utils/debugLog';
 import {
   clearStoredAppleRedirect,
@@ -39,25 +40,28 @@ export default function AppleSignInCallback() {
       }
 
       // If this window did not start the sign-in, it's a secondary window
-      // (external browser / temp WebView). It holds the auth code but can
-      // never exchange it — the code verifier lives in the main app window.
-      // Hand the code over and stop here.
+      // (external browser / temp WebView) whose storage is temporary. The
+      // sign-in tokens are in this window's URL hash (implicit flow) — hand
+      // them to the main app window so the session is born in permanent storage.
       if (loginId && getPendingHandoffTicket() !== loginId) {
         clearStoredAppleRedirect();
-        if (code) {
-          const outcome = await handoffCodeToMainWindow(loginId, code);
+        const tokens = getTokensFromUrlHash();
+        if (tokens) {
+          const outcome = await handoffSessionToMainWindow(loginId, tokens);
           if (outcome === 'claimed') {
             dlog('temp-window-handed-off');
+            // Discard this window's copy so the two windows can never fight
+            // over token refresh (which would kill both sessions).
+            try { (supabase.auth as any).stopAutoRefresh?.(); } catch {}
+            try { await supabase.auth.signOut({ scope: 'local' as any }); } catch {}
             setStatus('success');
             setMessage('Signed in — you can return to the Wakti app now');
             return; // stay on this screen; the main app window continues
           }
         }
-        // Nobody collected the code — this window may actually BE the main app
-        // window (e.g. iOS relaunched the app onto this URL, so the start-flag
-        // is gone but the code verifier is still here). Fall through and try to
-        // finish locally; in a plain browser without the verifier this fails
-        // cleanly into the normal error screen below.
+        // Nobody collected — this window may actually BE the main app window
+        // (e.g. iOS relaunched the app onto this URL, so the start-flag is
+        // gone). Fall through and finish locally.
         dlog('handoff-not-collected-trying-local');
       }
 
