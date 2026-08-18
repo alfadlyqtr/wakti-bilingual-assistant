@@ -372,6 +372,26 @@ const MAX_SCENE_DURATION = 10;
 const MAX_VIDEO_DURATION = 60;
 const SCENE_DURATION_OPTIONS = [6, 10] as const;
 
+type ImageToVideoReferenceRole = 'character' | 'scene' | 'product' | 'object' | 'style' | 'logo' | 'text';
+type ImageToVideoReferenceSlot = 1 | 2 | 3 | 4;
+
+const IMAGE_TO_VIDEO_REFERENCE_ROLE_OPTIONS: Array<{ value: ImageToVideoReferenceRole; en: string; ar: string }> = [
+  { value: 'character', en: 'Character', ar: 'شخصية' },
+  { value: 'scene', en: 'Scene', ar: 'مشهد' },
+  { value: 'product', en: 'Product', ar: 'منتج' },
+  { value: 'object', en: 'Object', ar: 'عنصر' },
+  { value: 'style', en: 'Style', ar: 'أسلوب' },
+  { value: 'logo', en: 'Logo', ar: 'شعار' },
+  { value: 'text', en: 'Text', ar: 'نص' },
+];
+
+const DEFAULT_IMAGE_TO_VIDEO_ROLE_BY_SLOT: Record<ImageToVideoReferenceSlot, ImageToVideoReferenceRole> = {
+  1: 'character',
+  2: 'scene',
+  3: 'object',
+  4: 'style',
+};
+
 const sceneArray = <T,>(sceneCount: number, value: T): T[] => Array.from({ length: sceneCount }, () => value);
 
 export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVideomakerProps) {
@@ -381,6 +401,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const { stitchClips: ffmpegStitchClips } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
+  const fileInputRef3 = useRef<HTMLInputElement>(null);
+  const fileInputRef4 = useRef<HTMLInputElement>(null);
   const emitTrialBlocked = useCallback((payload: VideoInvokeErrorPayload | null, fallbackFeature: string) => {
     emitEvent('wakti-trial-limit-reached', {
       feature: payload?.feature || fallbackFeature,
@@ -420,7 +442,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setResolution('720p');
     } else if (mode === 'image_to_video') {
       setDuration('6');
-      setResolution('720p');
+      setResolution('480p');
     } else {
       setDuration('6');
     }
@@ -429,10 +451,18 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [imagePreview2, setImagePreview2] = useState<string | null>(null);
+  const [imageToVideoFile2, setImageToVideoFile2] = useState<File | null>(null);
+  const [imageToVideoPreview2, setImageToVideoPreview2] = useState<string | null>(null);
+  const [imageToVideoFile3, setImageToVideoFile3] = useState<File | null>(null);
+  const [imageToVideoPreview3, setImageToVideoPreview3] = useState<string | null>(null);
+  const [imageToVideoFile4, setImageToVideoFile4] = useState<File | null>(null);
+  const [imageToVideoPreview4, setImageToVideoPreview4] = useState<string | null>(null);
+  const [imageToVideoRoleBySlot, setImageToVideoRoleBySlot] = useState<Record<ImageToVideoReferenceSlot, ImageToVideoReferenceRole>>({ ...DEFAULT_IMAGE_TO_VIDEO_ROLE_BY_SLOT });
+  const [showExtraImageToVideoReferences, setShowExtraImageToVideoReferences] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState<'4' | '5' | '6' | '8' | '10' | '15'>('6');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
-  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
+  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('480p');
   const [isKidsContentMode, setIsKidsContentMode] = useState(true);
   const [isBestArabicQuality, setIsBestArabicQuality] = useState(false);
   const [textVideoDialogueMode, setTextVideoDialogueMode] = useState<'english' | 'arabic'>('english');
@@ -459,7 +489,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [showSavedPicker, setShowSavedPicker] = useState(false);
   const [savedImages, setSavedImages] = useState<{id:string; image_url:string; submode:string; created_at:string}[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
-  const [pickingForSlot, setPickingForSlot] = useState<1 | 2>(1);
+  const [pickingForSlot, setPickingForSlot] = useState<ImageToVideoReferenceSlot>(1);
+  const [savedPickerMode, setSavedPickerMode] = useState<'image_to_video' | '2images_to_video'>('image_to_video');
   const [highlightKidsModeToggle, setHighlightKidsModeToggle] = useState(false);
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
@@ -503,7 +534,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         kidsModeHighlightTimeoutRef.current = null;
       }
       setDuration('6');
-      setResolution('720p');
+      setResolution('480p');
     } else {
       disableKidsMode();
     }
@@ -522,7 +553,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setIsKidsContentMode(true);
       setIsBestArabicQuality(false);
       setDuration('6');
-      setResolution('720p');
+      setResolution('480p');
     }
     setHighlightKidsModeToggle(false);
     kidsModeToggleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -584,9 +615,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (mode === '2images_to_video') {
       setDuration('8');
       setResolution('720p');
-    } else if (mode === 'text_to_video' || mode === 'image_to_video') {
+    } else if (mode === 'text_to_video') {
       setDuration('6');
       setResolution('720p');
+    } else if (mode === 'image_to_video') {
+      setDuration('6');
+      setResolution('480p');
     }
     const promptValue = value('prompt');
     if (promptValue) {
@@ -716,6 +750,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video';
       imagePreview: string | null;
       imagePreview2: string | null;
+      imageToVideoPreview2?: string | null;
+      imageToVideoPreview3?: string | null;
+      imageToVideoPreview4?: string | null;
+      imageToVideoRoleBySlot?: Partial<Record<ImageToVideoReferenceSlot, ImageToVideoReferenceRole>>;
       prompt: string;
       duration: '4' | '5' | '6' | '8' | '10' | '15';
       aspectRatio: string;
@@ -733,10 +771,22 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setImagePreview(draft.imagePreview || null);
     setImageFile2(null);
     setImagePreview2(draft.imagePreview2 || null);
+    setImageToVideoFile2(null);
+    setImageToVideoPreview2(draft.imageToVideoPreview2 || null);
+    setImageToVideoFile3(null);
+    setImageToVideoPreview3(draft.imageToVideoPreview3 || null);
+    setImageToVideoFile4(null);
+    setImageToVideoPreview4(draft.imageToVideoPreview4 || null);
+    setImageToVideoRoleBySlot({
+      ...DEFAULT_IMAGE_TO_VIDEO_ROLE_BY_SLOT,
+      ...(draft.imageToVideoRoleBySlot || {}),
+    });
+    setShowExtraImageToVideoReferences(Boolean(draft.imageToVideoPreview2 || draft.imageToVideoPreview3 || draft.imageToVideoPreview4));
     setPrompt(draft.prompt || '');
     setDuration(draft.duration || '6');
     setAspectRatio(draft.aspectRatio || '9:16');
-    setResolution(draft.resolution || '720p');
+    const fallbackResolution = draft.generationMode === 'image_to_video' ? '480p' : '720p';
+    setResolution(draft.resolution || fallbackResolution);
     const restoredKidsContentMode = typeof draft.isKidsContentMode === 'boolean' ? draft.isKidsContentMode : true;
     const restoredTextVideoDialogueMode = draft.textVideoDialogueMode === 'arabic' ? 'arabic' : 'english';
     setIsKidsContentMode(restoredKidsContentMode);
@@ -1137,15 +1187,93 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   }, [user]);
 
   const handlePickSaved = (url: string) => {
-    if (pickingForSlot === 1) {
-      setImageFile(null);
-      setImagePreview(url);
+    if (savedPickerMode === '2images_to_video') {
+      if (pickingForSlot === 1) {
+        setImageFile(null);
+        setImagePreview(url);
+      } else {
+        setImageFile2(null);
+        setImagePreview2(url);
+      }
     } else {
-      setImageFile2(null);
-      setImagePreview2(url);
+      if (pickingForSlot === 1) {
+        setImageFile(null);
+        setImagePreview(url);
+      } else if (pickingForSlot === 2) {
+        setImageToVideoFile2(null);
+        setImageToVideoPreview2(url);
+      } else if (pickingForSlot === 3) {
+        setImageToVideoFile3(null);
+        setImageToVideoPreview3(url);
+      } else {
+        setImageToVideoFile4(null);
+        setImageToVideoPreview4(url);
+      }
+      if (pickingForSlot !== 1) {
+        setShowExtraImageToVideoReferences(true);
+      }
     }
     setGeneratedVideoUrl(null);
     setShowSavedPicker(false);
+  };
+
+  const handleImageToVideoRoleChange = (slot: ImageToVideoReferenceSlot, role: ImageToVideoReferenceRole) => {
+    setImageToVideoRoleBySlot((prev) => ({ ...prev, [slot]: role }));
+  };
+
+  const handleImageSelectForImageToVideoReference = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    slot: 2 | 3 | 4,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error(language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 10 ميجابايت' : 'Max file size is 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const preview = ev.target?.result as string;
+      if (slot === 2) {
+        setImageToVideoFile2(file);
+        setImageToVideoPreview2(preview);
+      } else if (slot === 3) {
+        setImageToVideoFile3(file);
+        setImageToVideoPreview3(preview);
+      } else {
+        setImageToVideoFile4(file);
+        setImageToVideoPreview4(preview);
+      }
+      setGeneratedVideoUrl(null);
+      setShowExtraImageToVideoReferences(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openSavedImagePicker = (mode: 'image_to_video' | '2images_to_video', slot: ImageToVideoReferenceSlot) => {
+    setSavedPickerMode(mode);
+    setPickingForSlot(slot);
+    setShowSavedPicker(true);
+    fetchSavedImages();
+  };
+
+  const openImageToVideoReferenceFilePicker = (slot: 2 | 3 | 4) => {
+    if (slot === 2) {
+      fileInputRef2.current?.click();
+      return;
+    }
+    if (slot === 3) {
+      fileInputRef3.current?.click();
+      return;
+    }
+    fileInputRef4.current?.click();
   };
 
   // Handle image upload
@@ -1211,6 +1339,33 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setGeneratedVideoUrl(null);
     if (fileInputRef2.current) {
       fileInputRef2.current.value = '';
+    }
+  };
+
+  const clearImageToVideoReference2 = () => {
+    setImageToVideoFile2(null);
+    setImageToVideoPreview2(null);
+    setGeneratedVideoUrl(null);
+    if (fileInputRef2.current) {
+      fileInputRef2.current.value = '';
+    }
+  };
+
+  const clearImageToVideoReference3 = () => {
+    setImageToVideoFile3(null);
+    setImageToVideoPreview3(null);
+    setGeneratedVideoUrl(null);
+    if (fileInputRef3.current) {
+      fileInputRef3.current.value = '';
+    }
+  };
+
+  const clearImageToVideoReference4 = () => {
+    setImageToVideoFile4(null);
+    setImageToVideoPreview4(null);
+    setGeneratedVideoUrl(null);
+    if (fileInputRef4.current) {
+      fileInputRef4.current.value = '';
     }
   };
 
@@ -1431,6 +1586,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         generationMode,
         imagePreview,
         imagePreview2,
+        imageToVideoPreview2,
+        imageToVideoPreview3,
+        imageToVideoPreview4,
+        imageToVideoRoleBySlot,
         prompt,
         duration,
         aspectRatio,
@@ -1512,58 +1671,77 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           mode: 'async',
         };
       } else if (generationMode === 'image_to_video') {
-        // Image-to-Video: always compress + upload image to get a signed https URL
-        setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
-        let imageUrl = '';
+        // Image-to-Video: upload up to 4 tagged reference images (slot order is preserved).
+        setGenerationStatus(language === 'ar' ? 'جاري رفع الصور...' : 'Uploading images...');
+        const references = [
+          { slot: 1 as ImageToVideoReferenceSlot, role: imageToVideoRoleBySlot[1], file: imageFile, preview: imagePreview },
+          { slot: 2 as ImageToVideoReferenceSlot, role: imageToVideoRoleBySlot[2], file: imageToVideoFile2, preview: imageToVideoPreview2 },
+          { slot: 3 as ImageToVideoReferenceSlot, role: imageToVideoRoleBySlot[3], file: imageToVideoFile3, preview: imageToVideoPreview3 },
+          { slot: 4 as ImageToVideoReferenceSlot, role: imageToVideoRoleBySlot[4], file: imageToVideoFile4, preview: imageToVideoPreview4 },
+        ].filter((item) => Boolean(item.preview));
+
+        let primaryImageUrl = '';
+        const taggedReferences: Array<{ url: string; role: ImageToVideoReferenceRole; slot: number }> = [];
         try {
-          const randomId = Math.random().toString(36).substring(2, 15);
-          const storagePath = `${user.id}/ai-video-input/${randomId}.jpg`;
+          for (const ref of references) {
+            const randomId = Math.random().toString(36).substring(2, 15);
+            const storagePath = `${user.id}/ai-video-input/${randomId}_${ref.slot}.jpg`;
 
-          let sourceBlob: Blob;
-          if (imageFile) {
-            sourceBlob = await compressImage(imageFile, 1024, 0.7);
-          } else if (imagePreview?.startsWith('data:')) {
-            const previewBlob = await dataUrlToBlob(imagePreview);
-            sourceBlob = await compressImage(new File([previewBlob], 'preview.jpg', { type: 'image/jpeg' }), 1024, 0.7);
-          } else if (imagePreview?.startsWith('http')) {
-            const fetchedBlob = await fetch(imagePreview).then(r => r.blob());
-            sourceBlob = await compressImage(new File([fetchedBlob], 'saved.jpg', { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
-          } else {
-            throw new Error('Missing image source');
-          }
+            let sourceBlob: Blob;
+            if (ref.file) {
+              sourceBlob = await compressImage(ref.file, 1024, 0.7);
+            } else if (ref.preview?.startsWith('data:')) {
+              const previewBlob = await dataUrlToBlob(ref.preview);
+              sourceBlob = await compressImage(new File([previewBlob], `preview-${ref.slot}.jpg`, { type: 'image/jpeg' }), 1024, 0.7);
+            } else if (ref.preview?.startsWith('http')) {
+              const fetchedBlob = await fetch(ref.preview).then((r) => r.blob());
+              sourceBlob = await compressImage(new File([fetchedBlob], `saved-${ref.slot}.jpg`, { type: fetchedBlob.type || 'image/jpeg' }), 1024, 0.7);
+            } else {
+              throw new Error('Missing image source');
+            }
 
-          console.log('[AIVideomaker] Uploading to message_attachments:', storagePath, 'size:', sourceBlob.size);
+            console.log('[AIVideomaker] Uploading to message_attachments:', storagePath, 'size:', sourceBlob.size);
+            const { error: uploadErr } = await supabase.storage
+              .from('message_attachments')
+              .upload(storagePath, sourceBlob, {
+                contentType: 'image/jpeg',
+                cacheControl: '3600',
+                upsert: true,
+              });
 
-          const { error: uploadErr } = await supabase.storage
-            .from('message_attachments')
-            .upload(storagePath, sourceBlob, {
-              contentType: 'image/jpeg',
-              cacheControl: '3600',
-              upsert: true,
+            if (uploadErr) {
+              console.error('[AIVideomaker] Storage upload error details:', uploadErr);
+              throw new Error(`Upload failed: ${uploadErr.message}`);
+            }
+
+            const { data: signedData, error: signedErr } = await supabase.storage
+              .from('message_attachments')
+              .createSignedUrl(storagePath, 60 * 60 * 6);
+            if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
+            if (!signedData?.signedUrl) throw new Error('Signed URL missing');
+
+            const cleanedSignedUrl = cleanSignedUrl(signedData.signedUrl);
+            if (!primaryImageUrl) {
+              primaryImageUrl = cleanedSignedUrl;
+              setSourceImageUrl(cleanedSignedUrl);
+              setSourceImagePath(storagePath);
+            }
+            taggedReferences.push({
+              url: cleanedSignedUrl,
+              role: ref.role,
+              slot: ref.slot,
             });
-
-          if (uploadErr) {
-            console.error('[AIVideomaker] Storage upload error details:', uploadErr);
-            throw new Error(`Upload failed: ${uploadErr.message}`);
           }
-
-          const { data: signedData, error: signedErr } = await supabase.storage
-            .from('message_attachments')
-            .createSignedUrl(storagePath, 60 * 60 * 6);
-          if (signedErr) throw new Error(`Signed URL failed: ${signedErr.message}`);
-          if (!signedData?.signedUrl) throw new Error('Signed URL missing');
-          imageUrl = signedData.signedUrl;
-          setSourceImageUrl(imageUrl);
-          setSourceImagePath(storagePath);
-          console.log('[AIVideomaker] Upload successful, URL:', imageUrl);
+          console.log('[AIVideomaker] Image-to-video reference uploads complete:', taggedReferences.length);
         } catch (prepErr: any) {
-          console.error('[AIVideomaker] Prepare image error:', prepErr);
+          console.error('[AIVideomaker] Prepare image(s) error:', prepErr);
           throw prepErr;
         }
 
         requestBody = {
           generation_type: 'image_to_video',
-          image: imageUrl,
+          image: primaryImageUrl,
+          reference_images: taggedReferences,
           prompt: finalPrompt,
           duration,
           aspect_ratio: aspectRatio,
@@ -3256,7 +3434,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           <div className={`grid grid-cols-1 ${generationMode === 'image_to_video' ? 'xl:grid-cols-[280px_1fr]' : ''} gap-5 items-start`}>
             {/* Single image upload - only shown in image_to_video mode */}
             {generationMode === 'image_to_video' && (
-              <div className="relative">
+              <div className="relative space-y-3">
                 {!imagePreview ? (
                   <div className="h-full min-h-[200px] flex flex-col gap-2">
                     {/* Upload from device */}
@@ -3270,7 +3448,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                         <div className="text-center px-3">
                           <p className="font-semibold text-sm">
-                            {language === 'ar' ? 'رفع صورة' : 'Upload Image'}
+                            {language === 'ar' ? 'رفع صورة ١' : 'Upload Image 1'}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {language === 'ar' ? 'PNG, JPG • 10MB' : 'PNG, JPG • 10MB'}
@@ -3280,7 +3458,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     </div>
                     {/* Pick from saved images */}
                     <div
-                      onClick={() => { setShowSavedPicker(true); fetchSavedImages(); }}
+                      onClick={() => openSavedImagePicker('image_to_video', 1)}
                       className="relative cursor-pointer group"
                     >
                       <div className="rounded-2xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-2.5 py-3 px-4 transition-all hover:border-orange-500 hover:shadow-[0_0_30px_hsla(25,95%,60%,0.3)] active:scale-[0.98]">
@@ -3292,8 +3470,6 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </p>
                       </div>
                     </div>
-
-                    {renderImageControls()}
                   </div>
                 ) : (
                   <div className="flex h-full min-h-[200px] flex-col gap-3">
@@ -3326,9 +3502,117 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </Button>
                       </div>
                     </div>
-                    {renderImageControls()}
                   </div>
                 )}
+
+                <div className="rounded-xl border border-primary/20 bg-background/60 p-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                    {language === 'ar' ? 'وسم الصورة ١' : 'Image 1 Tag'}
+                  </p>
+                  <select
+                    value={imageToVideoRoleBySlot[1]}
+                    onChange={(e) => handleImageToVideoRoleChange(1, e.target.value as ImageToVideoReferenceRole)}
+                    disabled={isGenerating}
+                    className="w-full rounded-lg border border-border bg-background/70 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  >
+                    {IMAGE_TO_VIDEO_REFERENCE_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {language === 'ar' ? option.ar : option.en}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="rounded-xl border border-primary/20 bg-background/60 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {language === 'ar' ? 'حتى ٤ صور مرجعية مع الوسوم' : 'Up to 4 tagged reference images'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowExtraImageToVideoReferences((value) => !value)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-full border border-border/70 bg-muted/50 text-muted-foreground active:scale-95 transition-all"
+                    >
+                      {showExtraImageToVideoReferences
+                        ? (language === 'ar' ? 'إخفاء' : 'Hide')
+                        : (language === 'ar' ? '+ صور إضافية' : '+ More images')}
+                    </button>
+                  </div>
+
+                  {(showExtraImageToVideoReferences || imageToVideoPreview2 || imageToVideoPreview3 || imageToVideoPreview4) && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {([2, 3, 4] as const).map((slot) => {
+                        const preview = slot === 2
+                          ? imageToVideoPreview2
+                          : slot === 3
+                            ? imageToVideoPreview3
+                            : imageToVideoPreview4;
+                        const clearReference = slot === 2
+                          ? clearImageToVideoReference2
+                          : slot === 3
+                            ? clearImageToVideoReference3
+                            : clearImageToVideoReference4;
+
+                        return (
+                          <div key={slot} className="space-y-1.5">
+                            {preview ? (
+                              <div className="relative aspect-square rounded-xl overflow-hidden bg-black/90 ring-1 ring-primary/25">
+                                <img
+                                  src={preview}
+                                  alt={`Reference ${slot}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={clearReference}
+                                  disabled={isGenerating}
+                                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-transform"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="aspect-square rounded-xl border-2 border-dashed border-primary/20 p-1 flex flex-col gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openImageToVideoReferenceFilePicker(slot)}
+                                  className="flex-1 rounded-lg border border-primary/20 bg-primary/5 text-[10px] font-semibold text-primary active:scale-95 transition-all"
+                                >
+                                  {language === 'ar' ? `رفع ${slot}` : `Upload ${slot}`}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowExtraImageToVideoReferences(true);
+                                    openSavedImagePicker('image_to_video', slot);
+                                  }}
+                                  className="flex-1 rounded-lg border border-orange-400/30 bg-orange-500/5 text-[10px] font-semibold text-orange-500 active:scale-95 transition-all"
+                                >
+                                  {language === 'ar' ? 'محفوظ' : 'Saved'}
+                                </button>
+                              </div>
+                            )}
+
+                            <select
+                              value={imageToVideoRoleBySlot[slot]}
+                              onChange={(e) => handleImageToVideoRoleChange(slot, e.target.value as ImageToVideoReferenceRole)}
+                              disabled={isGenerating}
+                              className="w-full rounded-md border border-border bg-background/70 px-1.5 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary/40"
+                            >
+                              {IMAGE_TO_VIDEO_REFERENCE_ROLE_OPTIONS.map((option) => (
+                                <option key={`${slot}-${option.value}`} value={option.value}>
+                                  {language === 'ar' ? option.ar : option.en}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {renderImageControls()}
 
                 <input
                   ref={fileInputRef}
@@ -3337,6 +3621,30 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   className="hidden"
                   onChange={handleImageSelect}
                   aria-label={language === 'ar' ? 'اختر صورة' : 'Select image'}
+                />
+                <input
+                  ref={fileInputRef2}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImageSelectForImageToVideoReference(e, 2)}
+                  aria-label={language === 'ar' ? 'اختر الصورة الثانية' : 'Select second reference image'}
+                />
+                <input
+                  ref={fileInputRef3}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImageSelectForImageToVideoReference(e, 3)}
+                  aria-label={language === 'ar' ? 'اختر الصورة الثالثة' : 'Select third reference image'}
+                />
+                <input
+                  ref={fileInputRef4}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImageSelectForImageToVideoReference(e, 4)}
+                  aria-label={language === 'ar' ? 'اختر الصورة الرابعة' : 'Select fourth reference image'}
                 />
               </div>
             )}
@@ -3370,7 +3678,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                       </div>
                       <div
-                        onClick={() => { setPickingForSlot(1); setShowSavedPicker(true); fetchSavedImages(); }}
+                        onClick={() => openSavedImagePicker('2images_to_video', 1)}
                         className="relative cursor-pointer group"
                       >
                         <div className="rounded-lg sm:rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:py-2 sm:px-3 transition-all hover:border-orange-500 active:scale-[0.98]">
@@ -3450,7 +3758,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </div>
                       </div>
                       <div
-                        onClick={() => { setPickingForSlot(2); setShowSavedPicker(true); fetchSavedImages(); }}
+                        onClick={() => openSavedImagePicker('2images_to_video', 2)}
                         className="relative cursor-pointer group"
                       >
                         <div className="rounded-lg sm:rounded-xl border-2 border-dashed border-orange-400/40 bg-gradient-to-br from-orange-500/5 via-amber-500/5 to-orange-400/5 flex items-center justify-center gap-1.5 py-1.5 px-2 sm:py-2 sm:px-3 transition-all hover:border-orange-500 active:scale-[0.98]">
@@ -5396,6 +5704,10 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                     setGeneratedVideoUrl(null);
                     setIsSaved(false);
                     clearImage();
+                    clearImage2();
+                    clearImageToVideoReference2();
+                    clearImageToVideoReference3();
+                    clearImageToVideoReference4();
                   }}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />

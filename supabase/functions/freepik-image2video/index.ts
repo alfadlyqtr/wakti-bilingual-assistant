@@ -742,6 +742,66 @@ function sanitizeImageUrl(url: string): string {
   return cleaned.trim();
 }
 
+type ImageToVideoReferenceRole = "character" | "scene" | "product" | "object" | "style" | "logo" | "text";
+
+type NormalizedImageToVideoReference = {
+  url: string;
+  role: ImageToVideoReferenceRole;
+};
+
+function normalizeImageToVideoReferenceRole(raw: unknown): ImageToVideoReferenceRole {
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (value === "character" || value === "charactor") return "character";
+  if (value === "scene" || value === "background") return "scene";
+  if (value === "product") return "product";
+  if (value === "object" || value === "prop") return "object";
+  if (value === "style" || value === "look") return "style";
+  if (value === "logo") return "logo";
+  if (value === "text" || value === "typography") return "text";
+  return "scene";
+}
+
+function normalizeImageToVideoReferences(raw: unknown): NormalizedImageToVideoReference[] {
+  if (!Array.isArray(raw)) return [];
+
+  const refs: NormalizedImageToVideoReference[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.url !== "string") continue;
+    const cleanedUrl = sanitizeImageUrl(rec.url);
+    if (!cleanedUrl) continue;
+    refs.push({
+      url: cleanedUrl,
+      role: normalizeImageToVideoReferenceRole(rec.role),
+    });
+  }
+  return refs;
+}
+
+function buildTaggedImageToVideoPrompt(
+  prompt: string,
+  references: NormalizedImageToVideoReference[],
+): string {
+  if (!references.length) return prompt;
+
+  const roleLines = references.map((ref, idx) => `- Image ${idx + 1}: ${ref.role}`);
+  const tagBlock = [
+    "REFERENCE IMAGE TAGS (follow strictly):",
+    ...roleLines,
+    "Tag rules:",
+    "- character: keep the same person/identity details.",
+    "- scene: use as environment/background anchor.",
+    "- product/object/logo/text: preserve key visual details and clarity.",
+    "- style: transfer only visual style and mood, not identity.",
+  ].join("\n");
+
+  const trimmedPrompt = prompt.trim();
+  return trimmedPrompt
+    ? `${tagBlock}\n\nMotion request:\n${trimmedPrompt}`
+    : tagBlock;
+}
+
 function parseDataUriImage(dataUri: string): { contentType: string; bytes: Uint8Array } {
   const match = dataUri.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.*)$/);
   if (!match) throw new Error("Invalid image data URI");
@@ -1298,7 +1358,8 @@ serve(async (req: Request) => {
     // Parse request body (need it before trial check to detect generation_type)
     errorStage = "request_parse";
     const body = await req.json();
-    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride, text_video_dialogue_mode } = body;
+    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride, text_video_dialogue_mode, reference_images } = body;
+    const imageToVideoReferences = normalizeImageToVideoReferences(reference_images);
     const safePrompt = typeof prompt === "string"
       ? sanitizeUserInput(prompt, { maxLength: 7000, label: "video_prompt" }).trim()
       : "";
@@ -1308,7 +1369,12 @@ serve(async (req: Request) => {
       typeof modelOverride === "string" ? modelOverride : undefined,
       typeof text_video_dialogue_mode === "string" ? text_video_dialogue_mode : undefined,
     );
-    errorInputText = safePrompt || (typeof image === "string" ? image : "") || (typeof image1 === "string" ? image1 : "") || (typeof image2 === "string" ? image2 : "");
+    errorInputText = safePrompt
+      || (typeof image === "string" ? image : "")
+      || (typeof image1 === "string" ? image1 : "")
+      || (typeof image2 === "string" ? image2 : "")
+      || imageToVideoReferences[0]?.url
+      || "";
     errorMetadata = {
       generation_type: generationType,
       requested_model: errorModel,
@@ -1319,6 +1385,8 @@ serve(async (req: Request) => {
       has_image: Boolean(image),
       has_image1: Boolean(image1),
       has_image2: Boolean(image2),
+      reference_images_count: imageToVideoReferences.length,
+      reference_image_roles: imageToVideoReferences.map((item) => item.role),
       child_safety_mode: modelOverride === "grok-imagine-video-1-5-preview",
       text_video_dialogue_mode: typeof text_video_dialogue_mode === "string" ? text_video_dialogue_mode : null,
     };
@@ -1386,8 +1454,15 @@ serve(async (req: Request) => {
     }
 
     // Validation based on generation type
-    if (generationType === "image_to_video" && !image) {
+    const hasInlineImage = typeof image === "string" && image.trim().length > 0;
+    if (generationType === "image_to_video" && !hasInlineImage && imageToVideoReferences.length === 0) {
       return new Response(JSON.stringify({ error: "Missing image (URL or base64)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (generationType === "image_to_video" && imageToVideoReferences.length > 4) {
+      return new Response(JSON.stringify({ error: "image_to_video supports up to 4 tagged images" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -1550,21 +1625,62 @@ serve(async (req: Request) => {
         user.id,
       );
     } else {
-      // Image-to-Video: requires single image
-      let imageUrl: string = image;
-      if (typeof image === "string" && image.startsWith("data:image/")) {
-        try {
-          imageUrl = await uploadImageDataUriToPublicUrl(supabase, user.id, image);
-          console.log("[kie-image2video] Uploaded data URI to public URL for KIE");
-        } catch (e) {
-          console.error("[kie-image2video] Failed to upload image:", e);
-          return new Response(
-            JSON.stringify({ error: e instanceof Error ? e.message : "Failed to prepare image" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+      // Image-to-Video: supports up to 4 tagged reference images.
+      const requestedReferences: NormalizedImageToVideoReference[] = imageToVideoReferences.length > 0
+        ? imageToVideoReferences
+        : (typeof image === "string" && image.trim().length > 0
+            ? [{ url: sanitizeImageUrl(image), role: "character" as ImageToVideoReferenceRole }]
+            : []);
+
+      if (!requestedReferences.length) {
+        return new Response(JSON.stringify({ error: "Missing image (URL or base64)" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      task = await createVideoTask([imageUrl], finalPrompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode, modelOverride);
+
+      if (requestedReferences.length > 4) {
+        return new Response(JSON.stringify({ error: "image_to_video supports up to 4 tagged images" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const preparedReferences: NormalizedImageToVideoReference[] = [];
+      for (let i = 0; i < requestedReferences.length; i++) {
+        const reference = requestedReferences[i];
+        let imageUrl = reference.url;
+        if (typeof imageUrl === "string" && imageUrl.startsWith("data:image/")) {
+          try {
+            imageUrl = await uploadImageDataUriToPublicUrl(supabase, user.id, imageUrl);
+            console.log(`[kie-image2video] Uploaded tagged image ${i + 1} data URI to public URL for KIE`);
+          } catch (e) {
+            console.error(`[kie-image2video] Failed to upload tagged image ${i + 1}:`, e);
+            return new Response(
+              JSON.stringify({ error: e instanceof Error ? e.message : `Failed to prepare image ${i + 1}` }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+        preparedReferences.push({
+          url: sanitizeImageUrl(imageUrl),
+          role: reference.role,
+        });
+      }
+
+      const taggedPrompt = buildTaggedImageToVideoPrompt(finalPrompt, preparedReferences);
+      const preparedUrls = preparedReferences.map((item) => item.url);
+      task = await createVideoTask(
+        preparedUrls,
+        taggedPrompt,
+        reqDuration,
+        aspect_ratio,
+        fixed_lens,
+        generate_audio,
+        resolution,
+        video_style_mode,
+        modelOverride,
+      );
     }
     errorMetadata = {
       ...errorMetadata,
@@ -1629,6 +1745,8 @@ serve(async (req: Request) => {
         duration: reqDuration ?? null,
         aspect_ratio: aspect_ratio ?? null,
         resolution: resolution ?? null,
+        reference_images_count: imageToVideoReferences.length,
+        reference_image_roles: imageToVideoReferences.map((item) => item.role),
         child_safety_mode: modelOverride === "grok-imagine-video-1-5-preview",
       }
     });

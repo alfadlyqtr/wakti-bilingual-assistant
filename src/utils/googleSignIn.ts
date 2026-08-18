@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { setActiveScopedUserId } from '@/utils/userScopedStorage';
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -50,6 +51,8 @@ export function clearStoredGoogleRedirect(): void {
 
 export async function startGoogleSignIn(redirectTo = '/dashboard'): Promise<{ error: Error | null }> {
   const nextPath = sanitizeGoogleRedirectPath(redirectTo);
+  const inNatively = isNativelyApp();
+  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
   // Always use the exact origin the app is running on
   const origin = window.location.origin;
   const callbackUrl = new URL(GOOGLE_SIGN_IN_CALLBACK_PATH, origin);
@@ -75,10 +78,14 @@ export async function startGoogleSignIn(redirectTo = '/dashboard'): Promise<{ er
     return { error: new Error('Failed to start Google sign in') };
   }
 
-  // Navigate directly inside the app's WebView so session tokens are written
-  // to the app's own localStorage (opening external Safari creates a separate,
-  // isolated localStorage that vanishes when the user returns to the app).
-  window.location.href = data.url;
+  // On Natively mobile, force system browser for OAuth; embedded browser
+  // contexts can fail to hand the callback back into the app reliably.
+  const nativelyObj = (window as any).natively || (window as any).Natively;
+  if (inNatively && isMobile && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
+    nativelyObj.openExternalURL(data.url, true);
+  } else {
+    window.location.href = data.url;
+  }
 
   return { error: null };
 }
