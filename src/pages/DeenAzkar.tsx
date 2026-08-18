@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef, useCallback, type MouseEvent } from "react";
+import { useState, useEffect, useRef, useCallback, type PointerEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, RotateCcw, RefreshCw, Check, BookOpen, Info, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 
 // ── Data source: fitrahive/dua-dhikr (MIT licence) ────────────────────────────
 const BASE_RAW = "https://cdn.jsdelivr.net/gh/fitrahive/dua-dhikr@main/data";
+const TASBIH_COUNT_STORAGE_KEY = "deen_tasbih_count_v1";
+const TASBIH_GOAL_STORAGE_KEY = "deen_tasbih_goal_v1";
 
 interface DhikrItem {
   title: string;
@@ -62,6 +64,18 @@ export default function DeenAzkar() {
   const isAr = language === "ar";
   const isDark = theme === "dark";
 
+  const readStoredInt = (key: string, fallback: number) => {
+    if (typeof window === "undefined") return fallback;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw === null) return fallback;
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   const [selectedCat, setSelectedCat] = useState<Category | null>(null);
   const [items, setItems] = useState<DhikrItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -69,10 +83,10 @@ export default function DeenAzkar() {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [showTasbih, setShowTasbih] = useState(false);
-  const [tasbihCount, setTasbihCount] = useState(0);
-  const [tasbihLimit, setTasbihLimit] = useState(33);
+  const [tasbihCount, setTasbihCount] = useState(() => readStoredInt(TASBIH_COUNT_STORAGE_KEY, 0));
+  const [tasbihLimit, setTasbihLimit] = useState(() => readStoredInt(TASBIH_GOAL_STORAGE_KEY, 33));
   const [goalPanelOpen, setGoalPanelOpen] = useState(false);
-  const [goalDraft, setGoalDraft] = useState("33");
+  const [goalDraft, setGoalDraft] = useState(() => String(readStoredInt(TASBIH_GOAL_STORAGE_KEY, 33)));
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -94,6 +108,11 @@ export default function DeenAzkar() {
   const blue = isDark ? "hsl(210,100%,65%)" : "hsl(210,100%,40%)";
   const blueFaint = isDark ? "hsla(210,100%,65%,0.15)" : "hsla(210,100%,40%,0.10)";
   const blueGlow = isDark ? "hsla(210,100%,65%,0.30)" : "hsla(210,100%,40%,0.20)";
+  const tasbihAccent = isDark ? "hsl(45,100%,60%)" : "hsl(42,88%,46%)";
+  const tasbihCardBg = isDark
+    ? "linear-gradient(145deg, rgba(255,255,255,0.09) 0%, rgba(255,208,80,0.14) 100%)"
+    : "linear-gradient(145deg, #ffffff 0%, hsla(42,88%,46%,0.14) 100%)";
+  const tasbihCardBorder = isDark ? "hsla(45,100%,60%,0.24)" : "hsla(42,88%,46%,0.42)";
   const bottomSafe = "calc(env(safe-area-inset-bottom) + 80px)";
 
   const counterKey = (slug: string, idx: number) => `${slug}-${idx}`;
@@ -220,6 +239,24 @@ export default function DeenAzkar() {
       loadCategory(selectedCat);
     }
   }, [selectedCat, loadCategory]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(TASBIH_COUNT_STORAGE_KEY, String(Math.max(0, tasbihCount)));
+    } catch {
+      // Ignore storage failures (private mode/quota).
+    }
+  }, [tasbihCount]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(TASBIH_GOAL_STORAGE_KEY, String(Math.max(0, tasbihLimit)));
+    } catch {
+      // Ignore storage failures (private mode/quota).
+    }
+  }, [tasbihLimit]);
 
   useEffect(() => {
     if (!showTasbih || typeof document === "undefined") return;
@@ -364,7 +401,7 @@ export default function DeenAzkar() {
     });
   };
 
-  const handleTasbihPageTap = (event: MouseEvent<HTMLDivElement>) => {
+  const handleTasbihPageTap = (event: PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
     if (target?.closest('[data-tasbih-control="true"]')) return;
     incrementTasbih();
@@ -395,7 +432,7 @@ export default function DeenAzkar() {
           paddingBottom: "env(safe-area-inset-bottom)",
           zIndex: 20,
         }}
-        onClick={handleTasbihPageTap}
+        onPointerDown={handleTasbihPageTap}
         dir={isAr ? "rtl" : "ltr"}
       >
         <div className="px-4 pt-4 pb-3 shrink-0 flex items-center justify-between gap-3">
@@ -945,32 +982,51 @@ export default function DeenAzkar() {
       </div>
 
       {/* Category cards */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 pb-5 space-y-3">
         <button
           onClick={() => setShowTasbih(true)}
-          className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl active:scale-[0.99] transition-all"
+          className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl active:scale-[0.99] transition-all"
           style={{
-            background: cardBg,
-            border: `1px solid ${cardBorder}`,
-            boxShadow: isDark ? "none" : "0 2px 8px rgba(6,5,65,0.05)",
+            background: tasbihCardBg,
+            border: `1px solid ${tasbihCardBorder}`,
+            boxShadow: isDark
+              ? "0 10px 24px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,208,80,0.06) inset"
+              : "0 6px 16px rgba(6,5,65,0.12)",
           }}
         >
-          <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 text-xl"
-            style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)" }}
-          >
-            �
-          </div>
           <div className={`flex-1 min-w-0 ${isAr ? "text-right" : "text-left"}`} dir={isAr ? "rtl" : "ltr"}>
-            <p className="text-[14px] font-bold truncate" style={{ color: textPrimary }}>
+            <p className="text-[15px] font-extrabold truncate" style={{ color: textPrimary }}>
               {isAr ? "عداد التسبيح" : "Tasbih Counter"}
             </p>
-            <p className="text-[10px] mt-0.5" style={{ color: textMuted }}>
-              {isAr ? "تابع وِردك اليومي" : "Track your daily dhikr"}
-            </p>
           </div>
-          <ChevronRight className="w-4 h-4 shrink-0 opacity-30" style={{ color: textSecondary, transform: isAr ? "rotate(180deg)" : undefined }} />
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className="text-[10px] px-2 py-1 rounded-full font-semibold tracking-wide uppercase"
+              style={{
+                color: tasbihAccent,
+                background: isDark ? "hsla(45,100%,60%,0.12)" : "hsla(42,88%,46%,0.10)",
+                border: `1px solid ${isDark ? "hsla(45,100%,60%,0.25)" : "hsla(42,88%,46%,0.20)"}`,
+              }}
+            >
+              {isAr ? "أداة" : "Tool"}
+            </span>
+            <ChevronRight className="w-4 h-4 opacity-30" style={{ color: textSecondary, transform: isAr ? "rotate(180deg)" : undefined }} />
+          </div>
         </button>
+
+        <div className="pt-1 pb-0.5 px-1 flex items-center gap-3">
+          <span
+            className="h-px flex-1"
+            style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(6,5,65,0.14)" }}
+          />
+          <p className="text-[12px] font-semibold tracking-wide text-center" style={{ color: textMuted }}>
+            {isAr ? "الأذكار" : "Adhkar"}
+          </p>
+          <span
+            className="h-px flex-1"
+            style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(6,5,65,0.14)" }}
+          />
+        </div>
 
         {CATEGORIES.map((cat) => {
           const done = allDone(cat);
