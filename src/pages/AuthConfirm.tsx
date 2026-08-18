@@ -23,8 +23,6 @@ export default function AuthConfirm() {
         let type = searchParams.get('type');
         let access_token = searchParams.get('access_token');
         let refresh_token = searchParams.get('refresh_token');
-        const forcedMode = (searchParams.get('mode') || '').toLowerCase();
-        const isForcedRecovery = forcedMode === 'recovery';
 
         // If not in query params, check hash fragment
         if (location.hash) {
@@ -87,11 +85,9 @@ export default function AuthConfirm() {
             return;
           }
           
-          // Determine where to redirect based on auth type.
-          // `mode=recovery` is our explicit fallback for providers that drop `type`.
-          const normalizedType = (type || searchParams.get('type') || '').toLowerCase();
-          const isRecoveryFlow = normalizedType === 'recovery' || isForcedRecovery;
-          if (isRecoveryFlow) {
+          // Determine where to redirect based on type or default to dashboard
+          const redirectType = type || searchParams.get('type') || 'signup';
+          if (redirectType === 'recovery') {
             setStatus('success');
             setMessage(language === 'ar' ? 'يمكنك الآن إعادة تعيين كلمة المرور' : 'You can now reset your password');
             setTimeout(() => navigate('/reset-password'), 2000);
@@ -104,9 +100,6 @@ export default function AuthConfirm() {
         }
 
         // Original token_hash flow
-        if (!type && isForcedRecovery) {
-          type = 'recovery';
-        }
         if (!token_hash || !type) {
           setStatus('error');
           setMessage(language === 'ar' ? 'رابط غير صالح' : 'Invalid link');
@@ -139,18 +132,16 @@ export default function AuthConfirm() {
 
         // Success!
         setStatus('success');
-        const normalizedType = (type || '').toLowerCase();
-        const isRecoveryFlow = normalizedType === 'recovery' || isForcedRecovery;
         
         // Set appropriate success message based on type
-        if (normalizedType === 'signup') {
+        if (type === 'signup') {
           setMessage(
             language === 'ar'
               ? 'تم تأكيد بريدك الإلكتروني بنجاح!'
               : 'Email confirmed successfully!'
           );
           setTimeout(() => navigate('/dashboard'), 2000);
-        } else if (isRecoveryFlow) {
+        } else if (type === 'recovery') {
           setMessage(
             language === 'ar'
               ? 'يمكنك الآن إعادة تعيين كلمة المرور'

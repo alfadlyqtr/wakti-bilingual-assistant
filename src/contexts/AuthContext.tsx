@@ -550,11 +550,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const resetPassword = async (email: string) => {
-    // Determine the correct redirect URL based on environment
+    // Send recovery links straight to the reset screen — no middleman page,
+    // no chance of falling through to the dashboard.
     const baseUrl = window.location.origin;
-    // Add an explicit mode flag so AuthConfirm can reliably identify
-    // recovery flow even when provider callbacks omit `type=recovery`.
-    const redirectTo = `${baseUrl}/auth/confirm?mode=recovery`;
+    const redirectTo = `${baseUrl}/reset-password`;
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,

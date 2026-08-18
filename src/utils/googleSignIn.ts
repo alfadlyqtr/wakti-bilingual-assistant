@@ -55,7 +55,12 @@ export async function startGoogleSignIn(redirectTo = '/dashboard'): Promise<{ er
   const nextPath = sanitizeGoogleRedirectPath(redirectTo);
   const inNatively = isNativelyApp();
   const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const origin = window.location.origin;
+  // Pin the callback to the canonical origin (www.wakti.qa) — the same storage
+  // partition the app boots from (proven by device logs: sessions saved on the
+  // non-www partition are invisible at reopen). localhost stays for dev.
+  const origin = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    ? window.location.origin
+    : 'https://www.wakti.qa';
   const callbackUrl = new URL(GOOGLE_SIGN_IN_CALLBACK_PATH, origin);
   callbackUrl.searchParams.set('next', nextPath);
 

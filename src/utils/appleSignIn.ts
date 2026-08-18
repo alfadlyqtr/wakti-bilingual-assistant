@@ -55,11 +55,12 @@ export async function startAppleSignIn(redirectTo = '/dashboard'): Promise<{ err
   const nextPath = sanitizeAppleRedirectPath(redirectTo);
   const inNatively = isNativelyApp();
   const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  // Always use the origin the app is actually running on, so the session is
-  // saved in the same storage partition the app boots from (proven by device
-  // logs: the app runs on www.wakti.qa — the old hardcoded non-www callback
-  // saved sessions into a different partition that reopen never reads).
-  const origin = window.location.origin;
+  // Pin the callback to the canonical origin (www.wakti.qa) — the same storage
+  // partition the app boots from (proven by device logs: sessions saved on the
+  // non-www partition are invisible at reopen). localhost stays for dev.
+  const origin = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    ? window.location.origin
+    : 'https://www.wakti.qa';
   const callbackUrl = new URL(APPLE_SIGN_IN_CALLBACK_PATH, origin);
   callbackUrl.searchParams.set('next', nextPath);
 

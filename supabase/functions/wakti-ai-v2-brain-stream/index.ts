@@ -5479,7 +5479,9 @@ serve(async (req) => {
         let effectiveTrigger = activeTrigger;
         // LAZY: classifySearchIntent only for chat mode ΓÇö run async, resolved before we need effectiveTrigger
         // for the search path. For chat path it resolves in background while we build context.
-        const shouldCheckSearchIntent = !identity.isAnonymous && activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
+        // YouTube links stay in chat mode: the video is attached and watched directly (file_data),
+        // so the intent gate must NOT reroute them into web search.
+        const shouldCheckSearchIntent = !identity.isAnonymous && activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '') && !extractYouTubeWatchUrl(message || '');
         const intentGatePromise = shouldCheckSearchIntent
           ? classifySearchIntent(message || '', language).catch(() => null)
           : Promise.resolve(null);
