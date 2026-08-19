@@ -933,11 +933,23 @@ async function createVideoTask(
   const requestedSingleImageModel = modelOverride === KIE_IMAGE2VIDEO_QUALITY_MODEL
     ? KIE_IMAGE2VIDEO_QUALITY_MODEL
     : KIE_IMAGE2VIDEO_MODEL;
-  const model = shouldUseVeoTransition ? KIE_2IMAGES_MODEL : requestedSingleImageModel;
+  const shouldFallbackToGrokForMultiReferences = !shouldUseVeoTransition
+    && requestedSingleImageModel === KIE_IMAGE2VIDEO_QUALITY_MODEL
+    && sanitizedImageUrls.length > 1;
+  const effectiveSingleImageModel = shouldFallbackToGrokForMultiReferences
+    ? KIE_IMAGE2VIDEO_MODEL
+    : requestedSingleImageModel;
+  const model = shouldUseVeoTransition ? KIE_2IMAGES_MODEL : effectiveSingleImageModel;
+  if (shouldFallbackToGrokForMultiReferences) {
+    console.log("[kie-image2video] Falling back to grok model because gemini-omni-video is not reliable with multiple reference images.");
+  }
   const isGrokImageToVideoModel = !shouldUseVeoTransition && model === KIE_IMAGE2VIDEO_MODEL;
+  const isGeminiImageToVideoModel = !shouldUseVeoTransition && model === KIE_IMAGE2VIDEO_QUALITY_MODEL;
   const validDuration = shouldUseVeoTransition
     ? (["6", "8"].includes(duration || "") ? duration! : "8")
-    : (["4", "6", "8", "10", "15"].includes(duration || "") ? duration! : "6");
+    : isGeminiImageToVideoModel
+      ? (["4", "6", "8", "10"].includes(duration || "") ? duration! : "6")
+      : (["4", "6", "8", "10", "15"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = shouldUseVeoTransition
     ? (["16:9", "9:16", "Auto"].includes(aspectRatio || "")
       ? aspectRatio!
