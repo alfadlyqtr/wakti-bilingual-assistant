@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type PointerEvent } from "react";
+import { useState, useEffect, useRef, useCallback, type MouseEvent, type TouchEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronDown, ChevronRight, ChevronUp, RotateCcw, RefreshCw, Check, BookOpen, Info, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -94,6 +94,7 @@ export default function DeenAzkar() {
 
   const cacheRef = useRef<Record<string, DhikrItem[]>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastTouchTapAtRef = useRef(0);
 
   // Colours
   const bg = isDark ? "#0c0f14" : "#fcfefd";
@@ -401,11 +402,24 @@ export default function DeenAzkar() {
     });
   };
 
-  const handleTasbihPageTap = (event: PointerEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest('[data-tasbih-control="true"]')) return;
+  const shouldIgnoreTasbihTap = (target: EventTarget | null) => {
+    const el = target as HTMLElement | null;
+    return Boolean(el?.closest('[data-tasbih-control="true"]'));
+  };
+
+  const handleTasbihTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (shouldIgnoreTasbihTap(event.target)) return;
+    lastTouchTapAtRef.current = Date.now();
+    event.preventDefault();
     incrementTasbih();
   };
+
+  const handleTasbihMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (Date.now() - lastTouchTapAtRef.current < 700) return;
+    if (shouldIgnoreTasbihTap(event.target)) return;
+    incrementTasbih();
+  };
+
   const goalProgress = tasbihLimit > 0 ? Math.min(tasbihCount / tasbihLimit, 1) : 0;
   const isGoalCompleted = tasbihLimit > 0 && tasbihCount >= tasbihLimit;
   const activeRingColor = isDark ? "hsl(45,100%,60%)" : "hsl(42,88%,46%)";
@@ -432,7 +446,8 @@ export default function DeenAzkar() {
           paddingBottom: "env(safe-area-inset-bottom)",
           zIndex: 20,
         }}
-        onPointerDown={handleTasbihPageTap}
+        onTouchStart={handleTasbihTouchStart}
+        onMouseDown={handleTasbihMouseDown}
         dir={isAr ? "rtl" : "ltr"}
       >
         <div className="px-4 pt-4 pb-3 shrink-0 flex items-center justify-between gap-3">
