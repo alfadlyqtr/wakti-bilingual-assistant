@@ -20,7 +20,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
+import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupMember, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
 import { cn, getImageDimensions } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -217,6 +217,19 @@ export default function GroupChatPage() {
       queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+    },
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberId: string) => removeGroupMember(conversationId!, memberId),
+    onSuccess: () => {
+      toast.success(language === "ar" ? "تمت إزالة العضو" : "Member removed");
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || (language === "ar" ? "تعذر إزالة العضو" : "Failed to remove member"));
     },
   });
 
@@ -2392,6 +2405,8 @@ export default function GroupChatPage() {
             {conversation?.participants.map((participant) => {
               const participantIsCreator = participant.user_id === conversation.created_by;
               const isMe = participant.user_id === user?.id;
+              const canRemoveParticipant = isCreator && !participantIsCreator && !isMe;
+              const removingThisMember = removeMemberMutation.isPending && removeMemberMutation.variables === participant.user_id;
               const displayName = participant.profile?.display_name || participant.profile?.username || (language === "ar" ? "عضو" : "Member");
               return (
                 <div key={participant.user_id} className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/40">
@@ -2405,7 +2420,7 @@ export default function GroupChatPage() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-sm truncate">
+                      <span className="font-medium text-sm truncate block max-w-full">
                         {displayName}
                         {isMe && (
                           <span className="text-muted-foreground font-normal">
@@ -2423,6 +2438,26 @@ export default function GroupChatPage() {
                       )}
                     </div>
                   </div>
+                  {canRemoveParticipant && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-lg px-3 text-xs font-medium text-red-500 border-red-500/30 hover:bg-red-500/10 shrink-0"
+                      onClick={() => {
+                        const confirmed = window.confirm(
+                          language === "ar"
+                            ? `هل تريد إزالة ${displayName} من المجموعة؟`
+                            : `Remove ${displayName} from the group?`
+                        );
+                        if (confirmed) {
+                          removeMemberMutation.mutate(participant.user_id);
+                        }
+                      }}
+                      disabled={removeMemberMutation.isPending}
+                    >
+                      {removingThisMember ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (language === "ar" ? "إزالة" : "Remove")}
+                    </Button>
+                  )}
                 </div>
               );
             })}
