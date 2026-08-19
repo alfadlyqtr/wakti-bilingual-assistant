@@ -1343,12 +1343,15 @@ export default function ChatPage() {
     >
       {/* Header with back button */}
       <div 
-        className="flex items-center gap-3 px-4 py-3 border-b backdrop-blur-md sticky top-0 z-10 safe-area-top"
+        className="flex items-center gap-3 px-4 py-3 border-b backdrop-blur-md sticky top-0 z-10 safe-area-top select-none"
         style={{
           borderColor: `${colors.secondary}30`,
           background: isDark ? 
             `linear-gradient(to bottom, ${colors.surfaceDark}, transparent)` : 
-            `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`
+            `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`,
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none'
         }}
       >
         <Button 
@@ -1510,12 +1513,16 @@ export default function ChatPage() {
 
       {/* Composer area */}
       <div
-        className="px-4 pt-2 pb-4 border-t"
+        className="px-4 pt-2 pb-4 border-t select-none"
+        onSelectStart={(event) => event.preventDefault()}
         style={{
           borderColor: `${colors.secondary}30`,
           background: isDark ?
             `linear-gradient(to top, ${colors.surfaceDark}, transparent)` :
-            `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
+            `linear-gradient(to top, ${colors.surfaceLight}, transparent)`,
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none'
         }}
       >
         <div className="space-y-1">
@@ -1610,7 +1617,8 @@ export default function ChatPage() {
                   placeholder={editingMessage ? (language === 'ar' ? 'عدّل رسالتك...' : 'Edit your message...') : t('typeMessage', language)}
                   maxLength={MAX_CHARS}
                   rows={1}
-                  className={`min-h-[36px] max-h-[100px] h-[36px] px-3 py-[6px] text-sm rounded-xl border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                  className={`min-h-[36px] max-h-[100px] h-[36px] px-3 py-[6px] text-sm rounded-xl border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] select-text ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                  style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
                   disabled={(!canSend && !editingMessage) || sendMessageMutation.isPending || editMessageMutation.isPending || isUploading}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {

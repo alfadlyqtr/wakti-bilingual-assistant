@@ -1096,12 +1096,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           <div className="flex flex-col flex-1 h-full">
           {/* Glassmorphic header */}
           <div 
-            className="flex items-center justify-between p-1 h-10 border-b backdrop-blur-md sticky top-0 z-10"
+            className="flex items-center justify-between p-1 h-10 border-b backdrop-blur-md sticky top-0 z-10 select-none"
             style={{
               borderColor: `${colors.secondary}30`,
               background: isDark ? 
                 `linear-gradient(to bottom, ${colors.surfaceDark}, transparent)` : 
-                `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`
+                `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`,
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
             }}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0 h-full">
@@ -1197,12 +1200,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
           {/* Floating composer (auto height) */}
           <div
-            className="px-1 pt-1 pb-3 border-t"
+            className="px-1 pt-1 pb-3 border-t select-none"
+            onSelectStart={(event) => event.preventDefault()}
             style={{
               borderColor: `${colors.secondary}30`,
               background: isDark ?
                 `linear-gradient(to top, ${colors.surfaceDark}, transparent)` :
-                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
+                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`,
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
             }}
           >
             <div className="space-y-1">
@@ -1282,7 +1289,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                       placeholder={t('typeMessage', language)}
                       maxLength={MAX_CHARS}
                       rows={1}
-                      className={`min-h-[32px] max-h-[100px] h-[32px] px-2 py-[5px] text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                      className={`min-h-[32px] max-h-[100px] h-[32px] px-2 py-[5px] text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] select-text ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                      style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
                       disabled={!canSend || sendMessageMutation.isPending || isUploading}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {

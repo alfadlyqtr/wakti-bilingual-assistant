@@ -1444,7 +1444,10 @@ export default function GroupChatPage() {
   return (
     <div className="fixed inset-x-0 bottom-0 flex w-full max-w-full flex-col overflow-x-hidden overscroll-x-none bg-background" style={{ top: 'var(--app-header-h, 64px)', touchAction: 'pan-y' }}>
       {/* ── Fixed Header ── */}
-      <div className="shrink-0 border-b border-border/60 bg-background/95 backdrop-blur z-20">
+      <div
+        className="shrink-0 border-b border-border/60 bg-background/95 backdrop-blur z-20 select-none"
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      >
         <div className="flex items-center gap-3 px-4 py-3">
           <Button variant="outline" className="h-10 rounded-xl px-3 shrink-0" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -1821,7 +1824,11 @@ export default function GroupChatPage() {
       )}
 
       {/* ── Fixed Input Bar ── */}
-      <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-2" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div
+        className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-2 select-none"
+        onSelectStart={(event) => event.preventDefault()}
+        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
 
           {editingMessage && (
@@ -2069,9 +2076,10 @@ export default function GroupChatPage() {
                 }
                 rows={1}
                 className={cn(
-                  "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border",
+                  "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border select-text",
                   isDark ? "bg-transparent text-white placeholder:text-gray-400 border-gray-700" : "bg-white text-light-primary placeholder:text-gray-500 border-gray-200"
                 )}
+                style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
                 disabled={uploading || editGroupMessageMutation.isPending}
                 onKeyDown={(e) => {
                   if (showMentionPicker) {
