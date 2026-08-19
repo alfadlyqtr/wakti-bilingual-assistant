@@ -94,6 +94,7 @@ export default function DeenAzkar() {
 
   const cacheRef = useRef<Record<string, DhikrItem[]>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const tasbihLatestRef = useRef({ count: 0, goal: 33 });
 
   // Colours
   const bg = isDark ? "#0c0f14" : "#fcfefd";
@@ -241,22 +242,19 @@ export default function DeenAzkar() {
   }, [selectedCat, loadCategory]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(TASBIH_COUNT_STORAGE_KEY, String(Math.max(0, tasbihCount)));
-    } catch {
-      // Ignore storage failures (private mode/quota).
-    }
-  }, [tasbihCount]);
+    tasbihLatestRef.current = { count: tasbihCount, goal: tasbihLimit };
+  }, [tasbihCount, tasbihLimit]);
 
-  useEffect(() => {
+  const saveTasbihProgress = useCallback(() => {
     if (typeof window === "undefined") return;
     try {
-      window.localStorage.setItem(TASBIH_GOAL_STORAGE_KEY, String(Math.max(0, tasbihLimit)));
+      const latest = tasbihLatestRef.current;
+      window.localStorage.setItem(TASBIH_COUNT_STORAGE_KEY, String(Math.max(0, latest.count)));
+      window.localStorage.setItem(TASBIH_GOAL_STORAGE_KEY, String(Math.max(0, latest.goal)));
     } catch {
       // Ignore storage failures (private mode/quota).
     }
-  }, [tasbihLimit]);
+  }, []);
 
   useEffect(() => {
     if (!showTasbih || typeof document === "undefined") return;
@@ -290,6 +288,24 @@ export default function DeenAzkar() {
       });
     };
   }, [showTasbih]);
+
+  useEffect(() => {
+    if (!showTasbih || typeof window === "undefined" || typeof document === "undefined") return;
+
+    const handlePageHide = () => saveTasbihProgress();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") saveTasbihProgress();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      saveTasbihProgress();
+    };
+  }, [showTasbih, saveTasbihProgress]);
 
   const tap = (slug: string, idx: number) => {
     const key = counterKey(slug, idx);
@@ -438,7 +454,7 @@ export default function DeenAzkar() {
           paddingBottom: "env(safe-area-inset-bottom)",
           zIndex: 20,
         }}
-        onPointerDown={handleTasbihPointerDown}
+        onPointerDownCapture={handleTasbihPointerDown}
         dir={isAr ? "rtl" : "ltr"}
       >
         <div className="px-4 pt-4 pb-3 shrink-0 flex items-center justify-between gap-3">
