@@ -1143,7 +1143,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           </div>
 
           {/* Message area */}
-          <ScrollArea className="flex-1 min-h-0 px-1 pt-1 pb-1">
+          <ScrollArea
+            className="flex-1 min-h-0 px-1 pt-1 pb-1 select-none"
+            onSelectStart={(event) => event.preventDefault()}
+            style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+          >
             {isLoadingMessages ? (
               <div className="flex flex-col gap-3 p-4">
                 {[...Array(3)].map((_, i) => (

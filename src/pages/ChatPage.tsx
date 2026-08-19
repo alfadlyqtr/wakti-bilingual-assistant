@@ -1388,7 +1388,11 @@ export default function ChatPage() {
       </div>
 
       {/* Message area */}
-      <ScrollArea className="flex-1 min-h-0 px-3 py-2">
+      <ScrollArea
+        className="flex-1 min-h-0 px-3 py-2 select-none"
+        onSelectStart={(event) => event.preventDefault()}
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      >
         {isLoadingMessages ? (
           <div className="flex flex-col gap-3 p-4">
             {[...Array(3)].map((_, i) => (

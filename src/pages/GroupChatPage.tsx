@@ -1467,7 +1467,13 @@ export default function GroupChatPage() {
       </div>
 
       {/* ── Scrollable Messages ── */}
-      <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-4 py-4" style={{ touchAction: 'pan-y' }}>
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleMessagesScroll}
+        onSelectStart={(event) => event.preventDefault()}
+        className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-4 py-4 select-none"
+        style={{ touchAction: 'pan-y', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      >
         <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-3">
           {loadingMessages ? (
             <div className="flex justify-center py-10">
