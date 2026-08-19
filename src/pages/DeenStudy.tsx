@@ -622,7 +622,9 @@ export default function DeenStudy() {
           saveDailyLearntAyahKeys(next);
           return next;
         });
+      }
 
+      if (!alreadyMemorized && !activeGapSession) {
         let reachedDailyGoalNow = false;
         setDailyPlanProgressByPlan((prev) => {
           const previousPlanCount = prev[plan.id] ?? 0;
