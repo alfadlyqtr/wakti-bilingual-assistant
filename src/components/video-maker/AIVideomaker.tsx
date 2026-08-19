@@ -414,6 +414,27 @@ const getCharacterLabelForRoleChoice = (
   return { index, total };
 };
 
+const getSceneLabelForRoleChoice = (
+  slot: ImageToVideoReferenceSlot,
+  roleBySlot: Record<ImageToVideoReferenceSlot, ImageToVideoReferenceRole>,
+  nextRole: ImageToVideoReferenceRole,
+): { index: number; total: number } => {
+  let total = 0;
+  let index = 1;
+
+  for (const currentSlot of IMAGE_TO_VIDEO_REFERENCE_SLOTS) {
+    const role = currentSlot === slot ? nextRole : roleBySlot[currentSlot];
+    if (role === 'scene') {
+      total += 1;
+      if (currentSlot === slot) {
+        index = total;
+      }
+    }
+  }
+
+  return { index, total };
+};
+
 const sceneArray = <T,>(sceneCount: number, value: T): T[] => Array.from({ length: sceneCount }, () => value);
 
 export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVideomakerProps) {
@@ -455,14 +476,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   // State
   const [generationMode, setGenerationModeRaw] = useState<'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'>('image_to_video');
   const setGenerationMode = (mode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema') => {
-    setGenerationModeRaw(mode);
-    if (mode === '2images_to_video') {
-      setDuration('8');
+    const normalizedMode = mode === '2images_to_video' ? 'image_to_video' : mode;
+    setGenerationModeRaw(normalizedMode);
+    if (normalizedMode === 'text_to_video') {
+      setDuration(textVideoDialogueMode === 'english' ? '10' : '6');
       setResolution('720p');
-    } else if (mode === 'text_to_video') {
-      setDuration('6');
-      setResolution('720p');
-    } else if (mode === 'image_to_video') {
+    } else if (normalizedMode === 'image_to_video') {
       setDuration('6');
       setResolution('480p');
     } else {
@@ -628,22 +647,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     const modeByAction: Record<string, 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'> = {
       create_text_video: 'text_to_video',
       create_image_video: 'image_to_video',
-      create_two_image_video: '2images_to_video',
+      create_two_image_video: 'image_to_video',
       create_cinema_video: 'cinema',
     };
     const mode = modeByAction[operatorExecution.actionId];
     if (!mode) return;
-    setGenerationModeRaw(mode);
-    if (mode === '2images_to_video') {
-      setDuration('8');
-      setResolution('720p');
-    } else if (mode === 'text_to_video') {
-      setDuration('6');
-      setResolution('720p');
-    } else if (mode === 'image_to_video') {
-      setDuration('6');
-      setResolution('480p');
-    }
+    setGenerationMode(mode);
     const promptValue = value('prompt');
     if (promptValue) {
       setPrompt(promptValue);
@@ -805,12 +814,15 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     });
     setShowExtraImageToVideoReferences(Boolean(draft.imageToVideoPreview2 || draft.imageToVideoPreview3 || draft.imageToVideoPreview4));
     setPrompt(draft.prompt || '');
-    setDuration(draft.duration || '6');
+    const restoredTextVideoDialogueMode = draft.textVideoDialogueMode === 'arabic' ? 'arabic' : 'english';
+    const fallbackDuration = draft.generationMode === 'text_to_video'
+      ? (restoredTextVideoDialogueMode === 'english' ? '10' : '6')
+      : '6';
+    setDuration(draft.duration || fallbackDuration);
     setAspectRatio(draft.aspectRatio || '9:16');
     const fallbackResolution = draft.generationMode === 'image_to_video' ? '480p' : '720p';
     setResolution(draft.resolution || fallbackResolution);
     const restoredKidsContentMode = typeof draft.isKidsContentMode === 'boolean' ? draft.isKidsContentMode : true;
-    const restoredTextVideoDialogueMode = draft.textVideoDialogueMode === 'arabic' ? 'arabic' : 'english';
     setIsKidsContentMode(restoredKidsContentMode);
     setIsBestArabicQuality(Boolean(draft.isBestArabicQuality) && !restoredKidsContentMode);
     setTextVideoDialogueMode(restoredTextVideoDialogueMode);
@@ -820,7 +832,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   useEffect(() => {
     if (generationMode !== 'text_to_video') return;
 
-    const validDurations = textVideoDialogueMode === 'english' ? ['5', '10'] : ['4', '6', '8'];
+    const validDurations = textVideoDialogueMode === 'english' ? ['5', '10', '15'] : ['4', '6', '8'];
     if (!validDurations.includes(duration)) {
       setDuration(textVideoDialogueMode === 'english' ? '10' : '6');
     }
@@ -1250,6 +1262,15 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     roleLabelAr: string,
   ) => {
     const baseLabel = language === 'ar' ? roleLabelAr : roleLabelEn;
+
+    if (roleValue === 'scene') {
+      const { index } = getSceneLabelForRoleChoice(slot, imageToVideoRoleBySlot, roleValue);
+      if (index <= 1) {
+        return language === 'ar' ? 'مشهد البداية' : 'Starting Scene';
+      }
+      return `${language === 'ar' ? 'مشهد النهاية' : 'Ending Scene'} ${index - 1}`;
+    }
+
     if (roleValue !== 'character') return baseLabel;
 
     const { index, total } = getCharacterLabelForRoleChoice(slot, imageToVideoRoleBySlot, roleValue);
@@ -3211,6 +3232,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       >
                         {language === 'ar' ? '10 ث' : '10s'}
                       </button>
+                      <button
+                        onClick={() => !isGenerating && setDuration('15')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '15'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '15 ث' : '15s'}
+                      </button>
                     </>
                   ) : (
                     <>
@@ -3372,7 +3404,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
           {/* Mode toggle - Glassmorphic Segmented Control */}
           <div
-            className={`relative grid grid-cols-2 gap-2 rounded-[26px] p-2 border ${
+            className={`relative grid grid-cols-3 gap-2 rounded-[26px] p-2 border ${
               isGenerating ? 'opacity-80' : ''
             } bg-[linear-gradient(135deg,rgba(252,254,253,0.98),rgba(233,206,176,0.34))] border-[#060541]/10 shadow-[0_10px_28px_rgba(6,5,65,0.10)] dark:bg-[linear-gradient(135deg,rgba(12,15,20,0.96),rgba(30,34,42,0.94))] dark:border-white/10 dark:shadow-[0_18px_42px_rgba(0,0,0,0.42)]`}
             role="group"
@@ -3418,27 +3450,6 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
             >
               <Type className="h-3.5 w-3.5" />
               <span>{language === 'ar' ? 'نص ← فيديو' : 'Text → Video'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (!isGenerating) setGenerationMode('2images_to_video');
-              }}
-              disabled={isGenerating}
-              className={`flex items-center justify-center gap-2 rounded-[18px] px-3 py-3 min-h-[52px] text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap border ${
-                generationMode === '2images_to_video'
-                  ? 'text-[#060541] border-[#C5A47E] shadow-[0_10px_24px_rgba(197,164,126,0.28)] dark:text-[#0c0f14]'
-                  : 'text-[#060541]/70 border-[#060541]/10 bg-white/70 hover:bg-white dark:text-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
-              }`}
-              style={{
-                background: generationMode === '2images_to_video' 
-                  ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)' 
-                  : undefined,
-              }}
-            >
-              <Images className="h-3.5 w-3.5" />
-              <span>{language === 'ar' ? 'صورتان ← فيديو' : '2Images → Video'}</span>
             </button>
 
             <button

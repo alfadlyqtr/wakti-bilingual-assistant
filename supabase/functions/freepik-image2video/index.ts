@@ -38,7 +38,7 @@ const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
 const KIE_IMAGE2VIDEO_QUALITY_MODEL = "gemini-omni-video";
 const KIE_TEXT2VIDEO_ARABIC_MODEL = "gemini-omni-video";
-const KIE_TEXT2VIDEO_ENGLISH_MODEL = "kling-2.6/text-to-video";
+const KIE_TEXT2VIDEO_ENGLISH_MODEL = KIE_IMAGE2VIDEO_MODEL;
 const KIE_2IMAGES_MODEL = "veo3_lite";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -787,11 +787,19 @@ function buildTaggedImageToVideoPrompt(
   if (!references.length) return prompt;
 
   let characterIndex = 0;
+  let sceneIndex = 0;
   const characterCount = references.filter((ref) => ref.role === "character").length;
   const roleLines = references.map((ref, idx) => {
     if (ref.role === "character") {
       characterIndex += 1;
       return `- Image ${idx + 1}: character ${characterIndex}`;
+    }
+    if (ref.role === "scene") {
+      sceneIndex += 1;
+      if (sceneIndex === 1) {
+        return `- Image ${idx + 1}: starting scene`;
+      }
+      return `- Image ${idx + 1}: ending scene ${sceneIndex - 1}`;
     }
     return `- Image ${idx + 1}: ${ref.role}`;
   });
@@ -803,7 +811,7 @@ function buildTaggedImageToVideoPrompt(
     ...(characterCount > 1
       ? ["- if there are multiple characters, keep each numbered identity separate (character 1, character 2, ...)."]
       : []),
-    "- scene: use as environment/background anchor.",
+    "- scene: use starting scene as the opening look and ending scene tags as later/final look anchors.",
     "- product/object/logo/text: preserve key visual details and clarity.",
     "- style: transfer only visual style and mood, not identity.",
   ].join("\n");
@@ -858,26 +866,21 @@ async function createTextToVideoTask(
   dialogueMode?: string,
 ): Promise<VideoTaskCreateResult> {
   void videoStyleMode;
-  void resolution;
   const isArabicDialogue = dialogueMode === "arabic";
   const model = isArabicDialogue ? KIE_TEXT2VIDEO_ARABIC_MODEL : KIE_TEXT2VIDEO_ENGLISH_MODEL;
   const validDuration = isArabicDialogue
     ? (["4", "6", "8"].includes(duration || "") ? duration! : "6")
-    : (["5", "10"].includes(duration || "") ? duration! : "10");
+    : (["5", "10", "15"].includes(duration || "") ? duration! : "10");
   const validAspectRatio = ["1:1", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
-  const input: Record<string, unknown> = isArabicDialogue
-    ? {
-        prompt: prompt.slice(0, 2500),
-        aspect_ratio: validAspectRatio,
-        duration: validDuration,
-        resolution: ["720p", "1080p"].includes(resolution || "") ? resolution! : "720p",
-      }
-    : {
-        prompt: prompt.slice(0, 1000),
-        sound: true,
-        aspect_ratio: validAspectRatio,
-        duration: validDuration,
-      };
+  const validResolution = isArabicDialogue
+    ? (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p")
+    : (["480p", "720p", "1080p"].includes(resolution || "") ? resolution! : "720p");
+  const input: Record<string, unknown> = {
+    prompt: prompt.slice(0, 2500),
+    aspect_ratio: validAspectRatio,
+    duration: validDuration,
+    resolution: validResolution,
+  };
 
   const requestBody = {
     model,
