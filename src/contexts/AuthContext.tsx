@@ -549,18 +549,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Send recovery links straight to the reset screen — no middleman page,
     // no chance of falling through to the dashboard.
     const baseUrl = window.location.origin;
-    const redirectTo = `${baseUrl}/reset-password`;
+    // Carry the user's app language so the auth email hook can render the
+    // email in the same language (Arabic app → Arabic email).
+    let lang = "en";
+    try { lang = localStorage.getItem("language") === "ar" ? "ar" : "en"; } catch {}
+    const redirectTo = `${baseUrl}/reset-password?lang=${lang}`;
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
     });
-    
+
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success('Check your email for the reset link!');
+      toast.success(
+        lang === "ar"
+          ? "تفقد بريدك الإلكتروني لرابط إعادة التعيين!"
+          : "Check your email for the reset link!"
+      );
     }
-    
+
     return { error };
   };
 

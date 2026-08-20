@@ -32,12 +32,17 @@ export default function ForgotPassword() {
     setIsLoading(true);
     
     try {
-      await forgotPassword(email);
-      toast.success("Password reset link sent. Check your email for the reset link");
-      // Redirect to login after a short delay
+      const { error } = await forgotPassword(email);
+      // AuthContext shows the success/error toast — here we only decide
+      // whether to move on. Never celebrate a failed send.
+      if (error) return;
       setTimeout(() => navigate('/login'), 2000);
     } catch (error: any) {
-      toast.error("Password reset failed: " + (error?.message || "An unexpected error occurred"));
+      toast.error(
+        language === 'en'
+          ? "Password reset failed: " + (error?.message || "An unexpected error occurred")
+          : "فشل إرسال رابط إعادة التعيين: " + (error?.message || "حدث خطأ غير متوقع")
+      );
     } finally {
       setIsLoading(false);
     }
