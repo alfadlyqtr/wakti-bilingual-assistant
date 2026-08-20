@@ -268,14 +268,15 @@ export default function Signup() {
   }, [language]);
 
   useEffect(() => {
-    initializeVoice();
+    // Do not auto-initialize mic on auth screens.
+    // Voice capture should only start from an explicit user action.
     return () => {
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       if (pcRef.current) pcRef.current.close();
       if (dcRef.current) dcRef.current.close();
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
-  }, [initializeVoice]);
+  }, []);
 
   const handleHoldStart = (e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();

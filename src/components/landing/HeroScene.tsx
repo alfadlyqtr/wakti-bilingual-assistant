@@ -287,11 +287,20 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           transition={{ delay: 0.5, duration: 0.8 }}
           className="text-lg font-light text-white/80 mb-5 md:mb-8 max-w-xs"
           style={{ letterSpacing: "0.05em" }}
+          dir={isArabic ? "rtl" : "ltr"}
+          lang={isArabic ? "ar" : "en"}
         >
-          {isArabic 
-            ? "الكل في واحد"
-            : "ALL IN ONE"
-          }
+          {isArabic ? (
+            <>
+              كل اللي تبيه.. بتطبيق{" "}
+              <span dir="ltr" style={{ unicodeBidi: "isolate" }}>
+                AI
+              </span>{" "}
+              واحد
+            </>
+          ) : (
+            "ALL IN ONE AI APP"
+          )}
         </motion.p>
 
         {/* Features banner carousel */}

@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LandingScene } from "./LandingScene";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface PricingSceneProps {
   language?: "en" | "ar";
@@ -11,8 +13,25 @@ interface PricingSceneProps {
 
 export function PricingScene({ language = "en" }: PricingSceneProps) {
   const navigate = useNavigate();
+  const { signInAnonymously } = useAuth();
   const isArabic = language === "ar";
   const [showQAR, setShowQAR] = useState(true);
+  const [isGuestSigningIn, setIsGuestSigningIn] = useState(false);
+
+  const handleGuestAccess = async () => {
+    if (isGuestSigningIn) return;
+    setIsGuestSigningIn(true);
+    try {
+      const { error, user } = await signInAnonymously();
+      if (error || !user?.id) {
+        toast.error(isArabic ? "تعذر بدء وضع الضيف الآن" : "Couldn't start guest mode right now");
+        return;
+      }
+      navigate("/dashboard", { replace: true });
+    } finally {
+      setIsGuestSigningIn(false);
+    }
+  };
 
   return (
     <LandingScene
@@ -21,13 +40,23 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
       gradient="radial-gradient(ellipse 70% 55% at 50% 55%, rgba(233,206,176,0.07) 0%, rgba(12,15,20,0.88) 55%, #0c0f14 100%)"
     >
       <style>{`
-        @keyframes pricing-shimmer {
-          0%   { transform: translateX(-110%) rotate(25deg); }
-          100% { transform: translateX(210%) rotate(25deg); }
+        @keyframes pricing-spark-sweep {
+          0% {
+            transform: translateX(-140%) rotate(18deg);
+            opacity: 0;
+          }
+          14% { opacity: 0.12; }
+          42% { opacity: 0.4; }
+          70% { opacity: 0.2; }
+          100% {
+            transform: translateX(180%) rotate(18deg);
+            opacity: 0;
+          }
         }
-        .pricing-shimmer-sweep {
-          animation: pricing-shimmer 3.5s ease-in-out infinite;
-          animation-delay: 1.2s;
+
+        .pricing-spark-sweep {
+          animation: pricing-spark-sweep 4.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+          will-change: transform, opacity;
         }
       `}</style>
 
@@ -52,9 +81,38 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
           {/* Glass border */}
           <div className="absolute inset-0 rounded-[1.6rem] pointer-events-none" style={{ border: "1.5px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(255,255,255,0.22), rgba(233,206,176,0.35) 30%, rgba(255,255,255,0.06) 60%, rgba(233,206,176,0.18))", WebkitMask: "linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)", WebkitMaskComposite: "destination-out", maskComposite: "exclude" }} />
 
-          {/* Shimmer sweep */}
+          {/* Spark sweep + ambient highlights (soft, no harsh cut) */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[1.6rem]">
-            <div className="pricing-shimmer-sweep absolute inset-y-0" style={{ width: "45%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 45%, rgba(233,206,176,0.12) 50%, rgba(255,255,255,0.07) 55%, transparent 100%)" }} />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(120% 70% at 50% -10%, rgba(255,255,255,0.09) 0%, transparent 58%), radial-gradient(85% 70% at 12% 100%, rgba(233,206,176,0.08) 0%, transparent 72%)",
+              }}
+            />
+            <div
+              className="pricing-spark-sweep absolute -top-[24%] -bottom-[24%] left-[-40%] w-[74%]"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 26%, rgba(255,255,255,0.12) 45%, rgba(233,206,176,0.28) 50%, rgba(255,255,255,0.12) 55%, rgba(255,255,255,0.02) 74%, transparent 100%)",
+                filter: "blur(8px)",
+                mixBlendMode: "screen",
+                WebkitMaskImage: "linear-gradient(180deg, transparent 0%, black 14%, black 86%, transparent 100%)",
+                maskImage: "linear-gradient(180deg, transparent 0%, black 14%, black 86%, transparent 100%)",
+              }}
+            />
+            <div
+              className="pricing-spark-sweep absolute -top-[14%] -bottom-[14%] left-[-34%] w-[54%]"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 34%, rgba(233,206,176,0.3) 50%, rgba(255,255,255,0.05) 66%, transparent 100%)",
+                filter: "blur(2px)",
+                mixBlendMode: "screen",
+                animationDelay: "1.05s",
+                WebkitMaskImage: "linear-gradient(180deg, transparent 0%, black 16%, black 84%, transparent 100%)",
+                maskImage: "linear-gradient(180deg, transparent 0%, black 16%, black 84%, transparent 100%)",
+              }}
+            />
           </div>
 
           <div className="relative z-10 p-7 flex flex-col items-center">
@@ -157,10 +215,11 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.55 }}
-              className="w-full"
+              className="w-full flex flex-col items-center gap-2.5"
             >
               <Button
-                onClick={() => navigate("/signup")}
+                onClick={handleGuestAccess}
+                disabled={isGuestSigningIn}
                 className="w-full py-6 rounded-full text-sm font-bold tracking-[0.07em] uppercase transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden"
                 style={{
                   background: "linear-gradient(135deg, #e9ceb0 0%, #c5a47e 50%, #e9ceb0 100%)",
@@ -169,8 +228,23 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
                 }}
               >
                 <span className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 55%)" }} />
-                <span className="relative z-10">{isArabic ? "ابدأ وقتي مجاناً" : "START WAKTI FOR FREE"}</span>
+                <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                  <span>
+                    {isGuestSigningIn
+                      ? (isArabic ? "جارٍ الدخول كضيف..." : "STARTING GUEST MODE...")
+                      : (isArabic ? "ابدأ وقتي مجاناً" : "START WAKTI FOR FREE")}
+                  </span>
+                  <ArrowRight className={isArabic ? "h-4 w-4 rotate-180" : "h-4 w-4"} />
+                </span>
               </Button>
+
+              <button
+                type="button"
+                onClick={() => navigate("/signup", { state: { authTab: "login" } })}
+                className="w-[92%] rounded-full px-8 py-2.5 text-[13px] font-semibold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/70 text-white border border-blue-300/35 backdrop-blur-xl shadow-[0_0_18px_hsla(210,100%,65%,0.32),inset_0_1px_0_rgba(255,255,255,0.08)] hover:text-white hover:bg-blue-500/18 hover:border-blue-200/55 hover:shadow-[0_0_30px_hsla(210,100%,65%,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
+              >
+                {isArabic ? "إنشاء حساب / تسجيل الدخول" : "Create Account / Sign in"}
+              </button>
             </motion.div>
 
             <motion.p

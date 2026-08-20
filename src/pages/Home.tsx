@@ -102,7 +102,7 @@ export default function Home() {
           {/* Tagline */}
           <motion.div variants={itemVariants} className="mb-8 md:mb-12">
             <p className="text-sm md:text-xl lg:text-2xl font-light tracking-[0.15em] text-white/70">
-              SMARTER . FASTER . EASIER
+              ALL IN ONE AI APP
             </p>
           </motion.div>
 
@@ -173,4 +173,3 @@ export default function Home() {
     </div>
   );
 }
-

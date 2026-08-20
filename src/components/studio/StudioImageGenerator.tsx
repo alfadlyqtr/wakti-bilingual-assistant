@@ -2806,11 +2806,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   {language === 'ar' ? 'أفضل' : 'Best'}
                 </button>
               </div>
-              {quality === 'quick' && (
-                <span className="text-[10px] text-purple-500 dark:text-purple-400 font-medium">
-                  {language === 'ar' ? '✦ متعدد الصور' : '✦ Multiple images'}
-                </span>
-              )}
             </div>
             {language === 'ar' && quality === 'quick' && (
               <div className="text-xs font-semibold text-orange-500 dark:text-orange-400">
