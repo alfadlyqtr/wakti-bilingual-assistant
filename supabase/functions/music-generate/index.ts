@@ -578,7 +578,9 @@ serve(async (req) => {
             ? body.duration
             : null;
     const ALLOWED_DURATION_SECONDS = new Set([30, 60, 90, 120, 150, 180, 210]);
-    const durationHint = rawDurationSeconds !== null ? Math.round(rawDurationSeconds) : null;
+    // null duration = "Auto": no duration is sent to KIE, so Suno composes a complete
+    // song and ends it naturally instead of cutting off at a hard wall.
+    const durationHint = rawDurationSeconds !== null && rawDurationSeconds > 0 ? Math.round(rawDurationSeconds) : null;
     const { prompt: promptLimit, style: styleLimit } = getModelLimits(model);
     const poemSignal = [style, prompt, styleTags.join(",")].join(" ").toLowerCase();
     const isPoemEffective = /\b(?:gcc\s*poem|arabic\s*poem|english\s*poem|poem\s*cadence|spoken\s*poem|spoken-word\s*poem|poem\s*recitation)\b|قصيدة|إلقاء\s*شعري/.test(poemSignal);
@@ -612,8 +614,8 @@ serve(async (req) => {
       throw new Error("Title exceeds 80 characters");
     }
 
-    if (durationHint === null || !ALLOWED_DURATION_SECONDS.has(durationHint)) {
-      return new Response(JSON.stringify({ error: "A valid duration is required" }), {
+    if (durationHint !== null && !ALLOWED_DURATION_SECONDS.has(durationHint)) {
+      return new Response(JSON.stringify({ error: "Invalid duration. Send one of 30/60/90/120/150/180/210, or omit for Auto (full song)." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -686,7 +688,9 @@ serve(async (req) => {
     if (customMode) {
       kiePayload.style = effectiveStyle;
       kiePayload.title = title;
-      kiePayload.duration = durationHint;
+      // Only attach duration when the user picked a fixed length. Auto (null) omits
+      // it entirely — Suno then completes the song with a natural ending.
+      if (durationHint !== null) kiePayload.duration = durationHint;
       if (effectiveNegativeTags) kiePayload.negativeTags = effectiveNegativeTags;
       if (vocalGender && !instrumental) kiePayload.vocalGender = vocalGender;
       if (effectiveStyleWeight !== undefined) kiePayload.styleWeight = effectiveStyleWeight;
@@ -696,14 +700,11 @@ serve(async (req) => {
       if (resolvedPersonaModel) kiePayload.personaModel = resolvedPersonaModel;
     }
 
-    if (customMode && typeof kiePayload.duration !== "number") {
-      throw new Error("Duration was not attached to the outbound KIE payload");
-    }
-
     console.log("[music-generate] Calling KIE.ai generate", {
       model,
       customMode,
       instrumental,
+      durationMode: durationHint === null ? "auto-natural" : "fixed",
       duration: durationHint,
       payloadDuration: kiePayload.duration ?? null,
       styleLen: effectiveStyle.length,

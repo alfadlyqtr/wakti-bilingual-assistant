@@ -2464,11 +2464,11 @@ function VoicesTab({
   const [lyricsText, setLyricsText] = useState('');
   const [autoLabelLyrics, setAutoLabelLyrics] = useState(true); // ON by default; power users can disable
   const [variations, setVariations] = useState(1);
-  const [duration, setDuration] = useState(30); // seconds
   // "Auto" duration choice: the song length is sized to the actual lyric content,
   // so a short lyric never stretches into a long song and a long lyric never gets
   // cut off mid-phrase. Resolved to a concrete preset before anything is sent.
   const AUTO_DURATION_VALUE = 0;
+  const [duration, setDuration] = useState(AUTO_DURATION_VALUE); // seconds; Auto by default
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('music', { studioTab: 'music', musicSubTab: 'compose' }));
   const musicDraftRestoredRef = useRef(false);
@@ -2533,7 +2533,7 @@ function VoicesTab({
     setLyricsText(draft.lyricsText || '');
     setAutoLabelLyrics(Boolean(draft.autoLabelLyrics));
     setVariations(typeof draft.variations === 'number' ? draft.variations : 1);
-    setDuration(typeof draft.duration === 'number' ? draft.duration : 30);
+    setDuration(typeof draft.duration === 'number' ? draft.duration : AUTO_DURATION_VALUE);
     setComposeStep(draft.composeStep || 1);
     setIncludeTags(Array.isArray(draft.includeTags) ? draft.includeTags : []);
     setInstrumentTags(Array.isArray(draft.instrumentTags) ? normalizeInstrumentKeys(draft.instrumentTags) : []);
@@ -2587,6 +2587,10 @@ function VoicesTab({
         {
           title: 'بوب وحديث',
           items: ['بوب','دانس بوب','تين بوب','باور بوب','بوب روك','إندي بوب','آر آند بي','نيو سول','ديسكو معاصر','سينث بوب','إلكترو بوب','بوب الثمانينات','بوب التسعينات','كي-بوب','جي-بوب','لاتن بوب']
+        },
+        {
+          title: 'بالادات وأغاني هادئة',
+          items: ['بالاد قوي','بالاد سوفت روك','بالاد بوب','بالاد آر آند بي','أكوستيك هادئ','رقصة بطيئة','بالاد معاصر']
         },
         {
           title: 'سول وفنك وديسكو',
@@ -2678,6 +2682,10 @@ function VoicesTab({
       {
         title: 'Pop',
         items: ['pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop','Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop']
+      },
+      {
+        title: 'Ballads & Slow',
+        items: ['Power Ballad','Soft Rock Ballad','Pop Ballad','R&B Ballad','Acoustic Unplugged','Slow Dance','Adult Contemporary']
       },
       {
         title: 'R&B / Soul / Funk',
@@ -3038,6 +3046,17 @@ function VoicesTab({
     return getRecommendedStyleParams(approxFamily, isGccLike);
   }, [effectiveIncludeTags, isGccStyleSelected]);
 
+  // GCC Creative Freedom cap (mirrors the payload clamp): above 0.5 Suno improvises
+  // instruments/vocal styles the user never picked, breaking dialect + instrument lock.
+  // Covers pure Khaleeji chips AND fusion picks (Khaleeji rhythm or dialect selected).
+  const isGccCapActive = useMemo(() => {
+    const GCC_MARKERS = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
+    return isGccStyleSelected
+      || effectiveIncludeTags.some((t) => GCC_MARKERS.test(t))
+      || rhythmTags.some((t) => GCC_MARKERS.test(t))
+      || Boolean(khaleejiDialect);
+  }, [effectiveIncludeTags, isGccStyleSelected, rhythmTags, khaleejiDialect]);
+
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(30);
   const [songsRemaining, setSongsRemaining] = useState(30);
@@ -3392,6 +3411,20 @@ function VoicesTab({
       'Zydeco': ['accordion', 'washboard', 'bass guitar', 'drum kit', 'fiddle'],
       'Cajun': ['accordion', 'fiddle', 'acoustic guitar', 'triangle', 'upright bass'],
       'Industrial': ['drum machine', 'synth bass', 'distorted synth', 'noise generator', 'electric guitar'],
+      'Power Ballad': ['piano', 'electric guitar', 'strings', 'drum kit'],
+      'Soft Rock Ballad': ['acoustic guitar', 'electric guitar', 'soft piano', 'bass guitar'],
+      'Pop Ballad': ['piano', 'strings', 'soft piano', 'cello'],
+      'R&B Ballad': ['electric piano', 'synth pad', 'bass guitar', 'strings'],
+      'Acoustic Unplugged': ['acoustic guitar', 'soft piano', 'cello', 'upright bass'],
+      'Slow Dance': ['soft piano', 'strings', 'acoustic guitar', 'warm pad'],
+      'Adult Contemporary': ['piano', 'soft piano', 'strings', 'acoustic guitar'],
+      'بالاد قوي': ['piano', 'electric guitar', 'strings', 'drum kit'],
+      'بالاد سوفت روك': ['acoustic guitar', 'electric guitar', 'soft piano', 'bass guitar'],
+      'بالاد بوب': ['piano', 'strings', 'soft piano', 'cello'],
+      'بالاد آر آند بي': ['electric piano', 'synth pad', 'bass guitar', 'strings'],
+      'أكوستيك هادئ': ['acoustic guitar', 'soft piano', 'cello', 'upright bass'],
+      'رقصة بطيئة': ['soft piano', 'strings', 'acoustic guitar', 'warm pad'],
+      'بالاد معاصر': ['piano', 'soft piano', 'strings', 'acoustic guitar'],
   };
 
   const INSTRUMENT_DISPLAY_EN: Record<string, string> = {
@@ -3837,6 +3870,20 @@ function VoicesTab({
     'Zydeco': ['Pop 4/4', '6/8 Fusion'],
     'Cajun': ['Waltz 3/4', 'Pop 4/4'],
     'Industrial': ['Club Beat', 'Marching Anthem'],
+    'Power Ballad': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Soft Rock Ballad': ['Ballad Slow Groove', 'Pop 4/4'],
+    'Pop Ballad': ['Ballad Slow Groove', 'Pop 4/4'],
+    'R&B Ballad': ['Ballad Slow Groove', 'None'],
+    'Acoustic Unplugged': ['Ballad Slow Groove', 'None'],
+    'Slow Dance': ['Waltz 3/4', '6/8 Fusion'],
+    'Adult Contemporary': ['Ballad Slow Groove', 'Pop 4/4'],
+    'بالاد قوي': ['بالاد هادئ', 'بوب ٤/٤'],
+    'بالاد سوفت روك': ['بالاد هادئ', 'بوب ٤/٤'],
+    'بالاد بوب': ['بالاد هادئ', 'بوب ٤/٤'],
+    'بالاد آر آند بي': ['بالاد هادئ', 'بدون إيقاع'],
+    'أكوستيك هادئ': ['بالاد هادئ', 'بدون إيقاع'],
+    'رقصة بطيئة': ['والتز ٣/٤', '٦/٨ فيوجن'],
+    'بالاد معاصر': ['بالاد هادئ', 'بوب ٤/٤'],
   };
 
   // Style → recommended moods (top 3)
@@ -4123,6 +4170,20 @@ function VoicesTab({
     'Zydeco': ['happy', 'energetic', 'celebratory'],
     'Cajun': ['happy', 'energetic', 'nostalgic'],
     'Industrial': ['dark', 'intense', 'angry'],
+    'Power Ballad': ['emotional', 'epic', 'romantic'],
+    'Soft Rock Ballad': ['romantic', 'nostalgic', 'emotional'],
+    'Pop Ballad': ['emotional', 'romantic', 'dramatic'],
+    'R&B Ballad': ['romantic', 'soulful', 'tender'],
+    'Acoustic Unplugged': ['calm', 'intimate', 'nostalgic'],
+    'Slow Dance': ['romantic', 'tender', 'dreamy'],
+    'Adult Contemporary': ['romantic', 'emotional', 'calm'],
+    'بالاد قوي': ['عاطفي', 'ملحمي', 'رومانسي'],
+    'بالاد سوفت روك': ['رومانسي', 'نوستالجي', 'عاطفي'],
+    'بالاد بوب': ['عاطفي', 'رومانسي', 'درامي'],
+    'بالاد آر آند بي': ['رومانسي', 'روحاني', 'عاطفي'],
+    'أكوستيك هادئ': ['هادئ', 'حميمي', 'نوستالجي'],
+    'رقصة بطيئة': ['رومانسي', 'حنون', 'حالم'],
+    'بالاد معاصر': ['رومانسي', 'عاطفي', 'هادئ'],
   };
 
   const recommendedRhythms = useMemo(() => {
@@ -4346,9 +4407,9 @@ function VoicesTab({
     
     setAmping(true);
     try {
-      const ampDuration = duration === AUTO_DURATION_VALUE
-        ? estimateAutoDurationSeconds(lyricsText.trim() || styleText.trim(), [...effectiveIncludeTags, ...rhythmTags, ...moodTags].join(' '), vocalType === 'none')
-        : duration;
+      // Auto → full-song structure contract (3:00) so AMP writes a complete song;
+      // no duration cap is sent to Suno at generation time.
+      const ampDuration = duration === AUTO_DURATION_VALUE ? 180 : duration;
       const khalijiControlBlock = buildKhalijiControlBlock(ampDuration);
       const kieStyle = khalijiControlBlock.styleString;
       const { data, error } = await supabase.functions.invoke('music-amp', {
@@ -4555,25 +4616,6 @@ function VoicesTab({
 
   const DURATION_VALUES = DURATION_PRESETS.map((preset) => preset.seconds);
   const MAX_DURATION_SECONDS = DURATION_PRESETS[DURATION_PRESETS.length - 1]?.seconds ?? 210;
-
-  // Smart "Auto" duration estimate: sizes the song to the lyric line count so a
-  // short lyric never becomes a long song and a long lyric never gets cut off.
-  function estimateAutoDurationSeconds(lyricsSource: string, signalText: string, instrumental: boolean): number {
-    if (instrumental) return 60;
-    const lyricLineCount = (lyricsSource || '')
-      .split('\n')
-      .filter((line) => {
-        const t = line.trim();
-        return t && !/^\[[^\]]+\]$/.test(t) && !/^\([^)]+\)$/.test(t);
-      }).length;
-    if (lyricLineCount === 0) return 30;
-    const signal = (signalText || '').toLowerCase();
-    const secondsPerLine = /ballad|slow|romantic|poem|anasheed|classical|jazz|blues|acoustic|عاطفي|بطيء/.test(signal) ? 4.5
-      : /rap|hip hop|hip-hop|trap|drill|metal|punk|dubstep|راب/.test(signal) ? 2.8
-      : 3.5;
-    const estimated = lyricLineCount * secondsPerLine + 14; // intro + outro breathing room
-    return DURATION_VALUES.find((value) => estimated <= value) ?? MAX_DURATION_SECONDS;
-  }
 
   // Clean wind-down ending so Suno resolves the song instead of being guillotined
   // by the hard duration cutoff mid-phrase.
@@ -5407,7 +5449,7 @@ function VoicesTab({
   // ============================================================================
   type GenreFamily =
     | 'khaleeji-pop' | 'khaleeji-heritage' | 'khaleeji-urban' | 'khaleeji-party' | 'khaleeji-poem'
-    | 'pop' | 'rock' | 'urban' | 'electronic' | 'roots' | 'jazz-blues'
+    | 'pop' | 'rock' | 'urban' | 'electronic' | 'roots' | 'jazz-blues' | 'ballad'
     | 'classical' | 'reggae' | 'metal' | 'punk' | 'world' | 'anasheed'
     | 'generic';
 
@@ -5431,6 +5473,18 @@ function VoicesTab({
   }
 
   const GENRE_VOCAB: Record<GenreFamily, SectionVocab> = {
+    ballad: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, gentle emotional entrance`
+        : `soft piano and strings, gentle emotional entrance`,
+      outroFade: (insts) => `slow emotional fade on ${insts[0] || 'piano'}, sustained final note`,
+      chorusLift: 'soaring, heartfelt, anthemic',
+      verseAdj: 'tender, intimate, melodic',
+      bridgeChar: 'stripped emotional breakdown with sustained notes',
+      preChorusChar: 'rising emotion with building dynamics',
+      vocalCueAdj: 'Heartfelt',
+      vocalCueDelivery: 'emotive ballad delivery with sustained soaring notes',
+    },
     'khaleeji-pop': {
       introScene: (insts) => describeUserInstruments(insts)
         ? `${describeUserInstruments(insts)}, atmospheric and warm Khaleeji entrance`
@@ -5654,6 +5708,7 @@ function VoicesTab({
   function getRecommendedStyleParams(genreFamily: GenreFamily, isGccEffective: boolean): { styleWeight: number; weirdnessConstraint: number } {
     if ((genreFamily as string).startsWith('khaleeji-')) return { styleWeight: 0.95, weirdnessConstraint: 0.30 };
     switch (genreFamily) {
+      case 'ballad': return { styleWeight: 0.85, weirdnessConstraint: 0.25 };
       case 'anasheed': return { styleWeight: 0.95, weirdnessConstraint: 0.15 };
       case 'classical': return { styleWeight: 0.90, weirdnessConstraint: 0.20 };
       case 'reggae': return { styleWeight: 0.80, weirdnessConstraint: 0.35 };
@@ -5702,6 +5757,8 @@ function VoicesTab({
     if (has(ELECTRONIC_KEYS)) return 'electronic';
     const URBAN_KEYS = new Set(['R&B','soul','Neo-Soul','Contemporary R&B','Motown','New Jack Swing','Quiet Storm','Blue-eyed Soul','Funk','disco','hip hop','rap','Trap','Drill','Boom Bap','Conscious Hip Hop','Gangsta Rap','East Coast Hip Hop','West Coast Hip Hop','Southern Hip Hop','Alternative Hip Hop','Cloud Rap','Crunk','Afrobeats','Afrobeat','Reggaeton','Latin','Latin Rock','Salsa','Bachata','Merengue','Tango','Samba','Cumbia','Bossa Nova','Bollywood','Bhangra']);
     if (has(URBAN_KEYS)) return 'urban';
+    const BALLAD_KEYS = new Set(['Power Ballad','Soft Rock Ballad','Pop Ballad','R&B Ballad','Acoustic Unplugged','Slow Dance','Adult Contemporary','بالاد قوي','بالاد سوفت روك','بالاد بوب','بالاد آر آند بي','أكوستيك هادئ','رقصة بطيئة','بالاد معاصر']);
+    if (has(BALLAD_KEYS)) return 'ballad';
     const ROCK_KEYS = new Set(['rock','Classic Rock','rock and roll','soft rock','Hard Rock','alternative rock','indie rock','Progressive Rock','Psychedelic Rock','Garage Rock','Glam Rock','grunge','Britpop','Shoegaze','Post-Rock','Math Rock','Surf Rock','Dream Pop']);
     if (has(ROCK_KEYS)) return 'rock';
     const ROOTS_KEYS = new Set(['country','Country Pop','Outlaw Country','Country Rock','Alternative Country','Honky Tonk','Western Swing','Americana','Contemporary Country','bluegrass','folk','Indie Folk','Folk Rock','Folk Pop','Folk Punk','Protest Folk']);
@@ -5826,11 +5883,13 @@ function VoicesTab({
     const GULF_INSTRUMENT_RE = /oud|qanun|qanoon|darbuka|riq|mirwas|ney|tabl|daff|duff|\btar\b|frame\s*drum|sagat/i;
     const leadInstrument = opts.instruments[0] ?? '';
     const leadIsNonGulf = leadInstrument.length > 0 && !GULF_INSTRUMENT_RE.test(leadInstrument);
+    // S1 — Genre FIRST. Suno weighs the opening words most heavily, so the chosen
+    // style leads; the dialect lock follows immediately after.
     const s1 = opts.instruments.length === 0
-      ? `${dialectLockSentence} Authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji production through ${productionLabel}.`
+      ? `${productionLabel}. ${dialectLockSentence} Authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji production.`
       : leadIsNonGulf
-        ? `${dialectLockSentence} The Khaleeji identity lives in the vocals and dialect; the production is modern and led by ${leadInstrument}, not a default Gulf ensemble.`
-        : `${dialectLockSentence} Authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji vocal identity through ${productionLabel}.`;
+        ? `${productionLabel} led by ${leadInstrument}. ${dialectLockSentence} The Khaleeji identity lives in the vocals and dialect; the production is modern, not a default Gulf ensemble.`
+        : `${productionLabel}. ${dialectLockSentence} Authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji vocal identity.`;
 
     const instList = opts.instruments.length > 0
       ? opts.instruments.join(', ')
@@ -5908,9 +5967,9 @@ function VoicesTab({
     const v = GENRE_VOCAB[opts.genreFamily];
     const label = normalizeChipForDisplay(opts.styleChipLabel);
 
-    // S1 — Identity FIRST. Suno reads this before anything else, so Gulf
-    // identity is locked before the genre context bleeds in.
-    const s1 = `Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock. ${selectedKhaleejiDialectContract.accentAnchor.charAt(0).toUpperCase()}${selectedKhaleejiDialectContract.accentAnchor.slice(1)}. Khaleeji vocal identity comes first. ${label} is only the production shell.`;
+    // S1 — Genre FIRST with Khaleeji identity attached. Suno reads the opening
+    // words first, so the chosen genre and Gulf vocal DNA land together up front.
+    const s1 = `${label} with strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji vocals. ${selectedKhaleejiDialectContract.accentAnchor.charAt(0).toUpperCase()}${selectedKhaleejiDialectContract.accentAnchor.slice(1)}. Khaleeji vocal identity comes first — ${label} is only the production shell.`;
 
     // S2 — Arrangement built around user instruments + rhythms.
     const instList = opts.instruments.length > 0
@@ -6128,7 +6187,10 @@ function VoicesTab({
         : poemMode === 'english'
           ? 'spoken English poem recitation only, strict English-only language, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, literary poetic wording, imagery-driven lines, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
           : null;
+    // Genre/style anchor leads the string — Suno weighs the earliest tokens most,
+    // so the chosen style is read before any dialect or structure descriptors.
     const styleParts: string[] = [
+      productionShellAnchor ?? styleAnchor,
       dialectLock,
       accentAnchor,
       pronunciationAnchor,
@@ -6136,7 +6198,6 @@ function VoicesTab({
       khaleejiPrimaryAnchor,
       dialectIdentityAnchor,
       poemStyleDirective,
-      productionShellAnchor ?? styleAnchor,
       primaryRhythm,
       supportingRhythms.length > 0 ? `supporting rhythms: ${supportingRhythms.join(', ')}` : null,
       instrumentLayer.length > 0 ? `locked instruments: ${instrumentLayer.join(', ')}` : null,
@@ -6277,8 +6338,9 @@ function VoicesTab({
   //    Use for jalsa, sheilat, samri, ardah, liwa, traditional, shaabi, zar, romantic, cinematic, anthemic.
   //    Dedup: one Khaleeji timbre anchor, one dialect anchor, one quarter-tone anchor. "mawwal" is the
   //    signal the edge function uses to route to heritage persona family.
+  //    Maqam Bayati/Hijaz keywords steer Suno toward authentic Gulf melodic scales.
   const LOCK_HERITAGE = (style: string) =>
-    `authentic khaleeji heritage production, seasoned Khaleeji vocalist timbre, ${style}, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic Khaleeji quarter-tone scale`;
+    `authentic khaleeji heritage production, seasoned Khaleeji vocalist timbre, ${style}, Maqam Bayati and Hijaz melodic color, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic Khaleeji quarter-tone scale and ornaments`;
 
   // ── Pop / Dance / Electro / Trap lock — clean hooks, no mawwal, tight pop articulation.
   //    Use for radio pop, dance pop, electro pop, synth pop, fusion, english crossover, r&b pop, party, elegant, rap, trap, luxury pop.
@@ -6376,6 +6438,20 @@ function VoicesTab({
     '90s pop':     'classic 90s pop, retro drum machines, smooth soulful textures, nostalgic commercial vocal, polished 90s studio master',
     'Synthpop':    'neon synthpop, lush analog pads, cinematic electronic production, retro-future vocal textures, atmospheric depth',
     'Electropop':  'glossy electropop, digital precision, pulsing synths, modern vocal processing, high energy, crisp electronic production',
+    'Power Ballad': 'epic power ballad, slow-burn emotional build, soaring heartfelt vocals, piano-driven verses, anthemic climactic chorus, melodic electric guitar solo, stadium reverb',
+    'Soft Rock Ballad': 'soft rock ballad, gentle acoustic and clean electric guitars, warm sincere vocal, slow swaying tempo, melodic guitar fills, intimate honest delivery',
+    'Pop Ballad': 'emotional pop ballad, piano-led arrangement, powerful heartfelt lead vocal, lush string swells, slow build to a soaring climax, polished studio production',
+    'R&B Ballad': 'soulful r&b ballad slow jam, velvet smooth vocals with melismatic runs, deep gentle groove, lush layered harmonies, intimate late-night atmosphere',
+    'Acoustic Unplugged': 'acoustic unplugged session, fingerpicked acoustic guitar, raw intimate close-mic vocal, stripped-back live room feel, natural dynamics, no heavy production',
+    'Slow Dance': 'romantic slow dance ballad, gentle 6/8 sway, soft piano and warm strings, tender close-mic vocals, candlelit slow-dance atmosphere',
+    'Adult Contemporary': 'adult contemporary ballad, smooth polished production, warm mature vocal delivery, soft piano and gentle rhythm section, timeless radio ballad feel',
+    'بالاد قوي': 'epic power ballad, slow-burn emotional build, soaring heartfelt vocals, piano-driven verses, anthemic climactic chorus, melodic electric guitar solo, stadium reverb',
+    'بالاد سوفت روك': 'soft rock ballad, gentle acoustic and clean electric guitars, warm sincere vocal, slow swaying tempo, melodic guitar fills, intimate honest delivery',
+    'بالاد بوب': 'emotional pop ballad, piano-led arrangement, powerful heartfelt lead vocal, lush string swells, slow build to a soaring climax, polished studio production',
+    'بالاد آر آند بي': 'soulful r&b ballad slow jam, velvet smooth vocals with melismatic runs, deep gentle groove, lush layered harmonies, intimate late-night atmosphere',
+    'أكوستيك هادئ': 'acoustic unplugged session, fingerpicked acoustic guitar, raw intimate close-mic vocal, stripped-back live room feel, natural dynamics, no heavy production',
+    'رقصة بطيئة': 'romantic slow dance ballad, gentle 6/8 sway, soft piano and warm strings, tender close-mic vocals, candlelit slow-dance atmosphere',
+    'بالاد معاصر': 'adult contemporary ballad, smooth polished production, warm mature vocal delivery, soft piano and gentle rhythm section, timeless radio ballad feel',
     'R&B':               'contemporary silky r&b, soulful vocal runs, velvet production, deep groove, lush harmonies, [Audio Engine: Ultra-HD 96kHz]',
     'soul':              'vintage soul resonance, soulful gospel-influenced vocals, warm analog production, rhythmic pocket, high fidelity',
     'Neo-Soul':          'smooth neo-soul, jazz-influenced harmonies, laid-back rhythmic pocket, expressive vocal texture, organic production',
@@ -7102,8 +7178,13 @@ function VoicesTab({
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const durationTarget = duration === AUTO_DURATION_VALUE
-        ? estimateAutoDurationSeconds(rawLyrics, [...effectiveIncludeTags, ...rhythmTags, ...moodTags].join(' '), instrumental)
+      // Auto = NO duration is sent to Suno at all, so the song always ends naturally.
+      // The structure roadmap sizes itself to the actual lyric volume: a couple of
+      // lines get a tight mini-song structure (no 4-minute instrumental padding), a
+      // full sheet gets the full-song roadmap.
+      const isAutoDuration = duration === AUTO_DURATION_VALUE;
+      const durationTarget = isAutoDuration
+        ? minDurationForStanzas(lyricPlanningText ? splitLyricStanzas(lyricPlanningText).length : 1)
         : (DURATION_VALUES.includes(duration) ? duration : 30);
       const activeInstrumentTags = isPoemStyleSelected ? instrumentTags.slice(0, 2) : instrumentTags;
       const smartSectionPlan = shouldSmartStructureLyrics
@@ -7441,6 +7522,15 @@ function VoicesTab({
       if (hasGccTag && (modernFamily === 'pop' || modernFamily === 'urban') && !userPickedTraditionalInstrument) {
         traditionalAntiTokens.push('oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'hand claps');
       }
+      // ── Clap guard ──
+      // Suno auto-adds Gulf hand claps whenever it reads "khaleeji". Only allow
+      // claps when the user explicitly picked a clap-driven rhythm (Wedding Beat,
+      // Clap Beat, Clap-Driven Groove, Samri) or the hand-claps instrument chip.
+      const clapSignal = [...rhythmTags, ...activeInstrumentTags].join(' ').toLowerCase();
+      const userWantsClaps = /clap|تصفيق|samri|سامري/.test(clapSignal);
+      const clapGuardTokens: string[] = hasGccTag && !userWantsClaps && !isPoemStyleSelected
+        ? ['hand claps', 'clapping']
+        : [];
       // ── Option A/B — Spotlight instrument exclusion shield ──
       // When spotlight is on (1-2 instruments), push the common bleed instruments the
       // user did NOT pick to the FRONT of the negative list so they survive the hard
@@ -7450,7 +7540,7 @@ function VoicesTab({
       if (instrumentSpotlightActive) {
         const selectedLower = activeInstrumentTags.map((t) => t.toLowerCase());
         const bleedPool = hasGccTag
-          ? ['oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'ney']
+          ? ['oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'ney', 'hand claps']
           : ['piano', 'electric guitar', 'synth', 'strings', 'drum kit', 'brass'];
         for (const inst of bleedPool) {
           if (!selectedLower.some((s) => s.includes(inst) || inst.includes(s))) spotlightAntiTokens.push(inst);
@@ -7461,7 +7551,7 @@ function VoicesTab({
         ? ['singing', 'sung chorus', 'chorus', 'hook', 'chant', 'hand claps', 'clapping', 'drum kit', 'percussion', 'trap beat', 'drill beat', 'club beat', 'marching anthem', 'screaming', 'shouting']
         : [];
       const finalNegativeTags = fitNegativeTags(
-        orderedDedupeNeg([...poemShieldTokens, ...spotlightAntiTokens, ...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
+        orderedDedupeNeg([...poemShieldTokens, ...clapGuardTokens, ...spotlightAntiTokens, ...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
       );
 
       // ── Final style string (resolved with GCC fallback) ──
@@ -7496,7 +7586,9 @@ function VoicesTab({
         // so reverted. GCC identity is enforced through styleWeight + tail dialect
         // anchor in the style string, and a prioritised negativeTags shield.
         model: 'V5_5',
-        duration_seconds: durationTarget,
+        // Auto → null: no duration is sent to KIE, so Suno writes a complete song
+        // with a natural ending. Fixed picks send the exact cap (with fade-out tags).
+        duration_seconds: isAutoDuration ? null : durationTarget,
         // User slider overrides take precedence; otherwise genre-based recommended defaults.
         // Spotlight KEEPS styleWeight high (>=0.85) — even with a custom voice — because the
         // "single featured instrument leads" instruction lives in the style text, so a high
@@ -7505,9 +7597,14 @@ function VoicesTab({
         styleWeight: isPoemStyleSelected
           ? Math.min(styleWeightOverride ?? 0.69, 0.72)
           : (styleWeightOverride ?? (instrumentSpotlightActive ? Math.max(recommendedParams.styleWeight, 0.85) : (customVoiceActive ? Math.min(recommendedParams.styleWeight, 0.65) : recommendedParams.styleWeight))),
+        // Creative Freedom is capped at 0.5 for Khaleeji/GCC tracks: above that, Suno
+        // starts improvising instruments and vocal styles the user never picked, which
+        // breaks dialect lock and instrument obedience.
         weirdnessConstraint: isPoemStyleSelected
           ? Math.min(weirdnessOverride ?? 0.2, 0.22)
-          : (weirdnessOverride ?? recommendedParams.weirdnessConstraint),
+          : (isGccEffective
+              ? Math.min(weirdnessOverride ?? recommendedParams.weirdnessConstraint, 0.5)
+              : (weirdnessOverride ?? recommendedParams.weirdnessConstraint)),
         audioWeight: isPoemStyleSelected ? 0.95 : 0.8,
         negativeTags: finalNegativeTags,
         controlBlock: khalijiControlBlock.controlBlock,
@@ -8519,9 +8616,6 @@ function VoicesTab({
             next={<StepNextBtn onClick={() => goToStep(4)} label={isAr ? 'التالي: الكلمات' : 'Next: Lyrics'} shortLabel={isAr ? 'التالي' : 'Next'} />}
           />
           <TrackChip />
-          <div className="rounded-xl border border-emerald-200 dark:border-emerald-400/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-3 py-2 text-[11px] sm:text-[10px] text-emerald-700 dark:text-emerald-200">
-            {isAr ? 'هذه طريقة الغناء — اللهجة أو النوع أو صوتك المستنسخ. لن تغيّر الآلات التي اخترتها.' : "This is how it's sung — dialect, gender, or your cloned voice. It won't change the instruments you picked."}
-          </div>
           <div className="flex flex-wrap gap-2">
             {(['auto', 'none', 'female', 'male', 'custom'] as const).map((v) => {
               const labels: Record<string, { en: string; ar: string }> = {
@@ -8820,8 +8914,9 @@ function VoicesTab({
                       const normalizedLyrics = parsedLyrics?.normalizedText ?? '';
                       const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
                       const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
-                      const durationTarget = duration === AUTO_DURATION_VALUE
-                        ? estimateAutoDurationSeconds(rawLyrics, [...effectiveIncludeTags, ...rhythmTags, ...moodTags].join(' '), instrumental)
+                      const isAutoDuration = duration === AUTO_DURATION_VALUE;
+                      const durationTarget = isAutoDuration
+                        ? minDurationForStanzas(lyricPlanningText ? splitLyricStanzas(lyricPlanningText).length : 1)
                         : (DURATION_VALUES.includes(duration) ? duration : 30);
                       const smartSectionPlan = shouldSmartStructureLyrics
                         ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
@@ -8846,16 +8941,21 @@ function VoicesTab({
                       );
                       const structuredPromptWithEnding = withSmartEnding(structuredPrompt);
                       const previewGccMarkers = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
-                      const previewIsGccLike = isGccStyleSelected || effectiveIncludeTags.some((t) => previewGccMarkers.test(t));
+                      // Match the real generate path: GCC detection also tests the resolved
+                      // style string, so dialect-locked fusion tracks (e.g. R&B Ballad chip +
+                      // Kuwaiti dialect) get the same Creative Freedom cap in preview.
+                      const previewIsGccLike = isGccStyleSelected || effectiveIncludeTags.some((t) => previewGccMarkers.test(t)) || previewGccMarkers.test(cb.styleString || '');
                       const previewRecommended = getRecommendedStyleParams(previewGenreFamily, previewIsGccLike);
                       const preview = {
                         title: title.trim(),
                         customMode: true,
                         instrumental,
                         vocalGender: vocalGender ?? null,
-                        duration_seconds: durationTarget,
+                        duration_seconds: isAutoDuration ? null : durationTarget,
                         styleWeight: styleWeightOverride ?? previewRecommended.styleWeight,
-                        weirdnessConstraint: weirdnessOverride ?? previewRecommended.weirdnessConstraint,
+                        weirdnessConstraint: previewIsGccLike
+                          ? Math.min(weirdnessOverride ?? previewRecommended.weirdnessConstraint, 0.5)
+                          : (weirdnessOverride ?? previewRecommended.weirdnessConstraint),
                         style: cb.styleString,
                         prompt: instrumental ? null : structuredPromptWithEnding,
                         tempoHint: cb.tempoTag,
@@ -8944,7 +9044,7 @@ function VoicesTab({
                       {isAr ? 'حرية الإبداع' : 'Creative Freedom'}
                     </label>
                     <span className="text-[10px] font-mono text-[#858384] dark:text-white/40">
-                      {(weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint).toFixed(2)}
+                      {(isGccCapActive ? Math.min(weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint, 0.5) : (weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint)).toFixed(2)}
                     </span>
                   </div>
                   <input
@@ -8960,6 +9060,11 @@ function VoicesTab({
                   <p className="text-[9px] text-[#858384] dark:text-white/40 leading-tight">
                     {isAr ? 'أعلى = نتائج أكثر تجريبية وإبداعية' : 'Higher = more experimental & creative surprises'}
                   </p>
+                  {isGccCapActive && (weirdnessOverride ?? 0) > 0.5 && (
+                    <p className="text-[9px] text-amber-600 dark:text-amber-400/90 leading-tight">
+                      {isAr ? 'محدودة عند 0.50 للأنماط الخليجية لحماية اللهجة والآلات المختارة' : 'Capped at 0.50 for Khaleeji styles to protect dialect & instrument obedience'}
+                    </p>
+                  )}
                 </div>
               </div>
             </>)}
@@ -8974,7 +9079,7 @@ function VoicesTab({
                 title={isAr ? 'المدة' : 'Duration'}
                 className="flex-shrink-0 px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
               >
-                <option value={AUTO_DURATION_VALUE}>{isAr ? 'تلقائي' : 'Auto'}</option>
+                <option value={AUTO_DURATION_VALUE}>{isAr ? 'تلقائي — أغنية كاملة' : 'Auto — full song'}</option>
                 {DURATION_PRESETS.map((preset) => (
                   <option key={preset.seconds} value={preset.seconds}>{preset.display}</option>
                 ))}

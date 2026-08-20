@@ -1753,9 +1753,9 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       : `0 10px 24px ${accent}12, 0 0 0 1px ${accent}18`,
   });
   const widgetsSectionStyle = buildSectionStyle("#6366f1");
-  const productivitySectionStyle = buildSectionStyle("#22c55e");
+  const productivitySectionStyle = buildSectionStyle("#38bdf8");
   const systemSectionStyle = buildSectionStyle("#38bdf8");
-  const creationSectionStyle = buildSectionStyle("#c084fc");
+  const creationSectionStyle = buildSectionStyle("#38bdf8");
   const sectionTitleClass = cn(
     "text-center font-black leading-none text-foreground",
     language === "ar" ? "text-[1.9rem] tracking-tight" : "text-[1.55rem] tracking-[-0.02em]"
