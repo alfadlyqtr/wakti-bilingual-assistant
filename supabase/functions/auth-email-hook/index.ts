@@ -216,15 +216,15 @@ function renderEmail(copy: EmailCopy, lang: Lang, confirmationUrl: string, otpCo
   const align = isAr ? "right" : "left";
 
   const buttonBlock = copy.button
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
-        <tr><td align="center" style="background:#060541;border-radius:14px;">
-          <a href="${confirmationUrl}" style="display:inline-block;padding:16px 40px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;">${copy.button}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px 0 4px;">
+        <tr><td align="center" bgcolor="#060541" style="background:#060541;background:linear-gradient(135deg,#060541 0%,#3b2f8f 55%,#060541 100%);border-radius:16px;box-shadow:0 10px 30px rgba(6,5,65,0.35);">
+          <a href="${confirmationUrl}" style="display:inline-block;padding:18px 48px;font-size:16px;font-weight:700;letter-spacing:0.4px;color:#ffffff;text-decoration:none;">${copy.button}</a>
         </td></tr>
       </table>`
     : "";
 
   const codeBlock = copy.showCode
-    ? `<div dir="ltr" style="font-size:36px;letter-spacing:10px;font-weight:800;color:#060541;background:#f4f4f7;border-radius:14px;padding:20px;text-align:center;margin:24px 0;">${otpCode}</div>`
+    ? `<div dir="ltr" style="font-size:38px;letter-spacing:12px;font-weight:800;color:#060541;background:#f4f4f9;border:1px solid #e6e4f5;border-radius:16px;padding:22px;text-align:center;margin:28px 0 8px;">${otpCode}</div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -232,29 +232,36 @@ function renderEmail(copy: EmailCopy, lang: Lang, confirmationUrl: string, otpCo
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0c0f14;font-family:'Segoe UI',Tahoma,'Noto Sans Arabic',Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0c0f14;">
-    <tr><td align="center" style="padding:48px 16px 40px;">
-      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;">
+    <tr><td align="center" style="padding:56px 16px 48px;">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
 
-        <!-- Logo -->
-        <tr><td align="center" style="padding-bottom:28px;">
-          <img src="${LOGO_URL}" width="64" height="64" alt="WAKTI" style="display:block;border-radius:16px;">
+        <!-- Logo with glow tile -->
+        <tr><td align="center" style="padding-bottom:32px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr><td align="center" bgcolor="#151a23" style="background:#151a23;background:linear-gradient(135deg,#151a23 0%,#1c2333 100%);border-radius:20px;border:1px solid #232c3d;padding:12px;box-shadow:0 0 40px rgba(61,139,255,0.25),0 0 80px rgba(176,106,224,0.12);">
+              <img src="${LOGO_URL}" width="56" height="56" alt="WAKTI" style="display:block;border-radius:12px;">
+            </td></tr>
+          </table>
+          <div style="margin-top:14px;font-size:15px;font-weight:800;letter-spacing:6px;color:#f2f2f2;">WAKTI</div>
         </td></tr>
 
         <!-- Card -->
-        <tr><td style="background:#ffffff;border-radius:20px;padding:40px 36px;box-shadow:0 8px 40px rgba(0,0,0,0.35);">
-          <div dir="${dir}" style="text-align:${align};">
-            <h1 style="font-size:24px;color:#060541;margin:0 0 14px;font-weight:800;line-height:1.3;">${copy.heading}</h1>
-            <p style="font-size:15px;color:#3a3a3f;line-height:1.8;margin:0;">${copy.body}</p>
+        <tr><td style="background:#ffffff;border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,0.45);">
+          <!-- vibrant accent strip -->
+          <div style="height:6px;border-radius:24px 24px 0 0;background:#3d8bff;background:linear-gradient(90deg,#3d8bff 0%,#b06ae0 50%,#f98a4b 100%);font-size:0;line-height:0;">&nbsp;</div>
+          <div dir="${dir}" style="text-align:${align};padding:44px 40px 40px;">
+            <h1 style="font-size:26px;color:#060541;margin:0 0 14px;font-weight:800;line-height:1.35;">${copy.heading}</h1>
+            <p style="font-size:15px;color:#46464d;line-height:1.9;margin:0;">${copy.body}</p>
             ${codeBlock}
             ${buttonBlock}
-            <p style="font-size:12px;color:#858384;line-height:1.6;margin:28px 0 0;padding-top:20px;border-top:1px solid #f0f0f2;">${copy.ignore}</p>
+            <p style="font-size:12px;color:#858384;line-height:1.7;margin:32px 0 0;padding-top:22px;border-top:1px solid #f0f0f4;">${copy.ignore}</p>
           </div>
         </td></tr>
 
         <!-- Footer -->
-        <tr><td align="center" style="padding-top:28px;">
-          <p style="font-size:12px;color:#606062;margin:0;line-height:1.6;">
-            <span style="font-weight:700;color:#858384;">WAKTI</span> · wakti.qa
+        <tr><td align="center" style="padding-top:32px;">
+          <p style="font-size:12px;color:#606062;margin:0;line-height:1.7;">
+            <span style="font-weight:800;letter-spacing:2px;color:#9a9a9d;">WAKTI</span><span style="color:#3d3d40;"> &nbsp;·&nbsp; </span><a href="https://www.wakti.qa" style="color:#3d8bff;text-decoration:none;">wakti.qa</a>
           </p>
         </td></tr>
 
