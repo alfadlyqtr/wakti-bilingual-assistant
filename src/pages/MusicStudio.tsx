@@ -7597,13 +7597,12 @@ function VoicesTab({
         styleWeight: isPoemStyleSelected
           ? Math.min(styleWeightOverride ?? 0.69, 0.72)
           : (styleWeightOverride ?? (instrumentSpotlightActive ? Math.max(recommendedParams.styleWeight, 0.85) : (customVoiceActive ? Math.min(recommendedParams.styleWeight, 0.65) : recommendedParams.styleWeight))),
-        // Creative Freedom is capped at 0.5 for Khaleeji/GCC tracks: above that, Suno
-        // starts improvising instruments and vocal styles the user never picked, which
-        // breaks dialect lock and instrument obedience.
+        // Creative Freedom on Khaleeji/GCC tracks: default 0.50, user may push to 0.70
+        // (slider hard max). Past 0.50 a red warning shows — surprises get likely.
         weirdnessConstraint: isPoemStyleSelected
           ? Math.min(weirdnessOverride ?? 0.2, 0.22)
           : (isGccEffective
-              ? Math.min(weirdnessOverride ?? recommendedParams.weirdnessConstraint, 0.5)
+              ? Math.min(weirdnessOverride ?? recommendedParams.weirdnessConstraint, 0.7)
               : (weirdnessOverride ?? recommendedParams.weirdnessConstraint)),
         audioWeight: isPoemStyleSelected ? 0.95 : 0.8,
         negativeTags: finalNegativeTags,
@@ -8954,7 +8953,7 @@ function VoicesTab({
                         duration_seconds: isAutoDuration ? null : durationTarget,
                         styleWeight: styleWeightOverride ?? previewRecommended.styleWeight,
                         weirdnessConstraint: previewIsGccLike
-                          ? Math.min(weirdnessOverride ?? previewRecommended.weirdnessConstraint, 0.5)
+                          ? Math.min(weirdnessOverride ?? previewRecommended.weirdnessConstraint, 0.7)
                           : (weirdnessOverride ?? previewRecommended.weirdnessConstraint),
                         style: cb.styleString,
                         prompt: instrumental ? null : structuredPromptWithEnding,
@@ -9044,13 +9043,13 @@ function VoicesTab({
                       {isAr ? 'حرية الإبداع' : 'Creative Freedom'}
                     </label>
                     <span className="text-[10px] font-mono text-[#858384] dark:text-white/40">
-                      {(isGccCapActive ? Math.min(weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint, 0.5) : (weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint)).toFixed(2)}
+                      {(weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint).toFixed(2)}
                     </span>
                   </div>
                   <input
                     type="range"
                     min={0}
-                    max={1}
+                    max={isGccCapActive ? 0.7 : 1}
                     step={0.05}
                     value={weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint}
                     onChange={(e) => setWeirdnessOverride(parseFloat(e.target.value))}
@@ -9060,9 +9059,9 @@ function VoicesTab({
                   <p className="text-[9px] text-[#858384] dark:text-white/40 leading-tight">
                     {isAr ? 'أعلى = نتائج أكثر تجريبية وإبداعية' : 'Higher = more experimental & creative surprises'}
                   </p>
-                  {isGccCapActive && (weirdnessOverride ?? 0) > 0.5 && (
-                    <p className="text-[9px] text-amber-600 dark:text-amber-400/90 leading-tight">
-                      {isAr ? 'محدودة عند 0.50 للأنماط الخليجية لحماية اللهجة والآلات المختارة' : 'Capped at 0.50 for Khaleeji styles to protect dialect & instrument obedience'}
+                  {isGccCapActive && (weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint) > 0.5 && (
+                    <p className="text-[9px] text-red-500 dark:text-red-400/90 leading-tight font-semibold">
+                      {isAr ? 'فوق 0.50: ممكن تسمع آلات أو نبرة غير اللي اخترتها في الأنماط الخليجية' : 'Above 0.50: the AI may add instruments or vocal drift you didn\'t pick on Khaleeji styles'}
                     </p>
                   )}
                 </div>
