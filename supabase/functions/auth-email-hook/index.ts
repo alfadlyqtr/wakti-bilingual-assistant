@@ -233,7 +233,7 @@ function renderEmail(copy: EmailCopy, lang: Lang, confirmationUrl: string, otpCo
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0c0f14;font-family:'Segoe UI',Tahoma,'Noto Sans Arabic',Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0c0f14;">
-    <tr><td align="center" style="padding:64px 16px 48px;">
+    <tr><td align="center" bgcolor="#0c0f14" style="padding:64px 16px 48px;background-color:#0c0f14;background-image:linear-gradient(rgba(140,160,200,0.08) 1px,transparent 1px),linear-gradient(90deg,rgba(140,160,200,0.08) 1px,transparent 1px);background-size:44px 44px;">
       <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
 
         <!-- Hero: logo with warm glow + wordmark -->
