@@ -191,11 +191,12 @@ export function MyGallery() {
   const handleDelete = async (img: GalleryImage) => {
     setDeletingId(img.id);
     try {
-      const { error } = await (supabase as any).from('user_generated_images').delete().eq('id', img.id);
+      const { data, error } = await supabase.functions.invoke('delete-image-safe', {
+        body: { imageId: img.id },
+      });
       if (error) throw error;
-      if (img.image_url?.includes('/generated-images/')) {
-        const pathMatch = img.image_url.split('/generated-images/')[1];
-        if (pathMatch) await supabase.storage.from('generated-images').remove([decodeURIComponent(pathMatch)]);
+      if (!(data as any)?.success) {
+        throw new Error((data as any)?.error || 'Delete failed');
       }
       setImages(prev => prev.filter(i => i.id !== img.id));
       if (lightbox?.id === img.id) setLightbox(null);

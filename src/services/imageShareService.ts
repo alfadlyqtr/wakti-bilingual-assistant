@@ -118,9 +118,22 @@ export async function getPendingImageShares(): Promise<ImageShareRecord[]> {
 }
 
 export async function acceptImageShare(shareId: string): Promise<string> {
-  const { data, error } = await (supabase as any).rpc('accept_image_share', { p_share_id: shareId });
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+
+  const { data, error } = await supabase.functions.invoke('accept-image-share', {
+    body: { shareId },
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  });
+
   if (error) throw error;
-  return data as string;
+
+  const acceptedImageId = (data as any)?.acceptedImageId;
+  if (!acceptedImageId) {
+    throw new Error('Failed to accept image share');
+  }
+
+  return acceptedImageId as string;
 }
 
 export async function declineImageShare(shareId: string): Promise<void> {

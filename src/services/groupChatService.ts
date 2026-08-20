@@ -590,25 +590,13 @@ export async function removeGroupMember(conversationId: string, memberId: string
   if (memberId === userId) throw new Error("Creator cannot remove themselves");
   await ensurePassport();
 
-  const { data: conversation, error: conversationError } = await (supabase as any)
-    .from("conversations")
-    .select("created_by")
-    .eq("id", conversationId)
-    .eq("is_group", true)
-    .maybeSingle();
-
-  if (conversationError) throw conversationError;
-  if (!conversation) throw new Error("Group not found");
-  if (conversation.created_by !== userId) throw new Error("Only the creator can remove members");
-  if (conversation.created_by === memberId) throw new Error("Creator cannot be removed");
-
-  const { error } = await (supabase as any)
-    .from("conversation_participants")
-    .delete()
-    .eq("conversation_id", conversationId)
-    .eq("user_id", memberId);
+  const { data, error } = await (supabase as any).rpc("remove_group_member", {
+    group_conversation_id: conversationId,
+    member_user_id: memberId,
+  });
 
   if (error) throw error;
+  if (!data) throw new Error("Member could not be removed");
 }
 
 export async function addWaktiToGroup(conversationId: string) {

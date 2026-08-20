@@ -206,26 +206,12 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      // Find the image to get its URL for storage cleanup
-      const img = images.find((i) => i.id === id);
-
-      // Delete DB row
-      const { error } = await (supabase as any)
-        .from('user_generated_images')
-        .delete()
-        .eq('id', id);
+      const { data, error } = await supabase.functions.invoke('delete-image-safe', {
+        body: { imageId: id },
+      });
       if (error) throw error;
-
-      // Also delete from storage bucket if it's our bucket URL
-      if (img?.image_url?.includes('/generated-images/')) {
-        try {
-          const pathMatch = img.image_url.split('/generated-images/')[1];
-          if (pathMatch) {
-            await supabase.storage.from('generated-images').remove([decodeURIComponent(pathMatch)]);
-          }
-        } catch (storageErr) {
-          console.warn('Storage cleanup failed (non-critical):', storageErr);
-        }
+      if (!(data as any)?.success) {
+        throw new Error((data as any)?.error || 'Delete failed');
       }
 
       setImages((prev) => prev.filter((i) => i.id !== id));
