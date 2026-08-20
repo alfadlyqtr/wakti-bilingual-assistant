@@ -1,17 +1,20 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
-// ─── User ID Extraction from JWT ───
-function getUserIdFromRequest(req: Request): string | null {
+// ─── Verified User ID from JWT (signature checked with Supabase Auth) ───
+async function getVerifiedUserId(req: Request): Promise<string | null> {
   try {
     const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
     if (!authHeader) return null;
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!token || token.split(".").length !== 3) return null;
-    const payloadB64 = token.split(".")[1];
-    const payloadJson = atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/"));
-    const payload = JSON.parse(payloadJson);
-    return payload.sub || null;
+    if (!token) return null;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return null;
+    return user.id;
   } catch {
     return null;
   }
@@ -518,30 +521,26 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
-async function ampGccEnhanceWithAnthropic(input: string, inputLanguage: InputLanguage, khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): Promise<string> {
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!ANTHROPIC_API_KEY) throw new Error("CONFIG: Missing ANTHROPIC_API_KEY");
+async function ampGccEnhanceWithOpenAI(input: string, inputLanguage: InputLanguage, khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): Promise<string> {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
   const dialectInstruction = buildKhaleejiDialectInstruction(inputLanguage, khaleejiDialectLabel, khaleejiAccentAnchor);
 
   const payload = {
-    model: "claude-haiku-4-5-20251001",
+    model: "gpt-4o",
     temperature: 0.5,
     max_tokens: 2000,
-    system: [GCC_ENHANCE_SYSTEM_PROMPT, dialectInstruction].filter(Boolean).join("\n\n"),
     messages: [
-      {
-        role: "user",
-        content: input,
-      },
+      { role: "system", content: [GCC_ENHANCE_SYSTEM_PROMPT, dialectInstruction].filter(Boolean).join("\n\n") },
+      { role: "user", content: input },
     ],
   };
 
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify(payload),
   });
@@ -550,22 +549,16 @@ async function ampGccEnhanceWithAnthropic(input: string, inputLanguage: InputLan
   if (!resp.ok) {
     throw new Error(
       JSON.stringify({
-        stage: "anthropic-gcc-enhance",
+        stage: "openai-gcc-enhance",
         status: resp.status,
         body: data || null,
       }),
     );
   }
 
-  const content = Array.isArray(data?.content)
-    ? data.content
-      .filter((part: { type?: string; text?: string }) => part?.type === "text" && typeof part?.text === "string")
-      .map((part: { text: string }) => part.text)
-      .join("\n")
-    : "";
-
+  const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || content.trim().length === 0) {
-    throw new Error("anthropic_empty_response");
+    throw new Error("openai_empty_response");
   }
 
   return content.trim();
@@ -580,8 +573,14 @@ serve(async (req) => {
   let inputText = "";
   let mode: string | undefined;
 
-  // Extract user ID from JWT token
-  const userId = getUserIdFromRequest(req) || undefined;
+  // Verify the caller's JWT with Supabase Auth (signature-checked). Guests are rejected.
+  const userId = (await getVerifiedUserId(req)) || undefined;
+  if (!userId) {
+    return new Response(
+      JSON.stringify({ error: "Authentication required", code: "UNAUTHORIZED" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 
   try {
     if (req.method !== "POST") {
@@ -725,7 +724,7 @@ serve(async (req) => {
         );
       }
 
-      // Build context block so Claude knows the rhythm/style for Groove-Locked stress
+      // Build context block so the model knows the rhythm/style for Groove-Locked stress
       const gccContextParts: string[] = [];
       if (style)       gccContextParts.push(`Style: ${style}`);
       if (styleTags.length > 0) gccContextParts.push(`Style tags: ${styleTags.join(", ")}`);
@@ -750,18 +749,18 @@ serve(async (req) => {
         : "";
       const gccInput = gccContext + text;
 
-      const improved = await ampGccEnhanceWithAnthropic(gccInput, inputLanguage, khaleejiDialectLabel, khaleejiAccentAnchor);
+      const improved = await ampGccEnhanceWithOpenAI(gccInput, inputLanguage, khaleejiDialectLabel, khaleejiAccentAnchor);
 
       await logAI({
         functionName: "prompt-amp",
         userId,
-        model: "claude-haiku-4-5-20251001",
+        model: "gpt-4o",
         inputText: text,
         outputText: improved,
         durationMs: Date.now() - startTime,
         status: "success",
         metadata: {
-          provider: "anthropic",
+          provider: "openai",
           mode: "gcc-enhance",
           duration: normalizedDuration,
           style,
@@ -810,8 +809,8 @@ serve(async (req) => {
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    const errorModel = mode === "gcc-enhance" ? "claude-haiku-4-5-20251001" : "gpt-4o-mini";
-    const errorProvider = mode === "gcc-enhance" ? "anthropic" : "openai";
+    const errorModel = mode === "gcc-enhance" ? "gpt-4o" : "gpt-4o-mini";
+    const errorProvider = "openai";
 
     await logAI({
       functionName: "prompt-amp",

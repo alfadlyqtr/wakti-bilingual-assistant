@@ -260,3 +260,30 @@ export async function finalizeMusicTaskTracks(params: {
 
   return savedTracks;
 }
+
+/**
+ * Refund a monthly-quota log entry when a generation definitively fails.
+ * music-generate logs the task the moment KIE accepts it; if KIE later reports
+ * failure (via callback or status polling) we remove the log row so the failed
+ * attempt does not burn the user's monthly quota.
+ */
+export async function refundMusicGenerationQuota(
+  // deno-lint-ignore no-explicit-any
+  supabaseService: any,
+  taskId: string,
+  reason: string,
+): Promise<void> {
+  try {
+    const { error } = await supabaseService
+      .from("user_music_generation_log")
+      .delete()
+      .eq("task_id", taskId);
+    if (error) {
+      console.error(`[music-finalize] Quota refund failed for task ${taskId}:`, error.message);
+    } else {
+      console.log(`[music-finalize] Quota refunded for task ${taskId} (${reason})`);
+    }
+  } catch (err) {
+    console.error(`[music-finalize] Quota refund exception for task ${taskId}:`, (err as Error).message);
+  }
+}

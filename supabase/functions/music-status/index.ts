@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
-import { finalizeMusicTaskTracks } from "../_shared/music-finalize.ts";
+import { finalizeMusicTaskTracks, refundMusicGenerationQuota } from "../_shared/music-finalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -193,6 +193,8 @@ serve(async (req) => {
           .update({ meta: { status: "failed", error: failureMessage } })
           .eq("id", recordId);
       }
+      // Refund the monthly quota — KIE polling revealed a definitive failure
+      await refundMusicGenerationQuota(supabaseService, taskId, "status-poll-failed");
       return new Response(JSON.stringify({ status: "failed", error: kieData?.data?.errorMessage || kieData?.data?.error_message || kieData?.msg || "Generation failed" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

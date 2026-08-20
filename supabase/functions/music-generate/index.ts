@@ -509,6 +509,29 @@ serve(async (req) => {
     }
     // ── End Trial Token Check ──
 
+    // ── Monthly Quota Check (server-side enforcement) ──
+    // Counts distinct task_ids logged this calendar month + admin-gifted extras.
+    // This is the authoritative check; the frontend pre-check is only a courtesy.
+    try {
+      const { data: quota, error: quotaErr } = await supabaseService
+        .rpc('can_generate_music_for', { p_user_id: user.id });
+      if (quotaErr) {
+        console.error('[music-generate] Monthly quota check failed (non-fatal):', quotaErr.message);
+      } else if (quota && quota.can_generate === false) {
+        return new Response(
+          JSON.stringify({
+            error: 'MONTHLY_LIMIT_REACHED',
+            generated: quota.generated,
+            limit: quota.limit,
+          }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (quotaEx) {
+      console.error('[music-generate] Monthly quota check exception (non-fatal):', (quotaEx as Error).message);
+    }
+    // ── End Monthly Quota Check ──
+
     if (req.method !== "POST") {
       throw new Error("Method not allowed");
     }

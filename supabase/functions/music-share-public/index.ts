@@ -140,7 +140,9 @@ serve(async (req) => {
         duration: data.duration,
         cover_url: data.cover_url,
         mime: data.mime,
-        meta: data.meta,
+        // Only expose the style tags the share page displays — never the full
+        // internal meta blob (request payloads, debug info, provider IDs).
+        meta: { tags: data.meta?.tags ?? null },
       },
       playUrl,
     }), {

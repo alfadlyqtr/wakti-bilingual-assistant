@@ -1295,9 +1295,9 @@ function QuoteWidgetInline({ shell, language, quote, onExpand }: { shell: ShellF
 
 type ModeKey = "chat" | "search" | "study";
 const MODES: { key: ModeKey; labelEn: string; labelAr: string; pill: string; Icon: React.ElementType }[] = [
-  { key: "chat",   labelEn: "Chat",   labelAr: "?????", pill: "bg-blue-600",   Icon: Bot },
-  { key: "search", labelEn: "Search", labelAr: "???",   pill: "bg-green-600",  Icon: SearchIcon },
-  { key: "study",  labelEn: "Study",  labelAr: "?????", pill: "bg-purple-600", Icon: BookOpen },
+  { key: "chat",   labelEn: "Chat",   labelAr: "دردشة", pill: "bg-blue-600",   Icon: Bot },
+  { key: "search", labelEn: "Search", labelAr: "بحث",   pill: "bg-green-600",  Icon: SearchIcon },
+  { key: "study",  labelEn: "Study",  labelAr: "دراسة", pill: "bg-purple-600", Icon: BookOpen },
 ];
 
 type WaktiAiNavigationState = {
@@ -1562,7 +1562,7 @@ function HomescreenChatBar({
               )}
             >
               <span className={cn("h-1.5 w-1.5 rounded-full", searchSubmode === "web" ? "bg-green-500" : "bg-gray-400")} />
-              {language === "ar" ? "?????" : "Web"}
+              {language === "ar" ? "ويب" : "Web"}
             </button>
             <button
               type="button"
@@ -1596,7 +1596,7 @@ function HomescreenChatBar({
           />
           <button
             type="button"
-            title={language === "ar" ? "?????" : "Send"}
+            title={language === "ar" ? "إرسال" : "Send"}
             onClick={sendMessage}
             className={cn(
               "mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-all active:scale-95",

@@ -2465,6 +2465,10 @@ function VoicesTab({
   const [autoLabelLyrics, setAutoLabelLyrics] = useState(true); // ON by default; power users can disable
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(30); // seconds
+  // "Auto" duration choice: the song length is sized to the actual lyric content,
+  // so a short lyric never stretches into a long song and a long lyric never gets
+  // cut off mid-phrase. Resolved to a concrete preset before anything is sent.
+  const AUTO_DURATION_VALUE = 0;
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('music', { studioTab: 'music', musicSubTab: 'compose' }));
   const musicDraftRestoredRef = useRef(false);
@@ -4335,17 +4339,24 @@ function VoicesTab({
       toast.error(isAr ? 'تحتوي المدخلات على ألفاظ غير مسموحة.' : 'Inputs contain disallowed words.');
       return;
     }
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     
     setAmping(true);
     try {
-      const khalijiControlBlock = buildKhalijiControlBlock();
+      const ampDuration = duration === AUTO_DURATION_VALUE
+        ? estimateAutoDurationSeconds(lyricsText.trim() || styleText.trim(), [...effectiveIncludeTags, ...rhythmTags, ...moodTags].join(' '), vocalType === 'none')
+        : duration;
+      const khalijiControlBlock = buildKhalijiControlBlock(ampDuration);
       const kieStyle = khalijiControlBlock.styleString;
       const { data, error } = await supabase.functions.invoke('music-amp', {
         body: {
           text: userInput,
           mode: ampMode === 'gcc_enhance' ? 'gcc-enhance' : 'lyrics',
           ampMode: ampMode,
-          duration: duration,
+          duration: ampDuration,
           style: kieStyle || includeTags.join(', '),
           styleTags: effectiveIncludeTags,
           rhythm: rhythmTags[0] || '',
@@ -4544,6 +4555,35 @@ function VoicesTab({
 
   const DURATION_VALUES = DURATION_PRESETS.map((preset) => preset.seconds);
   const MAX_DURATION_SECONDS = DURATION_PRESETS[DURATION_PRESETS.length - 1]?.seconds ?? 210;
+
+  // Smart "Auto" duration estimate: sizes the song to the lyric line count so a
+  // short lyric never becomes a long song and a long lyric never gets cut off.
+  function estimateAutoDurationSeconds(lyricsSource: string, signalText: string, instrumental: boolean): number {
+    if (instrumental) return 60;
+    const lyricLineCount = (lyricsSource || '')
+      .split('\n')
+      .filter((line) => {
+        const t = line.trim();
+        return t && !/^\[[^\]]+\]$/.test(t) && !/^\([^)]+\)$/.test(t);
+      }).length;
+    if (lyricLineCount === 0) return 30;
+    const signal = (signalText || '').toLowerCase();
+    const secondsPerLine = /ballad|slow|romantic|poem|anasheed|classical|jazz|blues|acoustic|عاطفي|بطيء/.test(signal) ? 4.5
+      : /rap|hip hop|hip-hop|trap|drill|metal|punk|dubstep|راب/.test(signal) ? 2.8
+      : 3.5;
+    const estimated = lyricLineCount * secondsPerLine + 14; // intro + outro breathing room
+    return DURATION_VALUES.find((value) => estimated <= value) ?? MAX_DURATION_SECONDS;
+  }
+
+  // Clean wind-down ending so Suno resolves the song instead of being guillotined
+  // by the hard duration cutoff mid-phrase.
+  const SMART_ENDING_TAGS = '[Fade out]\n[End]';
+  function withSmartEnding(structuredText: string): string {
+    if (!structuredText.trim()) return structuredText;
+    return /\[(?:end|fade\s*out)\]/i.test(structuredText)
+      ? structuredText
+      : `${structuredText}\n\n${SMART_ENDING_TAGS}`;
+  }
   const STRUCTURE_LABELS_AR: Record<RoadmapLabel, string> = {
     Intro: 'مقدمة',
     Outro: 'خاتمة',
@@ -7062,7 +7102,9 @@ function VoicesTab({
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const durationTarget = DURATION_VALUES.includes(duration) ? duration : 30;
+      const durationTarget = duration === AUTO_DURATION_VALUE
+        ? estimateAutoDurationSeconds(rawLyrics, [...effectiveIncludeTags, ...rhythmTags, ...moodTags].join(' '), instrumental)
+        : (DURATION_VALUES.includes(duration) ? duration : 30);
       const activeInstrumentTags = isPoemStyleSelected ? instrumentTags.slice(0, 2) : instrumentTags;
       const smartSectionPlan = shouldSmartStructureLyrics
         ? buildSmartLyricStructure(lyricPlanningText, durationTarget, activeInstrumentTags)
@@ -7094,9 +7136,9 @@ function VoicesTab({
         autoLabelLyrics,
         khaleejiTriggerActive,
       );
-      const structuredPrompt = poemPromptPrefix
+      const structuredPrompt = withSmartEnding(poemPromptPrefix
         ? `${poemPromptPrefix}\n\n${baseStructuredPrompt}`
-        : baseStructuredPrompt;
+        : baseStructuredPrompt);
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
       const REGIONAL_NEGATIVE: Record<string, string> = {
@@ -7495,6 +7537,17 @@ function VoicesTab({
         emitEvent('wakti-trial-limit-reached', { feature: 'music' });
         setSubmitting(false);
         musicGenerateLockRef.current = false;
+        return;
+      }
+      if (genError?.message?.includes('MONTHLY_LIMIT_REACHED') || genData?.error === 'MONTHLY_LIMIT_REACHED') {
+        const used = genData?.generated ?? songsUsed;
+        const limit = genData?.limit ?? (songsUsed + songsRemaining);
+        toast.error(language === 'ar'
+          ? `لقد وصلت إلى الحد الأقصى: ${used} من ${limit} أغاني هذا الشهر`
+          : `Monthly limit reached: ${used} of ${limit} songs this month`);
+        setSubmitting(false);
+        musicGenerateLockRef.current = false;
+        onQuotaChange?.({ used, limit, remaining: Math.max(0, limit - used) });
         return;
       }
       if (genError) throw genError;
@@ -8767,7 +8820,9 @@ function VoicesTab({
                       const normalizedLyrics = parsedLyrics?.normalizedText ?? '';
                       const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
                       const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
-                      const durationTarget = DURATION_VALUES.includes(duration) ? duration : 30;
+                      const durationTarget = duration === AUTO_DURATION_VALUE
+                        ? estimateAutoDurationSeconds(rawLyrics, [...effectiveIncludeTags, ...rhythmTags, ...moodTags].join(' '), instrumental)
+                        : (DURATION_VALUES.includes(duration) ? duration : 30);
                       const smartSectionPlan = shouldSmartStructureLyrics
                         ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
                         : null;
@@ -8789,6 +8844,7 @@ function VoicesTab({
                         autoLabelLyrics,
                         previewKhaleejiTrigger,
                       );
+                      const structuredPromptWithEnding = withSmartEnding(structuredPrompt);
                       const previewGccMarkers = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
                       const previewIsGccLike = isGccStyleSelected || effectiveIncludeTags.some((t) => previewGccMarkers.test(t));
                       const previewRecommended = getRecommendedStyleParams(previewGenreFamily, previewIsGccLike);
@@ -8801,7 +8857,7 @@ function VoicesTab({
                         styleWeight: styleWeightOverride ?? previewRecommended.styleWeight,
                         weirdnessConstraint: weirdnessOverride ?? previewRecommended.weirdnessConstraint,
                         style: cb.styleString,
-                        prompt: instrumental ? null : structuredPrompt,
+                        prompt: instrumental ? null : structuredPromptWithEnding,
                         tempoHint: cb.tempoTag,
                         musicalKeyHint: cb.keyTag,
                         controlBlock: cb.controlBlock,
@@ -8913,11 +8969,12 @@ function VoicesTab({
                 value={duration}
                 onChange={(e) => {
                   const nextDuration = parseInt(e.target.value || '30', 10);
-                  setDuration(DURATION_VALUES.includes(nextDuration) ? nextDuration : 30);
+                  setDuration(nextDuration === AUTO_DURATION_VALUE || DURATION_VALUES.includes(nextDuration) ? nextDuration : 30);
                 }}
                 title={isAr ? 'المدة' : 'Duration'}
                 className="flex-shrink-0 px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
               >
+                <option value={AUTO_DURATION_VALUE}>{isAr ? 'تلقائي' : 'Auto'}</option>
                 {DURATION_PRESETS.map((preset) => (
                   <option key={preset.seconds} value={preset.seconds}>{preset.display}</option>
                 ))}

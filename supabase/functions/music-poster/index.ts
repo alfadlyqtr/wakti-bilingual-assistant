@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { verifyKieWebhookSignature } from "../_shared/kie-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -166,7 +167,7 @@ serve(async (req) => {
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    // ── KIE callback (no auth needed) ──
+    // ── KIE callback (signature-verified) ──
     const reqUrl = new URL(req.url);
     if (reqUrl.searchParams.get("cb") === "1") {
       console.log("[poster] KIE callback received");
@@ -175,6 +176,15 @@ serve(async (req) => {
         console.log("[poster] callback payload:", JSON.stringify(cbBody).slice(0, 500));
         const taskId = cbBody?.data?.taskId;
         const rawVideoUrl = cbBody?.data?.response?.videoUrl;
+        // Verify KIE.ai HMAC signature (enforced once KIE_WEBHOOK_HMAC_KEY is configured)
+        const webhookCheck = await verifyKieWebhookSignature(req, taskId ? String(taskId) : null, "music-poster");
+        if (!webhookCheck.ok) {
+          console.warn(`[poster] Rejected callback for taskId=${taskId}: ${webhookCheck.reason}`);
+          return new Response(JSON.stringify({ ok: false, error: "Invalid signature" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         if (taskId && rawVideoUrl) {
           // Find the poster row to get its id for storage path
           const { data: posterRow } = await db.from("user_music_posters").select("id").eq("kie_poster_task_id", taskId).maybeSingle();

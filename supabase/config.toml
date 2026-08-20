@@ -147,6 +147,21 @@ verify_jwt = true
 [functions.deen-import-sources]
 verify_jwt = true
 
+# Music webhooks/public endpoints — these are called by KIE.ai servers or the
+# public share page, so the Supabase gateway JWT check must stay OFF.
+# Authenticity is enforced inside the functions (KIE HMAC signature verification).
+[functions.music-callback]
+verify_jwt = false
+
+[functions.music-voice-callback]
+verify_jwt = false
+
+[functions.music-poster]
+verify_jwt = false
+
+[functions.music-share-public]
+verify_jwt = false
+
 [studio]
 enabled = true
 port = 54323

@@ -2,7 +2,8 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
-import { finalizeMusicTaskTracks } from "../_shared/music-finalize.ts";
+import { finalizeMusicTaskTracks, refundMusicGenerationQuota } from "../_shared/music-finalize.ts";
+import { verifyKieWebhookSignature } from "../_shared/kie-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,6 +127,16 @@ serve(async (req) => {
       });
     }
 
+    // Verify KIE.ai HMAC signature (enforced once KIE_WEBHOOK_HMAC_KEY is configured)
+    const webhookCheck = await verifyKieWebhookSignature(req, taskId, "music-callback");
+    if (!webhookCheck.ok) {
+      console.warn(`[music-callback] Rejected callback for taskId=${taskId}: ${webhookCheck.reason}`);
+      return new Response(JSON.stringify({ ok: false, error: "Invalid signature" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Always acknowledge quickly — KIE.ai expects a fast 200
     // We process async after this point
 
@@ -181,6 +192,9 @@ serve(async (req) => {
           })
           .eq("task_id", taskId)
           .eq("meta->>status", "generating");
+
+        // Refund the monthly quota — this generation produced no usable track
+        await refundMusicGenerationQuota(supabaseService, taskId, "callback-complete-no-audio");
 
         return new Response(JSON.stringify({ ok: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -251,6 +265,9 @@ serve(async (req) => {
           },
         })
         .eq("task_id", taskId);
+
+      // Refund the monthly quota — KIE reported a definitive failure
+      await refundMusicGenerationQuota(supabaseService, taskId, "callback-failed");
 
     } else if (type === "first") {
       // "first" callback: low-bitrate preview is ready — save URL but keep status=generating
