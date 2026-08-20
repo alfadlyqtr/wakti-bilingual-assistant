@@ -599,6 +599,19 @@ export async function removeGroupMember(conversationId: string, memberId: string
   if (!data) throw new Error("Member could not be removed");
 }
 
+export async function deleteGroupConversation(conversationId: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data, error } = await (supabase as any).rpc("delete_group_conversation", {
+    group_conversation_id: conversationId,
+  });
+
+  if (error) throw error;
+  if (!data) throw new Error("Group could not be deleted");
+}
+
 export async function addWaktiToGroup(conversationId: string) {
   await ensurePassport();
   const { data, error } = await (supabase as any).rpc("add_wakti_to_group", {

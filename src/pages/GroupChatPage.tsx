@@ -20,7 +20,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupMember, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
+import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupConversation, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupMember, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
 import { cn, getImageDimensions } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -230,6 +230,18 @@ export default function GroupChatPage() {
     },
     onError: (error: any) => {
       toast.error(error?.message || (language === "ar" ? "تعذر إزالة العضو" : "Failed to remove member"));
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: () => deleteGroupConversation(conversationId!),
+    onSuccess: () => {
+      toast.success(language === "ar" ? "تم حذف المجموعة" : "Group deleted");
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+      navigate(entrySource === "social" ? "/social?section=contacts&tab=groups" : "/contacts?tab=groups");
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || (language === "ar" ? "تعذر حذف المجموعة" : "Failed to delete group"));
     },
   });
 
@@ -2478,6 +2490,30 @@ export default function GroupChatPage() {
               >
                 {leaveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <LogOut className="h-4 w-4 mr-2" />}
                 {language === "ar" ? "مغادرة المجموعة" : "Leave Group"}
+              </Button>
+            </div>
+          )}
+
+          {/* Delete group button (creator only) */}
+          {isCreator && (
+            <div className="px-5 pb-5 pt-2">
+              <Button
+                variant="destructive"
+                className="w-full rounded-xl"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    language === "ar"
+                      ? "هل أنت متأكد من حذف هذه المجموعة بالكامل؟ لا يمكن التراجع عن هذا الإجراء."
+                      : "Are you sure you want to delete this entire group? This cannot be undone."
+                  );
+                  if (confirmed) {
+                    deleteGroupMutation.mutate();
+                  }
+                }}
+                disabled={deleteGroupMutation.isPending}
+              >
+                {deleteGroupMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                {language === "ar" ? "حذف المجموعة" : "Delete Group"}
               </Button>
             </div>
           )}
