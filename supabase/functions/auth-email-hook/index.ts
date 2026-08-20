@@ -214,17 +214,18 @@ function renderEmail(copy: EmailCopy, lang: Lang, confirmationUrl: string, otpCo
   const isAr = lang === "ar";
   const dir = isAr ? "rtl" : "ltr";
   const align = isAr ? "right" : "left";
+  const tagline = isAr ? "تطبيقك الذكي الشامل" : "ALL IN ONE AI APP";
 
   const buttonBlock = copy.button
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px 0 4px;">
-        <tr><td align="center" bgcolor="#060541" style="background:#060541;background:linear-gradient(135deg,#060541 0%,#3b2f8f 55%,#060541 100%);border-radius:16px;box-shadow:0 10px 30px rgba(6,5,65,0.35);">
-          <a href="${confirmationUrl}" style="display:inline-block;padding:18px 48px;font-size:16px;font-weight:700;letter-spacing:0.4px;color:#ffffff;text-decoration:none;">${copy.button}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:34px 0 6px;">
+        <tr><td align="center" bgcolor="#060541" style="background:#060541;border:1px solid #33336b;border-radius:999px;box-shadow:0 0 28px rgba(61,139,255,0.28);">
+          <a href="${confirmationUrl}" style="display:inline-block;padding:16px 46px;font-size:15px;font-weight:700;letter-spacing:0.6px;color:#ffffff;text-decoration:none;">${copy.button}</a>
         </td></tr>
       </table>`
     : "";
 
   const codeBlock = copy.showCode
-    ? `<div dir="ltr" style="font-size:38px;letter-spacing:12px;font-weight:800;color:#060541;background:#f4f4f9;border:1px solid #e6e4f5;border-radius:16px;padding:22px;text-align:center;margin:28px 0 8px;">${otpCode}</div>`
+    ? `<div dir="ltr" style="font-size:36px;letter-spacing:12px;font-weight:800;color:#f2f2f2;background:#1c2333;border:1px solid #2a3348;border-radius:16px;padding:22px;text-align:center;margin:28px 0 8px;">${otpCode}</div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -232,36 +233,35 @@ function renderEmail(copy: EmailCopy, lang: Lang, confirmationUrl: string, otpCo
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0c0f14;font-family:'Segoe UI',Tahoma,'Noto Sans Arabic',Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0c0f14;">
-    <tr><td align="center" style="padding:56px 16px 48px;">
+    <tr><td align="center" style="padding:64px 16px 48px;">
       <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
 
-        <!-- Logo with glow tile -->
-        <tr><td align="center" style="padding-bottom:32px;">
+        <!-- Hero: logo with warm glow + wordmark -->
+        <tr><td align="center" style="padding-bottom:40px;">
           <table role="presentation" cellpadding="0" cellspacing="0">
-            <tr><td align="center" bgcolor="#151a23" style="background:#151a23;background:linear-gradient(135deg,#151a23 0%,#1c2333 100%);border-radius:20px;border:1px solid #232c3d;padding:12px;box-shadow:0 0 40px rgba(61,139,255,0.25),0 0 80px rgba(176,106,224,0.12);">
-              <img src="${LOGO_URL}" width="56" height="56" alt="WAKTI" style="display:block;border-radius:12px;">
+            <tr><td align="center" style="background:#0c0f14;background:radial-gradient(closest-side,rgba(233,206,176,0.22),rgba(233,206,176,0) 72%);padding:20px 36px;">
+              <img src="${LOGO_URL}" width="72" height="72" alt="WAKTI" style="display:block;border-radius:18px;">
             </td></tr>
           </table>
-          <div style="margin-top:14px;font-size:15px;font-weight:800;letter-spacing:6px;color:#f2f2f2;">WAKTI</div>
+          <div dir="ltr" style="margin-top:16px;font-size:22px;font-weight:300;letter-spacing:10px;color:#f2f2f2;">WAKTI</div>
+          <div style="margin-top:8px;font-size:10px;font-weight:600;letter-spacing:${isAr ? "0" : "3"}px;color:#858384;">${tagline}</div>
         </td></tr>
 
-        <!-- Card -->
-        <tr><td style="background:#ffffff;border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,0.45);">
-          <!-- vibrant accent strip -->
-          <div style="height:6px;border-radius:24px 24px 0 0;background:#3d8bff;background:linear-gradient(90deg,#3d8bff 0%,#b06ae0 50%,#f98a4b 100%);font-size:0;line-height:0;">&nbsp;</div>
+        <!-- Glass card -->
+        <tr><td bgcolor="#11151d" style="background:#11151d;border:1px solid #1f2632;border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
           <div dir="${dir}" style="text-align:${align};padding:44px 40px 40px;">
-            <h1 style="font-size:26px;color:#060541;margin:0 0 14px;font-weight:800;line-height:1.35;">${copy.heading}</h1>
-            <p style="font-size:15px;color:#46464d;line-height:1.9;margin:0;">${copy.body}</p>
+            <h1 style="font-size:22px;color:#f2f2f2;margin:0 0 14px;font-weight:700;line-height:1.4;">${copy.heading}</h1>
+            <p style="font-size:15px;color:#a4a4ab;line-height:1.9;margin:0;">${copy.body}</p>
             ${codeBlock}
             ${buttonBlock}
-            <p style="font-size:12px;color:#858384;line-height:1.7;margin:32px 0 0;padding-top:22px;border-top:1px solid #f0f0f4;">${copy.ignore}</p>
+            <p style="font-size:12px;color:#606062;line-height:1.7;margin:34px 0 0;padding-top:22px;border-top:1px solid #1f2632;">${copy.ignore}</p>
           </div>
         </td></tr>
 
         <!-- Footer -->
-        <tr><td align="center" style="padding-top:32px;">
-          <p style="font-size:12px;color:#606062;margin:0;line-height:1.7;">
-            <span style="font-weight:800;letter-spacing:2px;color:#9a9a9d;">WAKTI</span><span style="color:#3d3d40;"> &nbsp;·&nbsp; </span><a href="https://www.wakti.qa" style="color:#3d8bff;text-decoration:none;">wakti.qa</a>
+        <tr><td align="center" style="padding-top:34px;">
+          <p style="font-size:11px;color:#4a4a4e;margin:0;line-height:1.8;letter-spacing:1px;">
+            <span style="font-weight:800;color:#858384;">WAKTI</span> &nbsp;·&nbsp; <a href="https://www.wakti.qa" style="color:#606062;text-decoration:none;">wakti.qa</a>
           </p>
         </td></tr>
 
