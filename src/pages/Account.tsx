@@ -286,14 +286,15 @@ export default function Account() {
   const dobCurrentYear = new Date().getFullYear();
   const dobYearOptions = Array.from({ length: dobCurrentYear - 1899 }, (_, index) => (dobCurrentYear - index).toString());
   // Detect correct paywall variant using same logic as ProtectedRoute (priority: trial_expired > cancelled > new_user)
-  const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
+  const { isNewUser, wasSubscribed, isAccessExpired, profile, loading: isProfileLoading } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
 
   // Soft email-confirmation nag: email signups start unconfirmed until they
   // click the welcome-email link. OAuth users and guests are out of scope.
   const needsEmailConfirm = !!user && !isGuest
+    && !isProfileLoading
     && (user.app_metadata?.provider ?? 'email') === 'email'
-    && profile?.email_confirmed === false;
+    && profile?.email_confirmed !== true;
   const [isResendingConfirm, setIsResendingConfirm] = useState(false);
   const handleResendConfirm = async () => {
     setIsResendingConfirm(true);
