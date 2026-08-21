@@ -289,6 +289,26 @@ export default function Account() {
   const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
 
+  // Soft email-confirmation nag: email signups start unconfirmed until they
+  // click the welcome-email link. OAuth users and guests are out of scope.
+  const needsEmailConfirm = !!user && !isGuest
+    && (user.app_metadata?.provider ?? 'email') === 'email'
+    && profile?.email_confirmed === false;
+  const [isResendingConfirm, setIsResendingConfirm] = useState(false);
+  const handleResendConfirm = async () => {
+    setIsResendingConfirm(true);
+    try {
+      await supabase.functions.invoke('welcome-email', {
+        body: { lang: language, origin: window.location.origin },
+      });
+      toast.success(language === 'ar' ? 'تم إرسال بريد التأكيد — تفقد بريدك' : 'Confirmation email sent — check your inbox');
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر الإرسال — حاول مرة أخرى' : 'Could not send — try again');
+    } finally {
+      setIsResendingConfirm(false);
+    }
+  };
+
   // Direct native purchase
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
 
@@ -898,7 +918,16 @@ export default function Account() {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-lg font-bold text-[#060541] dark:text-white">{name || t("account", language)}</h1>
-              {email && <p className="truncate text-sm text-[#060541]/50 dark:text-white/40 mt-0.5">{email}</p>}
+              {email && (
+                <p className="truncate text-sm text-[#060541]/50 dark:text-white/40 mt-0.5 flex items-center gap-2">
+                  <span className="truncate">{email}</span>
+                  {needsEmailConfirm && (
+                    <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                      {language === 'ar' ? 'غير مؤكد' : 'Unconfirmed'}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -923,6 +952,29 @@ export default function Account() {
 
           <TabsContent value="profile" className="space-y-4 px-3 pt-3 pb-24 sm:px-4">
             <div className="mx-auto w-full max-w-4xl space-y-4">
+              {needsEmailConfirm && (
+                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 text-sm text-amber-700 dark:text-amber-300">
+                    <p className="font-bold">{language === 'ar' ? 'بريدك الإلكتروني غير مؤكد' : 'Your email is not confirmed'}</p>
+                    <p className="text-xs mt-0.5 opacity-80">
+                      {language === 'ar'
+                        ? 'أكد بريدك الإلكتروني لتتمكن من تغيير كلمة المرور والبريد الإلكتروني وتاريخ الميلاد.'
+                        : 'Confirm your email to unlock password, email, and date of birth changes.'}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isResendingConfirm}
+                    onClick={handleResendConfirm}
+                    className="shrink-0 border-amber-500/50 text-amber-700 dark:text-amber-300"
+                  >
+                    {isResendingConfirm
+                      ? (language === 'ar' ? 'جاري الإرسال...' : 'Sending...')
+                      : (language === 'ar' ? 'إعادة إرسال البريد' : 'Resend email')}
+                  </Button>
+                </div>
+              )}
               <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
                 <CardHeader className="pb-2 pt-5 text-center">
                   <CardTitle className="text-base">{t("profile", language)}</CardTitle>
@@ -1048,7 +1100,7 @@ export default function Account() {
                               !dateOfBirth && "text-muted-foreground",
                               language === 'ar' && "text-right"
                             )}
-                            disabled={isUpdatingDob || isGuest}
+                            disabled={isUpdatingDob || isGuest || needsEmailConfirm}
                           >
                             <CalendarIcon className={cn("h-5 w-5", language === 'ar' ? "ml-2" : "mr-2")} />
                             {dateOfBirth ? (
@@ -1122,7 +1174,7 @@ export default function Account() {
                     <div className="mt-2">
                       <Button
                         onClick={handleUpdateDateOfBirth}
-                        disabled={isUpdatingDob || !dateOfBirth || isGuest}
+                        disabled={isUpdatingDob || !dateOfBirth || isGuest || needsEmailConfirm}
                         className="w-full bg-primary/80 hover:bg-primary text-white font-semibold py-6"
                       >
                         {isUpdatingDob
@@ -1140,13 +1192,13 @@ export default function Account() {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        disabled={loadingUserData || isUpdatingEmail || isGuest}
+                        disabled={loadingUserData || isUpdatingEmail || isGuest || needsEmailConfirm}
                         className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                       />
                     </div>
                     <div className="mt-4">
                       <Button
-                        disabled={isUpdatingEmail || loadingUserData || isGuest}
+                        disabled={isUpdatingEmail || loadingUserData || isGuest || needsEmailConfirm}
                         type="submit"
                       >
                         {isUpdatingEmail
@@ -1165,7 +1217,7 @@ export default function Account() {
                           type="password"
                           value={currentPassword}
                           onChange={(e) => setCurrentPassword(e.target.value)}
-                          disabled={isUpdatingPassword || isGuest}
+                          disabled={isUpdatingPassword || isGuest || needsEmailConfirm}
                           className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                         />
                       </div>
@@ -1177,7 +1229,7 @@ export default function Account() {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            disabled={isUpdatingPassword || isGuest}
+                            disabled={isUpdatingPassword || isGuest || needsEmailConfirm}
                             className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                           />
                         </div>
@@ -1188,7 +1240,7 @@ export default function Account() {
                             type="password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            disabled={isUpdatingPassword || isGuest}
+                            disabled={isUpdatingPassword || isGuest || needsEmailConfirm}
                             className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                           />
                         </div>
@@ -1196,7 +1248,7 @@ export default function Account() {
                     </div>
                     <div className="mt-4">
                       <Button
-                        disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword || isGuest}
+                        disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword || isGuest || needsEmailConfirm}
                         type="submit"
                       >
                         {isUpdatingPassword

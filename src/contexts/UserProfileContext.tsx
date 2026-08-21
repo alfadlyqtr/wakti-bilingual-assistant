@@ -7,6 +7,7 @@ interface UserProfile {
   avatar_url?: string;
   display_name?: string;
   email?: string;
+  email_confirmed?: boolean | null;
   username?: string;
   first_name?: string;
   last_name?: string;

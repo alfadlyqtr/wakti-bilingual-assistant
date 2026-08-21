@@ -434,6 +434,11 @@ export default function Signup() {
         setIsEmailConfirmationDialogOpen(true);
       } else {
         console.log('User already confirmed, redirecting to dashboard');
+        // Our own welcome + soft-confirm email (Supabase confirm is OFF on
+        // purpose). Fire-and-forget — the Account page can resend if missed.
+        supabase.functions.invoke('welcome-email', {
+          body: { lang: language, origin: window.location.origin },
+        }).catch(() => {});
         navigate("/dashboard");
       }
     }

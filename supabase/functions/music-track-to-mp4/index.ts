@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkMusicExtraQuota, logMusicExtra, extraLimitResponse } from "../_shared/music-extra-quota.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,6 +59,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Monthly quota for MP4 renders (credit-spending extra)
+    const supabaseService = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const quota = await checkMusicExtraQuota(supabaseService, user.id, "mp4");
+    if (!quota.allowed) {
+      return extraLimitResponse("mp4", quota.used, quota.limit, corsHeaders);
+    }
+
     console.log(`[music-track-to-mp4] Calling render server for user ${user.id}, track ${trackId}`);
 
     // Delegate to the Render server which has real FFmpeg installed.
@@ -97,6 +105,9 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[music-track-to-mp4] Done: ${videoUrl}`);
+
+    // Log the successful render against the monthly quota
+    await logMusicExtra(supabaseService, user.id, "mp4", trackId || null);
 
     return new Response(
       JSON.stringify({ success: true, video_url: videoUrl, storage_path: result?.storage_path }),

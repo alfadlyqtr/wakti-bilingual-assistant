@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { checkMusicExtraQuota, logMusicExtra, extraLimitResponse } from "../_shared/music-extra-quota.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -298,6 +299,12 @@ serve(async (req) => {
       if (!clipLabel) throw new Error("Voice clip is required");
       if (!audioDataUrl) throw new Error("Voice audio is required");
 
+      // Monthly quota for new voice clones (credit-spending extra)
+      const voiceQuota = await checkMusicExtraQuota(supabaseService, user.id, "voice");
+      if (!voiceQuota.allowed) {
+        return extraLimitResponse("voice", voiceQuota.used, voiceQuota.limit, corsHeaders);
+      }
+
       const { data: inserted, error: insertError } = await supabaseService
         .from("user_music_voices")
         .insert({
@@ -347,6 +354,9 @@ serve(async (req) => {
       if (kieData?.code !== 200 || !kieData?.data?.taskId) {
         throw new Error(kieData?.msg || "KIE did not return a validation task");
       }
+
+      // Log the accepted voice-clone job against the monthly quota
+      await logMusicExtra(supabaseService, user.id, "voice", kieData.data.taskId);
 
       const nextRow = await updateVoiceRow(supabaseService, row.id, {
         source_storage_path: uploaded.storagePath,

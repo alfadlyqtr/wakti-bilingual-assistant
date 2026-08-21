@@ -22,6 +22,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import ResetSuccess from "@/pages/ResetSuccess";
 import Confirmed from "@/pages/Confirmed";
+import ConfirmEmail from "@/pages/ConfirmEmail";
 import AuthConfirm from "@/pages/AuthConfirm";
 import NotFound from "@/pages/NotFound";
 import SessionEnded from "@/pages/SessionEnded";
@@ -154,6 +155,7 @@ export default function ConsumerRouter() {
         <Route path="/account-delete" element={<AccountDelete />} />
         <Route path="/goodbye" element={<GoodbyeScreen />} />
         <Route path="/confirmed" element={<Confirmed />} />
+        <Route path="/confirm-email" element={<ConfirmEmail />} />
         <Route path="/auth/confirm" element={<AuthConfirm />} />
         <Route path="/session-ended" element={<SessionEnded />} />
 

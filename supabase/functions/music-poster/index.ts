@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { verifyKieWebhookSignature } from "../_shared/kie-webhook.ts";
+import { checkMusicExtraQuota, logMusicExtra, extraLimitResponse } from "../_shared/music-extra-quota.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -264,6 +265,12 @@ serve(async (req) => {
         return json({ posterId: row.id, status: existingAnyUser.status, videoUrl: existingAnyUser.video_url });
       }
 
+      // ── Monthly quota — only brand-new KIE jobs count; reuse paths above are free ──
+      const posterQuota = await checkMusicExtraQuota(db, user.id, "poster");
+      if (!posterQuota.allowed) {
+        return extraLimitResponse("poster", posterQuota.used, posterQuota.limit, corsHeaders);
+      }
+
       // ── Call KIE exactly per docs ──
       const callBackUrl = `${SUPABASE_URL}/functions/v1/music-poster?cb=1`;
       const kieBody = { taskId, audioId, callBackUrl, author, domainName: "wakti.ai" };
@@ -319,6 +326,9 @@ serve(async (req) => {
       // Success — save to DB
       const kiePosterTaskId = (kieData as any).data?.taskId ?? null;
       console.log("[poster] KIE success, poster taskId:", kiePosterTaskId);
+
+      // Log the accepted job against the monthly poster quota
+      await logMusicExtra(db, user.id, "poster", kiePosterTaskId);
 
       const { data: row } = await upsertPosterForCurrentUser(db, user.id, trackId, taskId, audioId, author, {
         status: "generating",

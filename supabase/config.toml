@@ -162,6 +162,9 @@ verify_jwt = false
 [functions.music-share-public]
 verify_jwt = false
 
+[functions.cleanup-music-orphans]
+verify_jwt = false
+
 [studio]
 enabled = true
 port = 54323
