@@ -353,11 +353,18 @@ export function SimplifiedFileUpload({
             {uploadedFiles.map((file) => (
               <div key={file.id} className="relative group">
                 <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-primary/30 bg-background">
-                  <img
-                    src={file.url}
-                    alt={file.name}
-                    className="w-full h-full object-cover"
-                  />
+                  {file.type === 'application/pdf' ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-red-50 dark:bg-red-950/30">
+                      <span className="text-lg">📄</span>
+                      <span className="text-[8px] font-bold text-red-600 dark:text-red-300 px-1 truncate w-full text-center">PDF</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={file.url}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                 </div>
                 <button
                   onClick={() => onRemoveFile(file.id)}

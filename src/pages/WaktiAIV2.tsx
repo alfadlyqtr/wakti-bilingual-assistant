@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
 import { ConversationMetaUpdate, normalizeConversationTitle, SavedConversationsService } from '@/services/SavedConversationsService';
+import { HighlightsService } from '@/services/HighlightsService';
+import { TRService } from '@/services/trService';
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +15,6 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { StreamingBubbleHandle } from '@/components/wakti-ai-v2/StreamingBubble';
 import { ChatInput, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
-import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { HelpfulMemoryOnboardingPopup } from '@/components/wakti-ai-v2/HelpfulMemoryOnboardingPopup';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { AnnouncementService } from '@/services/AnnouncementService';
@@ -745,11 +746,17 @@ const WaktiAIV2 = () => {
   const handleDeleteConversation = useCallback(async (id: string) => {
     await SavedConversationsService.deleteConversation(id).catch(() => {});
     EnhancedFrontendMemory.deleteArchivedConversation(id);
-    if (id === currentConversationId) {
+    // The deleted conversation may be the one open in chat — and IDs come in two
+    // forms (DB row id vs frontend conversation_id), so match both before clearing.
+    const deleted = archivedConversations.find((c) => c.id === id || c.conversation_id === id);
+    const isActive = id === currentConversationId
+      || deleted?.id === currentConversationId
+      || deleted?.conversation_id === currentConversationId;
+    if (isActive) {
       handleClearChat();
     }
     handleRefreshConversations();
-  }, [currentConversationId, handleClearChat, handleRefreshConversations]);
+  }, [currentConversationId, archivedConversations, handleClearChat, handleRefreshConversations]);
 
 
   // Handler for reply button click
@@ -1138,6 +1145,21 @@ const WaktiAIV2 = () => {
           },
           (metadata: any) => { 
             streamMeta = metadata || {};
+            // Surface memory failures — "remember this" / "forget that" used to fail silently
+            const memAction = metadata?.memoryAction;
+            if (memAction?.failed) {
+              showError(
+                memAction.operation === 'forget'
+                  ? (language === 'ar' ? 'لم أجد ذلك في الذاكرة أو تعذر حذفه' : "I couldn't find or remove that memory")
+                  : (language === 'ar' ? 'تعذر حفظ ذلك في الذاكرة — حاول مرة أخرى' : "I couldn't save that to memory — please try again")
+              );
+            }
+            // Task drafts from the brain -> confirmation card (nothing is created without approval)
+            const taskDraft = metadata?.taskDraft;
+            if (taskDraft && typeof taskDraft.title === 'string' && taskDraft.title.trim()) {
+              setPendingTaskData(taskDraft);
+              setShowTaskConfirmation(true);
+            }
             const liveBrowsingData = metadata?.browsingData && typeof metadata.browsingData === 'object'
               ? metadata.browsingData
               : (metadata?.geminiSearch && typeof metadata.geminiSearch === 'object' ? metadata.geminiSearch : undefined);
@@ -1464,6 +1486,58 @@ const WaktiAIV2 = () => {
     handleSendMessage(prompt, 'chat', undefined, undefined, undefined, 'study');
   }, [handleSendMessage, isLoading]);
 
+  // YouTube action chips (Summarize / Transcribe) shown under video cards.
+  // Sends the video link through normal chat mode — the brain watches the video.
+  const handleYouTubeAction = useCallback((prompt: string) => {
+    if (isLoading) return;
+    handleSendMessage(prompt, 'chat');
+  }, [handleSendMessage, isLoading]);
+
+  // Retry a failed assistant response: drop the failed bubble + its user message,
+  // then resend the same content fresh (keeps the conversation clean).
+  const handleRetryMessage = useCallback((failedMessageId: string) => {
+    if (isLoading) return;
+    const msgs = sessionMessagesRef.current;
+    const failedIdx = msgs.findIndex((m) => m.id === failedMessageId);
+    if (failedIdx === -1) return;
+    let userIdx = -1;
+    for (let i = failedIdx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') { userIdx = i; break; }
+    }
+    if (userIdx === -1) return;
+    const userMsg = msgs[userIdx] as any;
+    const trimmed = msgs.slice(0, userIdx);
+    sessionMessagesRef.current = trimmed;
+    setSessionMessages(trimmed);
+    handleSendMessage(userMsg.content, userMsg.intent || 'chat', userMsg.attachedFiles, undefined, undefined, userMsg.chatSubmode);
+  }, [isLoading, handleSendMessage]);
+
+  // Share a conversation: stamp a public share token on the saved row, copy the link.
+  const handleShareConversation = useCallback(async (conversationKey: string) => {
+    try {
+      const token = crypto.randomUUID();
+      await SavedConversationsService.setShareToken(conversationKey, token);
+      const link = `${window.location.origin}/shared/${token}`;
+      const { safeCopyToClipboard } = await import('@/utils/clipboardUtils');
+      await safeCopyToClipboard(link);
+      showSuccess(language === 'ar' ? 'تم نسخ رابط المشاركة!' : 'Share link copied to clipboard!');
+    } catch {
+      showError(language === 'ar' ? 'تعذر إنشاء رابط المشاركة' : 'Could not create the share link');
+    }
+  }, [language, showSuccess, showError]);
+
+  // Pin an assistant answer to Highlights (local-first store, shown in the Conversations panel).
+  const handlePinHighlight = useCallback((messageId: string) => {
+    const msg = sessionMessagesRef.current.find((m) => m.id === messageId);
+    if (!msg || msg.role !== 'assistant' || !msg.content?.trim()) return;
+    HighlightsService.add({
+      conversationId: currentConversationId,
+      conversationTitle: activeConversationTitle,
+      content: msg.content.slice(0, 1200),
+    });
+    showSuccess(language === 'ar' ? '⭐ تمت الإضافة إلى المميزات' : '⭐ Pinned to Highlights');
+  }, [currentConversationId, activeConversationTitle, language, showSuccess]);
+
   // Listen for search confirmation Yes/No card responses
   useEffect(() => {
     const handler = (e: Event) => {
@@ -1630,8 +1704,26 @@ const WaktiAIV2 = () => {
     };
   }, [authUser?.id, currentConversationId, userProfile?.id, isLoading, location.state, handleSendMessage]);
 
-  const handleConfirmTask = (taskData: any) => { console.log('Task confirmed:', taskData); setShowTaskConfirmation(false); };
-  const handleDeclineTask = () => { console.log('Task declined'); setShowTaskConfirmation(false); };
+  const handleConfirmTask = async (taskData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      await TRService.createTask({
+        title: String(taskData?.title || '').slice(0, 200),
+        due_date: taskData?.due_date || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        priority: 'normal',
+        task_type: 'one-time',
+        is_shared: false,
+      });
+      showSuccess(language === 'ar' ? '✅ تمت إضافة المهمة إلى مهامك' : '✅ Task added to your Tasks');
+    } catch {
+      showError(language === 'ar' ? 'تعذر إنشاء المهمة — حاول مرة أخرى' : 'Could not create the task — try again');
+    } finally {
+      setTaskConfirmationLoading(false);
+      setShowTaskConfirmation(false);
+      setPendingTaskData(null);
+    }
+  };
+  const handleDeclineTask = () => { setShowTaskConfirmation(false); setPendingTaskData(null); };
   const handleConfirmReminder = (reminderData: any) => { console.log('Reminder confirmed:', reminderData); };
 
   // Handle Talk mode messages - add with "Talk" badge
@@ -1712,6 +1804,7 @@ const WaktiAIV2 = () => {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
+        onShareConversation={handleShareConversation}
         fetchConversations={handleRefreshConversations}
         onSendMessage={handleSendMessage}
         activeTrigger={activeTrigger}
@@ -1724,19 +1817,8 @@ const WaktiAIV2 = () => {
         isLoading={isLoading}
       />
 
-      {isDesktop && (
-        <ConversationSidebar
-          isOpen={showConversations}
-          onClose={() => setShowConversations(false)}
-          conversations={archivedConversations}
-          onSelectConversation={handleSelectConversation}
-          onDeleteConversation={handleDeleteConversation}
-          onNewConversation={handleClearChat}
-          onUpdateConversationMeta={handleUpdateConversationMeta}
-          currentConversationId={currentConversationId}
-          onRefreshConversations={handleRefreshConversations}
-        />
-      )}
+      {/* One conversations UI everywhere (mobile + desktop): the Extra drawer.
+          The old desktop-only ConversationSidebar was removed so they can never drift apart. */}
 
       <div
         className="wakti-ai-messages-area"
@@ -1765,6 +1847,9 @@ const WaktiAIV2 = () => {
             isNewConversation={isNewConversation}
             onReplyToMessage={handleReplyToMessage}
             onStudyFollowUp={handleStudyFollowUp}
+            onYouTubeAction={handleYouTubeAction}
+            onRetryMessage={handleRetryMessage}
+            onPinHighlight={handlePinHighlight}
             onScrollToLatest={scrollToLatest}
             streamingMessageId={streamingMessageId}
             streamingIsPlaceSearch={streamingIsPlaceSearch}

@@ -16,6 +16,7 @@ interface ExtraPanelProps {
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onShareConversation?: (id: string) => void;
   onRefresh: () => void;
   onClose: () => void;
   onNewConversation: () => Promise<boolean> | boolean;
@@ -30,6 +31,7 @@ export function ExtraPanel({
   currentConversationId,
   onSelectConversation,
   onDeleteConversation,
+  onShareConversation,
   onRefresh,
   onClose,
   onNewConversation,
@@ -106,6 +108,7 @@ export function ExtraPanel({
               currentConversationId={currentConversationId}
               onSelectConversation={onSelectConversation}
               onDeleteConversation={onDeleteConversation}
+              onShareConversation={onShareConversation}
               onRefresh={onRefresh}
               onClose={onClose}
               onNewConversation={onNewConversation}

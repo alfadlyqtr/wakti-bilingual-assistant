@@ -105,6 +105,9 @@ verify_jwt = false
 [functions.wakti-ai-v2-brain-stream]
 verify_jwt = true
 
+[functions.shared-conversation]
+verify_jwt = false
+
 [functions.wakti-co-draw]
 verify_jwt = false
 

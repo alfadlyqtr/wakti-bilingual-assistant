@@ -19,9 +19,48 @@ interface YouTubeResult {
 
 interface YouTubeResultsCardProps {
   results: YouTubeResult[];
+  onVideoAction?: (prompt: string) => void;
 }
 
-export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results }) => {
+interface YouTubeActionChipsProps {
+  videoId: string;
+  onAction: (prompt: string) => void;
+  language: string;
+}
+
+// Quick action chips shown under a YouTube player: send the video to the chat brain
+// for a real summary or a verbatim transcript (backend watches the video via Gemini).
+export const YouTubeActionChips: React.FC<YouTubeActionChipsProps> = ({ videoId, onAction, language }) => {
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const chips = [
+    {
+      key: 'summary',
+      label: language === 'ar' ? '📝 لخّص هذا الفيديو' : '📝 Summarize this video',
+      prompt: language === 'ar' ? `لخّص هذا الفيديو: ${watchUrl}` : `Summarize this video: ${watchUrl}`,
+    },
+    {
+      key: 'transcript',
+      label: language === 'ar' ? '📄 فرّغه نصياً' : '📄 Transcribe it',
+      prompt: language === 'ar' ? `فرّغ هذا الفيديو نصياً: ${watchUrl}` : `Transcribe this video: ${watchUrl}`,
+    },
+  ];
+  return (
+    <div className="flex flex-wrap gap-2">
+      {chips.map((chip) => (
+        <button
+          key={chip.key}
+          type="button"
+          onClick={() => onAction(chip.prompt)}
+          className="px-3 py-1.5 rounded-full text-xs font-medium border border-red-300/60 bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition-all dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
+        >
+          {chip.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results, onVideoAction }) => {
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const { language } = useTheme();
   const playerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +109,11 @@ export const YouTubeResultsCard: React.FC<YouTubeResultsCardProps> = ({ results 
             thumbnail={selectedVideo.thumbnail}
           />
         </div>
+      )}
+
+      {/* Action chips — summarize / transcribe the playing video via the chat brain */}
+      {selectedVideo && onVideoAction && (
+        <YouTubeActionChips videoId={selectedVideo.videoId} onAction={onVideoAction} language={language} />
       )}
 
       {/* Results list */}

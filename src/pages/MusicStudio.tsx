@@ -225,7 +225,28 @@ const handleDownload = async (url: string, filename: string) => {
    reader.readAsDataURL(blob);
  });
 
- const normalizeMusicVoiceShell = (entry: any): MusicVoiceShell | null => {
+ // Probe an audio file's duration without uploading it (for the vocal trim picker).
+const probeAudioDuration = (file: Blob) => new Promise<number | null>((resolve) => {
+  try {
+    const url = URL.createObjectURL(file);
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.onloadedmetadata = () => {
+      const d = audio.duration;
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(d) && d > 0 ? d : null);
+    };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    audio.src = url;
+  } catch {
+    resolve(null);
+  }
+});
+
+const formatTrimSeconds = (totalSeconds: number) =>
+  `${Math.floor(totalSeconds / 60)}:${String(Math.max(0, Math.round(totalSeconds)) % 60).padStart(2, '0')}`;
+
+const normalizeMusicVoiceShell = (entry: any): MusicVoiceShell | null => {
    if (!entry || typeof entry !== 'object') return null;
 
    const rawId = entry.id;
@@ -1731,6 +1752,10 @@ function VoicesTab({
   const [draftName, setDraftName] = useState('');
   const [draftType, setDraftType] = useState<MusicVoiceShellType>('custom');
   const [draftAccent, setDraftAccent] = useState('');
+  const [draftSkill, setDraftSkill] = useState<'beginner' | 'intermediate' | 'advanced' | 'professional'>('beginner');
+  const [draftClipDuration, setDraftClipDuration] = useState<number | null>(null);
+  const [draftTrimStart, setDraftTrimStart] = useState(0);
+  const [draftTrimEnd, setDraftTrimEnd] = useState<number | null>(null);
   const [draftSourceKind, setDraftSourceKind] = useState<MusicVoiceShellSource>('record');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -1802,10 +1827,53 @@ function VoicesTab({
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
+  // ── Auto-progress: silently poll pending voices so the user never has to tap
+  //    Refresh. Realtime announces transitions; this guarantees the row moves even
+  //    if the provider callback is delayed or missed.
+  const autoVoicePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoVoicePollingRef = useRef(false);
+  const voicesRef = useRef(voices);
+  useEffect(() => { voicesRef.current = voices; }, [voices]);
+  const hasPendingVoices = voices.some((v) => v.status === 'phrase_pending' || v.status === 'voice_pending');
+  useEffect(() => {
+    if (!hasPendingVoices) {
+      if (autoVoicePollRef.current) { clearInterval(autoVoicePollRef.current); autoVoicePollRef.current = null; }
+      return;
+    }
+    if (autoVoicePollRef.current) return;
+    autoVoicePollRef.current = setInterval(async () => {
+      if (autoVoicePollingRef.current) return;
+      const pending = voicesRef.current.filter((v) => v.status === 'phrase_pending' || v.status === 'voice_pending');
+      if (pending.length === 0) return;
+      autoVoicePollingRef.current = true;
+      try {
+        for (const v of pending) {
+          try {
+            const { data, error } = await supabase.functions.invoke('music-voice', {
+              body: { action: 'refresh', voiceRecordId: v.id },
+            });
+            if (!error) {
+              const nextVoice = normalizeMusicVoiceShell(data?.voice);
+              if (nextVoice) upsertVoice(nextVoice);
+            }
+          } catch {
+            // silent — next cycle retries
+          }
+        }
+      } finally {
+        autoVoicePollingRef.current = false;
+      }
+    }, 6000);
+    return () => {
+      if (autoVoicePollRef.current) { clearInterval(autoVoicePollRef.current); autoVoicePollRef.current = null; }
+    };
+  }, [hasPendingVoices]);
+
   const resetCreateState = () => {
     setDraftName('');
     setDraftType('custom');
     setDraftAccent('');
+    setDraftSkill('beginner');
     setDraftSourceKind('record');
     setIsRecording(false);
     setRecordingSeconds(0);
@@ -1813,6 +1881,9 @@ function VoicesTab({
     setRecordedClipBlob(null);
     setUploadedClipLabel('');
     setUploadedClipFile(null);
+    setDraftClipDuration(null);
+    setDraftTrimStart(0);
+    setDraftTrimEnd(null);
     durationRef.current = 0;
     chunksRef.current = [];
     if (timerRef.current) {
@@ -1873,6 +1944,9 @@ function VoicesTab({
       setRecordedClipBlob(null);
       setUploadedClipLabel('');
       setUploadedClipFile(null);
+      setDraftClipDuration(null);
+      setDraftTrimStart(0);
+      setDraftTrimEnd(null);
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -1883,6 +1957,9 @@ function VoicesTab({
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         setRecordedClipBlob(blob.size > 0 ? blob : null);
         setRecordedClipLabel(isAr ? `تسجيل ${seconds}ث` : `Recorded clip · ${seconds}s`);
+        setDraftClipDuration(seconds);
+        setDraftTrimStart(0);
+        setDraftTrimEnd(Math.min(seconds, 30));
         stopStream();
       };
 
@@ -1940,8 +2017,13 @@ function VoicesTab({
           sourceKind: draftSourceKind,
           clipLabel,
           audioDataUrl,
-          sourceDurationSeconds: draftSourceKind === 'record' ? Math.max(1, durationRef.current) : null,
+          sourceDurationSeconds: draftSourceKind === 'record'
+            ? Math.max(1, durationRef.current)
+            : (draftClipDuration ? Math.max(1, Math.round(draftClipDuration)) : null),
           validateLanguage: 'en',
+          singerSkillLevel: draftSkill,
+          vocalStartS: draftTrimStart,
+          ...(draftTrimEnd ? { vocalEndS: draftTrimEnd } : {}),
         },
       });
       if (error) {
@@ -1956,7 +2038,7 @@ function VoicesTab({
       onSelectVoice(nextVoice.id);
       setCreateOpen(false);
       resetCreateState();
-      toast.success(isAr ? 'تم إرسال الصوت لبدء جملة التحقق' : 'Your voice was sent to start the verification phrase');
+      toast.success(isAr ? 'تم استلام صوتك — نجهّز جملة التحقق تلقائياً وبنخبرك لما تجهز' : 'Voice received — preparing your verification phrase automatically, we\'ll tell you when it\'s ready');
     } catch (error: any) {
       console.error('Create music voice failed:', error);
       toast.error((isAr ? 'فشل إنشاء الصوت: ' : 'Voice creation failed: ') + (error?.message || 'Unknown error'));
@@ -2023,7 +2105,7 @@ function VoicesTab({
       setVerificationVoice(null);
       setVerificationFile(null);
       setVerificationLabel('');
-      toast.success(isAr ? 'تم إرسال تسجيل التحقق' : 'Verification recording sent');
+      toast.success(isAr ? 'تم الإرسال — ننشئ صوتك تلقائياً الآن، بنخبرك لما يجهز' : 'Sent — your voice is being created automatically, we\'ll tell you when it\'s ready');
     } catch (error: any) {
       console.error('Submit verification failed:', error);
       toast.error((isAr ? 'فشل إرسال التحقق: ' : 'Verification failed: ') + (error?.message || 'Unknown error'));
@@ -2174,10 +2256,57 @@ function VoicesTab({
                       <span>{formatMusicVoiceDate(voice.createdAt, isAr ? 'ar' : 'en')}</span>
                     </div>
 
+                    {/* Guided 1-2-3 progress — user always knows where they are */}
+                    {(voice.status === 'phrase_pending' || voice.status === 'phrase_ready' || voice.status === 'voice_pending') && (
+                      <div className="mt-1 space-y-1.5">
+                        <div className="flex items-center gap-1">
+                          {([
+                            { key: 'send', labelEn: 'Send voice', labelAr: 'إرسال الصوت', state: 'done' as const },
+                            {
+                              key: 'phrase', labelEn: 'Read phrase', labelAr: 'قراءة الجملة',
+                              state: (voice.status === 'phrase_pending' ? 'wait' : voice.status === 'phrase_ready' ? 'action' : 'done') as 'done' | 'wait' | 'action',
+                            },
+                            {
+                              key: 'ready', labelEn: 'Voice ready', labelAr: 'الصوت جاهز',
+                              state: (voice.status === 'voice_pending' ? 'wait' : 'pending') as 'wait' | 'pending',
+                            },
+                          ]).map((step, idx) => (
+                            <div key={step.key} className="flex items-center gap-1">
+                              {idx > 0 && <div className="w-3 h-px bg-[#d9dde7] dark:bg-white/15" />}
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                                step.state === 'done'
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                                  : step.state === 'action'
+                                    ? 'bg-[#060541]/10 dark:bg-white/10 text-[#060541] dark:text-white border border-[#060541]/25 dark:border-white/25'
+                                    : step.state === 'wait'
+                                      ? 'bg-sky-500/10 text-sky-600 dark:text-sky-300 border border-sky-500/25'
+                                      : 'bg-transparent text-[#858384] dark:text-white/35 border border-[#d9dde7] dark:border-white/10'
+                              }`}>
+                                {step.state === 'done' ? <Check className="h-2.5 w-2.5" /> : step.state === 'wait' ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : null}
+                                {isAr ? step.labelAr : step.labelEn}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {(voice.status === 'phrase_pending' || voice.status === 'voice_pending') && (
+                          <div className="text-[10px] text-[#858384] dark:text-white/45">
+                            {isAr ? 'نشتغل عليها تلقائياً — ما تحتاج تضغط أي شيء' : 'Working on it automatically — no need to tap anything'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {voice.status === 'phrase_ready' && voice.validatePhrase && (
-                      <div className="mt-1 rounded-xl border border-[#e9ceb0]/70 dark:border-[#858384]/30 bg-[#e9ceb0]/15 dark:bg-[#606062]/15 px-3 py-2.5 space-y-1">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#060541]/60 dark:text-white/40">{isAr ? 'جملة التحقق — اقرأها بصوت واضح' : 'Verification phrase — read this aloud'}</div>
+                      <div className="mt-1 rounded-xl border border-[#e9ceb0]/70 dark:border-[#858384]/30 bg-[#e9ceb0]/15 dark:bg-[#606062]/15 px-3 py-2.5 space-y-1.5">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#060541]/60 dark:text-white/40">
+                          {isAr ? 'للتحقق من صوتك — اقرأ الجملة بالإنجليزية' : 'To verify your voice — read it in English'}
+                        </div>
                         <div className="text-sm font-semibold text-[#060541] dark:text-white break-words leading-snug">{voice.validatePhrase}</div>
+                        <div className="text-[10px] text-[#606062] dark:text-white/50 leading-snug">
+                          {isAr
+                            ? 'اقرأ الجملة بالإنجليزية بصوت واضح كما هي مكتوبة، ثم اضغط "إرسال التحقق" وسجّل صوتك وأنت تقرأها. الغناء بلحن بسيط يعطي نتيجة أدق.'
+                            : 'Read the sentence above aloud in English, exactly as written — then tap "Send verification" and record yourself. Singing it with a simple melody gives a more accurate result.'}
+                        </div>
                       </div>
                     )}
 
@@ -2273,8 +2402,32 @@ function VoicesTab({
                 <Input value={draftAccent} onChange={(e) => setDraftAccent(e.target.value)} placeholder={isAr ? 'مثال: خليجي، كويتي' : 'e.g. Khaleeji, Kuwaiti'} maxLength={80} className="h-11 rounded-xl" />
               </div>
 
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/80">{isAr ? 'مستوى الغناء' : 'Singing level'}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { key: 'beginner', en: 'Just for fun', ar: 'للتجربة والمتعة' },
+                    { key: 'intermediate', en: 'I can sing', ar: 'أقدر أغني' },
+                    { key: 'advanced', en: 'Strong singer', ar: 'مغني قوي' },
+                    { key: 'professional', en: 'Professional', ar: 'محترف' },
+                  ] as const).map((opt) => (
+                    <button key={opt.key} type="button" onClick={() => setDraftSkill(opt.key)} className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${draftSkill === opt.key ? 'bg-[#060541] text-white border-[#060541]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/80'}`}>
+                      {isAr ? opt.ar : opt.en}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[10px] text-[#858384] dark:text-white/45 leading-snug">
+                  {isAr ? 'كن صادقاً — هذا يضبط كيفية تدريب الصوت' : 'Be honest — this tunes how the voice is trained'}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <div className="text-xs font-bold text-[#060541] dark:text-white/80">{isAr ? 'عينة الصوت' : 'Voice sample'}</div>
+                <div className="rounded-xl border border-sky-200/70 dark:border-sky-400/20 bg-sky-50/70 dark:bg-sky-500/10 px-3 py-2 text-[10px] text-sky-700 dark:text-sky-200 leading-snug">
+                  {isAr
+                    ? 'غنِّ بضعة أسطر بصوت واضح — بدون موسيقى خلفية. الغناء (مو الكلام العادي) يعطي أدق نسخة من صوتك.'
+                    : 'Sing a few lines clearly — no music behind your voice. Singing (not plain talking) gives the most accurate voice clone.'}
+                </div>
                 <div className="flex gap-2 p-1 rounded-xl bg-[#f0f1f5] dark:bg-white/[0.05]">
                   {([{ key: 'record', en: 'Record', ar: 'تسجيل' }, { key: 'upload', en: 'Upload file', ar: 'رفع ملف' }] as const).map((opt) => (
                     <button key={opt.key} type="button" onClick={() => { setDraftSourceKind(opt.key); setRecordedClipLabel(''); setRecordedClipBlob(null); setUploadedClipLabel(''); setUploadedClipFile(null); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${draftSourceKind === opt.key ? 'bg-white dark:bg-[#1a1f2e] shadow text-[#060541] dark:text-white' : 'text-[#606062] dark:text-white/50'}`}>
@@ -2309,9 +2462,69 @@ function VoicesTab({
                       <div className="text-xs font-bold text-[#060541] dark:text-white">{uploadedClipLabel || (isAr ? 'اختر ملفاً صوتياً' : 'Choose audio file')}</div>
                       <div className="text-[10px] text-[#858384] dark:text-white/40">{isAr ? 'MP3، WAV، M4A' : 'MP3, WAV, M4A'}</div>
                     </div>
-                    <input type="file" accept="audio/*" className="hidden" title={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'} aria-label={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'} onChange={(e) => { const f = e.target.files?.[0] || null; setUploadedClipFile(f); setUploadedClipLabel(f ? f.name : ''); setRecordedClipLabel(''); setRecordedClipBlob(null); }} />
+                    <input type="file" accept="audio/*" className="hidden" title={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'} aria-label={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'} onChange={async (e) => {
+                      const f = e.target.files?.[0] || null;
+                      setUploadedClipFile(f);
+                      setUploadedClipLabel(f ? f.name : '');
+                      setRecordedClipLabel('');
+                      setRecordedClipBlob(null);
+                      if (f) {
+                        const probed = await probeAudioDuration(f);
+                        setDraftClipDuration(probed);
+                        setDraftTrimStart(0);
+                        setDraftTrimEnd(probed ? Math.min(Math.floor(probed), 30) : null);
+                      } else {
+                        setDraftClipDuration(null);
+                        setDraftTrimStart(0);
+                        setDraftTrimEnd(null);
+                      }
+                    }} />
                   </label>
                 )}
+
+                {(recordedClipBlob || uploadedClipFile) && draftClipDuration !== null && draftClipDuration > 1 ? (
+                  <div className="rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] font-bold text-[#060541] dark:text-white/70">{isAr ? 'اختر أوضح جزء من صوتك' : 'Pick the clearest part of your voice'}</div>
+                      <div className="text-[10px] font-mono text-[#858384] dark:text-white/40">
+                        {formatTrimSeconds(draftTrimStart)} → {formatTrimSeconds(draftTrimEnd ?? Math.min(Math.floor(draftClipDuration), 30))}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-semibold text-[#858384] dark:text-white/40 w-9 shrink-0">{isAr ? 'البداية' : 'Start'}</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={Math.max(1, Math.floor(draftClipDuration) - 1)}
+                          step={1}
+                          value={draftTrimStart}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            const endCap = draftTrimEnd ?? Math.min(Math.floor(draftClipDuration), 30);
+                            setDraftTrimStart(Math.min(v, Math.max(0, endCap - 1)));
+                          }}
+                          className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-[#d9dde7] dark:bg-white/10 accent-sky-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-semibold text-[#858384] dark:text-white/40 w-9 shrink-0">{isAr ? 'النهاية' : 'End'}</span>
+                        <input
+                          type="range"
+                          min={draftTrimStart + 1}
+                          max={Math.max(draftTrimStart + 1, Math.min(Math.floor(draftClipDuration), draftTrimStart + 30))}
+                          step={1}
+                          value={draftTrimEnd ?? Math.min(Math.floor(draftClipDuration), 30)}
+                          onChange={(e) => setDraftTrimEnd(Math.max(draftTrimStart + 1, parseInt(e.target.value, 10)))}
+                          className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-[#d9dde7] dark:bg-white/10 accent-sky-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[9px] text-[#858384] dark:text-white/40 leading-snug">
+                      {isAr ? 'تخطَّ أي صمت أو ضجة في البداية — التحليل يحتاج صوتك فقط' : 'Skip any silence or noise at the start — the analysis needs only your voice'}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -2342,9 +2555,16 @@ function VoicesTab({
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="rounded-xl border border-[#e9ceb0]/70 dark:border-[#858384]/30 bg-[#e9ceb0]/15 dark:bg-[#606062]/15 px-4 py-3 space-y-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-[#060541]/55 dark:text-white/40">{isAr ? 'اقرأ هذه الجملة بصوت واضح' : 'Read this phrase out loud'}</div>
+              <div className="rounded-xl border border-[#e9ceb0]/70 dark:border-[#858384]/30 bg-[#e9ceb0]/15 dark:bg-[#606062]/15 px-4 py-3 space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#060541]/55 dark:text-white/40">
+                  {isAr ? 'اقرأ الجملة بالإنجليزية بصوت واضح' : 'Read this phrase out loud in English'}
+                </div>
                 <div className="text-sm font-semibold text-[#060541] dark:text-white break-words leading-snug">{verificationVoice.validatePhrase || ''}</div>
+                <div className="text-[10px] text-[#606062] dark:text-white/50 leading-snug">
+                  {isAr
+                    ? 'الجملة بالإنجليزية — اقرأها كما هي مكتوبة تماماً أثناء التسجيل. هذا يثبت أن الصوت صوتك. نصيحة: غنِّها بلحن بسيط — الغناء يعطي نسخة أدق من القراءة العادية.'
+                    : 'The phrase is in English — read it exactly as written while recording. This proves the voice is yours. Tip: sing it with a simple melody — singing gives a more accurate clone than plain reading.'}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -2412,7 +2632,7 @@ function VoicesTab({
                     const nextVoice = normalizeMusicVoiceShell(data?.voice);
                     if (!nextVoice) throw new Error(isAr ? 'تعذر إرسال التحقق' : 'Could not submit verification');
                     upsertVoice(nextVoice);
-                    toast.success(isAr ? 'تم إرسال تسجيل التحقق' : 'Verification recording sent');
+                    toast.success(isAr ? 'تم الإرسال — ننشئ صوتك تلقائياً الآن، بنخبرك لما يجهز' : 'Sent — your voice is being created automatically, we\'ll tell you when it\'s ready');
                     closeVerifyModal();
                   } catch (err: any) {
                     toast.error((isAr ? 'فشل إرسال التحقق: ' : 'Verification failed: ') + (err?.message || 'Unknown error'));
@@ -3080,6 +3300,9 @@ function VoicesTab({
       || rhythmTags.some((t) => GCC_MARKERS.test(t))
       || Boolean(khaleejiDialect);
   }, [effectiveIncludeTags, isGccStyleSelected, rhythmTags, khaleejiDialect]);
+
+  // Live lyric volume → which fixed durations can actually fit the words.
+  const lyricLineCount = useMemo(() => countLyricLines(lyricsText), [lyricsText]);
 
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(30);
@@ -4640,6 +4863,20 @@ function VoicesTab({
 
   const DURATION_VALUES = DURATION_PRESETS.map((preset) => preset.seconds);
   const MAX_DURATION_SECONDS = DURATION_PRESETS[DURATION_PRESETS.length - 1]?.seconds ?? 210;
+
+  // Max lyric lines each fixed duration can actually sing (mirrors AMP's duration
+  // contract). Used to disable too-small durations in the picker and block
+  // generation when lyrics overflow a fixed pick. Auto is exempt — it sizes itself.
+  const LYRIC_LINE_CAPACITY: Record<number, number> = { 30: 6, 60: 12, 90: 16, 120: 22, 150: 26, 180: 30, 210: 36 };
+
+  function countLyricLines(text: string): number {
+    return (text || '')
+      .split('\n')
+      .filter((line) => {
+        const t = line.trim();
+        return t && !/^\[[^\]]+\]$/.test(t) && !/^\([^)]+\)$/.test(t);
+      }).length;
+  }
 
   // Clean wind-down ending so Suno resolves the song instead of being guillotined
   // by the hard duration cutoff mid-phrase.
@@ -7123,6 +7360,21 @@ function VoicesTab({
         return;
       }
     }
+    // ── Lyric-fit guard for fixed durations ──
+    // If the words can't physically fit in the picked length, refuse before any
+    // credits are spent and point the user to the smallest fitting option / Auto.
+    if (duration !== AUTO_DURATION_VALUE && vocalType !== 'none') {
+      const capacity = LYRIC_LINE_CAPACITY[duration] ?? 36;
+      if (lyricLineCount > capacity) {
+        const minFit = DURATION_PRESETS.find((preset) => (LYRIC_LINE_CAPACITY[preset.seconds] ?? 36) >= lyricLineCount);
+        toast.error(
+          isAr
+            ? `كلماتك أطول من ${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')} — ${minFit ? `اختر ${minFit.display} على الأقل أو` : 'اختر'} "تلقائي"`
+            : `Your lyrics don't fit in ${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')} — pick ${minFit ? `${minFit.display} or longer, or ` : ''}Auto`
+        );
+        return;
+      }
+    }
     if (isGuest) {
       const redirectTo = buildStudioGuestRestorePath('music', {
         studioTab: 'music',
@@ -9103,9 +9355,15 @@ function VoicesTab({
                 className="flex-shrink-0 px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
               >
                 <option value={AUTO_DURATION_VALUE}>{isAr ? 'تلقائي — أغنية كاملة' : 'Auto — full song'}</option>
-                {DURATION_PRESETS.map((preset) => (
-                  <option key={preset.seconds} value={preset.seconds}>{preset.display}</option>
-                ))}
+                {DURATION_PRESETS.map((preset) => {
+                  const capacity = LYRIC_LINE_CAPACITY[preset.seconds] ?? 36;
+                  const tooSmall = vocalType !== 'none' && lyricLineCount > capacity;
+                  return (
+                    <option key={preset.seconds} value={preset.seconds} disabled={tooSmall}>
+                      {preset.display}{tooSmall ? (isAr ? ' — الكلمات أطول من هالمدة' : ' — lyrics too long') : ''}
+                    </option>
+                  );
+                })}
               </select>
               <button
                 type="button"

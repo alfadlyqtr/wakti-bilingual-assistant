@@ -52,6 +52,7 @@ import VisualAdsGenerator, {
   styleVariantMap,
   type VisualAdsState,
 } from '@/components/studio/VisualAdsGenerator';
+import { composeVisualAdsPoster } from '@/components/studio/visualAdsPosterComposer';
 
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads' | 'pro-studio';
 
@@ -210,6 +211,19 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('image', { studioTab: 'image', imageMode: 'create' }));
   const [restoredVisualAdsState, setRestoredVisualAdsState] = useState<VisualAdsState | null>(null);
+  // Raw (text-free) artworks + the text spec used — enables edit-text-after-generation
+  // without regenerating, and per-variation saved-state tracking.
+  const [visualAdsRawArtworks, setVisualAdsRawArtworks] = useState<string[]>([]);
+  const [visualAdsOverlaySpec, setVisualAdsOverlaySpec] = useState<{
+    aspectRatio: VisualAdsState['campaignDNA']['platform'];
+    ctaText: string | null;
+    featureChips: string[];
+    textPresence: VisualAdsState['creativeSoul']['textPresence'];
+    textColorStyle: VisualAdsState['creativeSoul']['textColorStyle'];
+    language: 'ar' | 'en';
+    brandAccent: string | null;
+  } | null>(null);
+  const [visualAdsImageIds, setVisualAdsImageIds] = useState<Array<string | null>>([]);
   const imageDraftRestoredRef = useRef(false);
 
   // Submode & quality
@@ -870,41 +884,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     if (insertErr) throw insertErr;
     return insertedRow?.id || null;
   }, [user?.id, prompt]);
-
-  const finalizeVisualAdsResult = useCallback(async (
-    rawUrls: string[],
-    taskId?: string | null,
-  ) => {
-    const sanitizedRawUrls = rawUrls.filter((url): url is string => typeof url === 'string' && url.length > 0);
-    const firstRawUrl = sanitizedRawUrls[0];
-    if (!firstRawUrl) throw new Error('Generation completed but no image URL returned');
-
-    const finalUrls = sanitizedRawUrls;
-    const imageIds = taskId
-      ? await Promise.all(finalUrls.map((finalUrl, index) => syncVisualAdsGalleryResult(taskId, index, finalUrl)))
-      : [];
-    const firstImageId = imageIds[0] || null;
-
-    if (taskId) {
-      await (supabase as any)
-        .from('visual_ads_jobs')
-        .update({
-          result_urls: finalUrls,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('task_id', taskId)
-        .eq('user_id', user?.id);
-    }
-
-    stopProgress();
-    setResultImageUrl(firstRawUrl);
-    setResultUrls(finalUrls);
-    setIsSaved(Boolean(firstImageId));
-    setSavedImageId(firstImageId);
-    setSavedBucketUrl(firstRawUrl);
-    setSavedSourceUrl(firstRawUrl);
-    return firstRawUrl;
-  }, [stopProgress, syncVisualAdsGalleryResult, user?.id]);
 
   const persistGeneratedImage = useCallback(async (
     imageUrl: string,
@@ -2086,7 +2065,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               : (normalizeShortValue(visualState.creativeSoul.styleVariant) || null);
             const resolvedCallToAction = visualState.creativeSoul.cta === 'custom'
               ? (customCta || null)
-              : (normalizeShortValue(selectedCtaChip?.labelEn) || normalizeShortValue(visualState.creativeSoul.cta) || null);
+              : (normalizeShortValue(language === 'ar' ? selectedCtaChip?.labelAr : selectedCtaChip?.labelEn) || normalizeShortValue(visualState.creativeSoul.cta) || null);
 
             const MAX_VISUAL_AD_IMAGES = 14;
             const assetEntries = (visualState.assets || [])
@@ -2135,113 +2114,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               });
             };
 
-            const isolateTransparentLogo = async (dataUri: string): Promise<string> => {
-              if (!dataUri.startsWith('data:image/')) return dataUri;
-              return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = img.width;
-                  canvas.height = img.height;
-                  const ctx = canvas.getContext('2d');
-                  if (!ctx) return resolve(dataUri);
-
-                  ctx.drawImage(img, 0, 0);
-                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                  const pixelData = imageData.data;
-                  const { width, height } = imageData;
-                  const visited = new Uint8Array(width * height);
-                  const queue: Array<[number, number]> = [
-                    [0, 0],
-                    [width - 1, 0],
-                    [0, height - 1],
-                    [width - 1, height - 1],
-                  ];
-
-                  const isRemovableBackgroundPixel = (offset: number) => {
-                    const alpha = pixelData[offset + 3];
-                    if (alpha < 20) return true;
-                    const red = pixelData[offset];
-                    const green = pixelData[offset + 1];
-                    const blue = pixelData[offset + 2];
-                    const max = Math.max(red, green, blue);
-                    const min = Math.min(red, green, blue);
-                    const brightness = (red + green + blue) / 3;
-                    return brightness > 215 && (max - min) < 40;
-                  };
-
-                  while (queue.length) {
-                    const current = queue.pop();
-                    if (!current) continue;
-                    const [x, y] = current;
-                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                    const index = y * width + x;
-                    if (visited[index]) continue;
-                    visited[index] = 1;
-
-                    const offset = index * 4;
-                    if (!isRemovableBackgroundPixel(offset)) continue;
-
-                    pixelData[offset + 3] = 0;
-                    queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
-                  }
-
-                  ctx.putImageData(imageData, 0, 0);
-
-                  let minX = width;
-                  let minY = height;
-                  let maxX = -1;
-                  let maxY = -1;
-                  for (let y = 0; y < height; y += 1) {
-                    for (let x = 0; x < width; x += 1) {
-                      const offset = (y * width + x) * 4;
-                      if (pixelData[offset + 3] > 0) {
-                        if (x < minX) minX = x;
-                        if (y < minY) minY = y;
-                        if (x > maxX) maxX = x;
-                        if (y > maxY) maxY = y;
-                      }
-                    }
-                  }
-
-                  if (maxX < minX || maxY < minY) {
-                    resolve(dataUri);
-                    return;
-                  }
-
-                  const padding = Math.max(12, Math.round(Math.max(maxX - minX, maxY - minY) * 0.08));
-                  const cropX = Math.max(0, minX - padding);
-                  const cropY = Math.max(0, minY - padding);
-                  const cropWidth = Math.min(width - cropX, maxX - minX + 1 + padding * 2);
-                  const cropHeight = Math.min(height - cropY, maxY - minY + 1 + padding * 2);
-                  const cropped = document.createElement('canvas');
-                  cropped.width = cropWidth;
-                  cropped.height = cropHeight;
-                  const croppedCtx = cropped.getContext('2d');
-                  if (!croppedCtx) {
-                    resolve(canvas.toDataURL('image/png'));
-                    return;
-                  }
-
-                  croppedCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-                  resolve(cropped.toDataURL('image/png'));
-                };
-                img.onerror = () => resolve(dataUri);
-                img.src = dataUri;
-              });
-            };
-
             const prepareAssetImage = async (asset: NonNullable<VisualAdsState['assets']>[number]) => {
               const originalImage = asset.image as string;
               if (asset.type === 'logo' && asset.logoMode === 'transparent') {
-                const isolated = await isolateTransparentLogo(originalImage);
-                return transformImage(isolated, { maxSize: 1600, preserveAlpha: true, output: 'png' });
+                // Real AI cutout runs server-side; just send a clean resized PNG here.
+                return transformImage(originalImage, { maxSize: 1600, preserveAlpha: true, output: 'png' });
               }
               if (asset.type === 'logo' && asset.logoMode === 'as-is') {
                 return transformImage(originalImage, { maxSize: 2200, quality: 0.97 });
               }
               if (asset.type === 'screenshot') {
-                return originalImage;
+                return transformImage(originalImage, { maxSize: 2000, quality: 0.95 });
               }
               if (asset.type === 'background') {
                 return transformImage(originalImage, { maxSize: 2400, quality: 0.94 });
@@ -2297,6 +2180,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             setSavedBucketUrl(null);
             setSavedImageId(null);
             setSavedSourceUrl(null);
+            setVisualAdsRawArtworks([]);
+            setVisualAdsOverlaySpec(null);
+            setVisualAdsImageIds([]);
             startProgress();
 
             try {
@@ -2359,21 +2245,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 screenshot_device: item.asset.type === 'screenshot' ? getScreenshotDevice(item.asset) : null,
               }));
 
-              const allowedText = visualState.creativeSoul.cta === 'custom'
-                ? (customCta ? [customCta] : [])
-                : (visualState.creativeSoul.cta ? [
-                  {
-                    'download-now': 'Download now',
-                    'get-started': 'Get started',
-                    'shop-now': 'Shop now',
-                    'learn-more': 'Learn more',
-                    'book-now': 'Book now',
-                    'start-free': 'Start free',
-                    'try-today': 'Try it today',
-                    'join-now': 'Join now',
-                    'subscribe': 'Subscribe',
-                  }[visualState.creativeSoul.cta] || ''
-                ].filter(Boolean) : []);
+              const allowedText = resolvedCallToAction ? [resolvedCallToAction] : [];
               const promptLines: string[] = [];
               const ratio = visualState.campaignDNA.platform || '1:1';
               const exactPosterText = [
@@ -2404,6 +2276,66 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 return;
               }
               const validImages = sentAssets.map((item) => item.preparedImage);
+
+              // The AI generates clean text-free artwork; exact poster text
+              // (CTA + key points) is drawn on top by the poster composer so it
+              // is always sharp, correctly spelled, and correctly placed.
+              const overlayTextSpec = {
+                aspectRatio: visualState.campaignDNA.platform,
+                ctaText: resolvedCallToAction,
+                featureChips: canUseFeatureChips ? featureChips : [],
+                textPresence: visualState.creativeSoul.textPresence,
+                textColorStyle: visualState.creativeSoul.textColorStyle,
+                language: (language === 'ar' ? 'ar' : 'en') as 'ar' | 'en',
+                brandAccent: visualState.brandKit?.accentColor || visualState.brandKit?.primaryColor || null,
+              };
+
+              // Compose exact poster text (CTA + key points) on top of each raw
+              // artwork, keep the raw artworks for later text edits, and sync
+              // every variation to the gallery under its own task id.
+              const finalizeVariations = async (pairs: Array<{ taskId: string; url: string }>) => {
+                const rawUrls = pairs.map((pair) => pair.url);
+                setVisualAdsRawArtworks(rawUrls);
+                setVisualAdsOverlaySpec(overlayTextSpec);
+
+                const hasOverlayText = Boolean(overlayTextSpec.ctaText) || overlayTextSpec.featureChips.length > 0;
+                const composedUrls: string[] = [];
+                for (const rawUrl of rawUrls) {
+                  if (!hasOverlayText) {
+                    composedUrls.push(rawUrl);
+                    continue;
+                  }
+                  try {
+                    const blob = await composeVisualAdsPoster(rawUrl, overlayTextSpec);
+                    const objectUrl = URL.createObjectURL(blob);
+                    try {
+                      const stored = await storeGeneratedImageAsset(objectUrl);
+                      composedUrls.push(stored.url);
+                    } finally {
+                      URL.revokeObjectURL(objectUrl);
+                    }
+                  } catch (overlayError) {
+                    console.error('Poster text overlay failed, using raw artwork:', overlayError);
+                    composedUrls.push(rawUrl);
+                  }
+                }
+
+                const imageIds = await Promise.all(
+                  pairs.map((pair, index) =>
+                    syncVisualAdsGalleryResult(pair.taskId, 0, composedUrls[index]).catch(() => null)),
+                );
+                setVisualAdsImageIds(imageIds);
+
+                stopProgress();
+                setResultImageUrl(composedUrls[0]);
+                setResultUrls(composedUrls);
+                setPickerIndex(0);
+                setIsSaved(Boolean(imageIds[0]));
+                setSavedImageId(imageIds[0] || null);
+                setSavedBucketUrl(composedUrls[0]);
+                setSavedSourceUrl(composedUrls[0]);
+                return composedUrls[0];
+              };
 
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.access_token) throw new Error('Not authenticated');
@@ -2503,11 +2435,21 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   },
                   prompt: finalPromptForKie,
                   aspect_ratio: visualState.campaignDNA.platform,
+                  brand: visualState.brandKit?.kitId ? {
+                    primary_color: visualState.brandKit.primaryColor,
+                    accent_color: visualState.brandKit.accentColor,
+                    tone: visualState.brandKit.tone,
+                  } : null,
                 }),
               });
 
               if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
+                if (errData?.error === 'TRIAL_LIMIT_REACHED' || typeof errData?.code === 'string' && errData.code.startsWith('TRIAL_')) {
+                  throw new Error(language === 'ar'
+                    ? (errData.messageAr || 'التجربة المجانية تسمح بإعلان واحد فقط. اشترك لإنشاء المزيد!')
+                    : (errData.message || 'Free trial allows 1 poster ad. Subscribe to create more!'));
+                }
                 throw new Error(getErrorMessage(errData, 'Failed to start Visual Ads generation'));
               }
 
@@ -2517,44 +2459,62 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 setResultImageUrl(taskData.videoUrl);
                 setResultUrls([taskData.videoUrl]);
               } else if (taskData.task_id) {
-                const taskId = taskData.task_id;
+                const taskIds: string[] = (Array.isArray(taskData.task_ids) ? taskData.task_ids : [taskData.task_id])
+                  .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
 
-                // Wait for the webhook to update the DB row via Realtime.
-                // KIE calls back → webhook writes to DB → Realtime pushes to frontend instantly.
+                // Wait for ALL variations to finish: KIE calls the webhook → the webhook
+                // writes each job row → Realtime pushes it here instantly. Polling every
+                // 10s is the fallback for dropped connections on mobile/background.
                 await new Promise<void>((resolve, reject) => {
                   const TIMEOUT_MS = 30 * 60 * 1000;
                   let settled = false;
+                  const outcomes = new Map<string, { status: string; urls: string[]; error?: string }>();
+                  const channels: Array<ReturnType<typeof supabase.channel>> = [];
+                  let settle: (fn: () => void) => void = () => {};
 
-                  let settle = (fn: () => void) => {
+                  const finish = () => {
                     if (settled) return;
-                    settled = true;
-                    clearTimeout(timeoutId);
-                    supabase.removeChannel(channel);
-                    fn();
+                    const pairs = taskIds
+                      .map((id) => ({
+                        taskId: id,
+                        url: outcomes.get(id)?.status === 'COMPLETED' ? (outcomes.get(id)?.urls[0] || '') : '',
+                      }))
+                      .filter((pair) => pair.url);
+                    if (!pairs.length) {
+                      const firstError = [...outcomes.values()].find((outcome) => outcome.error)?.error;
+                      settle(() => reject(new Error(firstError || 'Ad generation failed')));
+                      return;
+                    }
+                    settle(() => {
+                      void (async () => {
+                        try {
+                          await finalizeVariations(pairs);
+                          resolve();
+                        } catch (error) {
+                          reject(error instanceof Error ? error : new Error('Ad generation failed'));
+                        }
+                      })();
+                    });
                   };
 
-                  const handleRow = (row: { status: string; result_urls?: string[]; error_msg?: string }) => {
+                  const recordOutcome = (taskId: string, status: string, urls: string[], error?: string) => {
+                    if (settled || outcomes.has(taskId)) return;
+                    outcomes.set(taskId, { status, urls, error });
+                    if (taskIds.every((id) => outcomes.has(id))) finish();
+                  };
+
+                  const handleRow = (taskId: string, row: { status: string; result_urls?: string[]; error_msg?: string }) => {
                     if (row.status === 'COMPLETED') {
                       const generatedUrls = Array.isArray(row.result_urls)
                         ? row.result_urls.filter((url): url is string => typeof url === 'string' && url.length > 0)
                         : [];
-                      const finalUrl = generatedUrls[0];
-                      if (finalUrl) {
-                        settle(() => {
-                          void (async () => {
-                            try {
-                              await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId);
-                              resolve();
-                            } catch (error) {
-                              reject(error instanceof Error ? error : new Error('Ad generation failed'));
-                            }
-                          })();
-                        });
+                      if (generatedUrls[0]) {
+                        recordOutcome(taskId, 'COMPLETED', generatedUrls);
                       } else {
-                        settle(() => reject(new Error('Generation completed but no image URL returned')));
+                        recordOutcome(taskId, 'FAILED', [], 'Generation completed but no image URL returned');
                       }
                     } else if (row.status === 'FAILED') {
-                      settle(() => reject(new Error(row.error_msg || 'Ad generation failed')));
+                      recordOutcome(taskId, 'FAILED', [], row.error_msg || 'Ad generation failed');
                     }
                   };
 
@@ -2562,87 +2522,82 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     settle(() => reject(new Error('Ad generation timed out. Please try again.')));
                   }, TIMEOUT_MS);
 
-                  // Fallback polling in case WebSocket drops on mobile/background
                   const pollInterval = setInterval(async () => {
-                    if (settled) {
-                      clearInterval(pollInterval);
-                      return;
-                    }
+                    if (settled) return;
                     try {
                       const supabaseJobs: any = supabase;
                       const { data } = await supabaseJobs
                         .from('visual_ads_jobs')
-                        .select('status, result_urls, error_msg')
-                        .eq('task_id', taskId)
-                        .maybeSingle();
-                      if (data) handleRow(data as any);
-                      if (data?.status === 'COMPLETED' || data?.status === 'FAILED') return;
+                        .select('task_id, status, result_urls, error_msg')
+                        .in('task_id', taskIds);
+                      for (const row of data || []) {
+                        if (row?.task_id) handleRow(row.task_id, row as any);
+                      }
+                      if (settled) return;
 
-                      const statusRes = await fetch(visualAdsFunctionUrl, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${session.access_token}`,
-                        },
-                        body: JSON.stringify({
-                          mode: 'status',
-                          generation_type: 'visual_ads',
-                          task_id: taskId,
-                        }),
-                      });
-                      if (!statusRes.ok) return;
-
-                      const statusPayload = await statusRes.json().catch(() => null);
-                      const statusData = statusPayload?.data;
-                      if (statusData?.status === 'COMPLETED') {
-                        const generatedUrls = Array.isArray(statusData.generated)
-                          ? statusData.generated.filter((url: unknown): url is string => typeof url === 'string' && url.length > 0)
-                          : [];
-                        const finalUrl = generatedUrls[0] || (typeof statusData.video?.url === 'string' ? statusData.video.url : null);
-                        if (finalUrl) {
-                          settle(() => {
-                            void (async () => {
-                              try {
-                                await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId);
-                                resolve();
-                              } catch (error) {
-                                reject(error instanceof Error ? error : new Error('Ad generation failed'));
-                              }
-                            })();
-                          });
+                      // Ask the provider directly for any task still pending
+                      for (const pendingId of taskIds.filter((id) => !outcomes.has(id))) {
+                        const statusRes = await fetch(visualAdsFunctionUrl, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`,
+                          },
+                          body: JSON.stringify({
+                            mode: 'status',
+                            generation_type: 'visual_ads',
+                            task_id: pendingId,
+                          }),
+                        });
+                        if (!statusRes.ok) continue;
+                        const statusPayload = await statusRes.json().catch(() => null);
+                        const statusData = statusPayload?.data;
+                        if (statusData?.status === 'COMPLETED') {
+                          const generatedUrls = Array.isArray(statusData.generated)
+                            ? statusData.generated.filter((url: unknown): url is string => typeof url === 'string' && url.length > 0)
+                            : [];
+                          const fallbackUrl = typeof statusData.video?.url === 'string' ? statusData.video.url : null;
+                          if (generatedUrls[0] || fallbackUrl) {
+                            recordOutcome(pendingId, 'COMPLETED', generatedUrls.length ? generatedUrls : [fallbackUrl as string]);
+                          }
+                        } else if (statusData?.status === 'FAILED') {
+                          recordOutcome(pendingId, 'FAILED', [], statusData.error || 'Ad generation failed');
                         }
-                      } else if (statusData?.status === 'FAILED') {
-                        settle(() => reject(new Error(statusData.error || 'Ad generation failed')));
                       }
                     } catch (e) {
                     }
-                  }, 10000); // Poll every 10 seconds
+                  }, 10000);
 
-                  const channel = supabase
-                    .channel(`visual-ads-job-${taskId}`)
-                    .on('postgres_changes', {
-                      event: 'UPDATE',
-                      schema: 'public',
-                      table: 'visual_ads_jobs',
-                      filter: `task_id=eq.${taskId}`,
-                    }, (payload: any) => handleRow(payload.new))
-                    .subscribe(async (status) => {
-                      if (status !== 'SUBSCRIBED') return;
-                      const supabaseJobs: any = supabase;
-                      const { data } = await supabaseJobs
-                        .from('visual_ads_jobs')
-                        .select('status, result_urls, error_msg')
-                        .eq('task_id', taskId)
-                        .maybeSingle();
-                      if (data) handleRow(data as any);
-                    });
-
-                  // Ensure polling cleanup on settle
-                  const originalSettle = settle;
-                  settle = (fn) => {
+                  settle = (fn: () => void) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeoutId);
                     clearInterval(pollInterval);
-                    originalSettle(fn);
+                    channels.forEach((ch) => supabase.removeChannel(ch));
+                    fn();
                   };
+
+                  for (const taskId of taskIds) {
+                    const channel = supabase
+                      .channel(`visual-ads-job-${taskId}`)
+                      .on('postgres_changes', {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'visual_ads_jobs',
+                        filter: `task_id=eq.${taskId}`,
+                      }, (payload: any) => handleRow(taskId, payload.new))
+                      .subscribe(async (status) => {
+                        if (status !== 'SUBSCRIBED') return;
+                        const supabaseJobs: any = supabase;
+                        const { data } = await supabaseJobs
+                          .from('visual_ads_jobs')
+                          .select('status, result_urls, error_msg')
+                          .eq('task_id', taskId)
+                          .maybeSingle();
+                        if (data) handleRow(taskId, data as any);
+                      });
+                    channels.push(channel);
+                  }
                 });
               } else {
                 throw new Error('Failed to start task: no task_id returned');
@@ -2677,7 +2632,51 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             setResultImageUrl(null);
             setResultUrls([]);
             setResultError(null);
+            setVisualAdsRawArtworks([]);
+            setVisualAdsOverlaySpec(null);
+            setVisualAdsImageIds([]);
             stopProgress();
+          }}
+          resultUrls={resultUrls}
+          onSelectResult={(index) => {
+            const url = resultUrls[index];
+            if (!url) return;
+            setPickerIndex(index);
+            setResultImageUrl(url);
+            const imageId = visualAdsImageIds[index] || null;
+            setSavedImageId(imageId);
+            setIsSaved(Boolean(imageId));
+            setSavedBucketUrl(url);
+            setSavedSourceUrl(url);
+          }}
+          onEditText={async (edit) => {
+            // Text is code-drawn, so editing it never needs a regeneration —
+            // we just re-draw it on the raw artwork.
+            if (!visualAdsRawArtworks.length || !visualAdsOverlaySpec) return;
+            const newSpec = { ...visualAdsOverlaySpec, ...edit };
+            setVisualAdsOverlaySpec(newSpec);
+            const recomposed: string[] = [];
+            for (const raw of visualAdsRawArtworks) {
+              try {
+                const blob = await composeVisualAdsPoster(raw, newSpec);
+                const objectUrl = URL.createObjectURL(blob);
+                try {
+                  recomposed.push((await storeGeneratedImageAsset(objectUrl)).url);
+                } finally {
+                  URL.revokeObjectURL(objectUrl);
+                }
+              } catch (recomposeError) {
+                console.error('Poster text edit failed, keeping previous image:', recomposeError);
+                recomposed.push(raw);
+              }
+            }
+            setResultUrls(recomposed);
+            setResultImageUrl(recomposed[pickerIndex] || recomposed[0]);
+            setVisualAdsImageIds([]);
+            setSavedImageId(null);
+            setIsSaved(false);
+            setSavedBucketUrl(null);
+            setSavedSourceUrl(null);
           }}
         />
       )}

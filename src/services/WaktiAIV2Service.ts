@@ -691,6 +691,15 @@ class WaktiAIV2ServiceClass {
       if (type === 'image/jpg') type = 'image/jpeg';
       const isImage = typeof type === 'string' && type.startsWith('image/');
       const raw = rawCandidate;
+      // PDF passthrough: no downscaling, just a size cap (Gemini reads PDFs inline)
+      if (type === 'application/pdf' && raw) {
+        const pdfBytes = this.approxBase64Bytes(raw);
+        if (pdfBytes > 4 * 1024 * 1024) {
+          throw new Error('PDF is too large. Please upload a PDF under 3MB.');
+        }
+        processed.push({ ...f, data: raw, content: raw, type });
+        continue;
+      }
       if (!isImage || !raw) { processed.push(f); continue; }
       let outBase64 = raw;
       if (type && !supportedTypes.includes(type)) {
@@ -1307,11 +1316,25 @@ class WaktiAIV2ServiceClass {
           signal.addEventListener('abort', abortHandler, { once: true });
         }
 
-        // Removed client-side idle timeout to avoid false timeouts on Safari/iOS
+        // Silence watchdog: the brain sends keepalive pings during long operations,
+        // so 2 minutes of TOTAL silence means the connection is truly dead.
+        // (A shorter idle timeout was removed before — false positives on Safari/iOS.
+        // This one only trips when absolutely nothing arrives, keepalives included.)
+        const STREAM_SILENCE_TIMEOUT_MS = 120000;
+        let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+        const readWithWatchdog = () => {
+          if (silenceTimer) clearTimeout(silenceTimer);
+          return Promise.race([
+            reader.read(),
+            new Promise<never>((_, reject) => {
+              silenceTimer = setTimeout(() => reject(new Error('The response took too long. Please try again.')), STREAM_SILENCE_TIMEOUT_MS);
+            }),
+          ]);
+        };
         let firstTokenReceived = false;
         try {
           while (true) {
-            const { done, value } = await reader.read();
+            const { done, value } = await readWithWatchdog();
             if (done) {
               // Flush any remaining buffered SSE data (prevents final chunk from being dropped)
               try {
@@ -1484,6 +1507,7 @@ class WaktiAIV2ServiceClass {
             }
           }
         } finally {
+          if (silenceTimer) clearTimeout(silenceTimer);
           try { reader.releaseLock(); } catch {}
           if (signal) signal.removeEventListener('abort', abortHandler as any);
           try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}

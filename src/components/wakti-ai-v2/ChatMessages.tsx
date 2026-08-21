@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle, Bell, ChevronDown } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle, Bell, ChevronDown, FileDown, Star } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -12,7 +12,7 @@ import { stripReminderBlocks, parseReminderFromResponse, formatReminderTime } fr
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
-import { YouTubeResultsCard } from './YouTubeResultsCard';
+import { YouTubeResultsCard, YouTubeActionChips } from './YouTubeResultsCard';
 import { StudyModeMessage } from './StudyModeMessage';
 import { SearchResultActions } from './SearchResultActions';
 // Note: ToolUsageIndicator, ErrorExplanationCard, MessageTimestamp, EnhancedQuickActions
@@ -524,6 +524,9 @@ interface ChatMessagesProps {
   onUpdateMessage?: (messageId: string, content: string) => void;
   onReplyToMessage?: (messageId: string, content: string) => void;
   onStudyFollowUp?: (prompt: string) => void;
+  onYouTubeAction?: (prompt: string) => void;
+  onRetryMessage?: (messageId: string) => void;
+  onPinHighlight?: (messageId: string) => void;
   onScrollToLatest?: (behavior?: ScrollBehavior) => void;
   streamingMessageId?: string | null;
   streamingText?: string;
@@ -550,6 +553,9 @@ export function ChatMessages({
   onUpdateMessage,
   onReplyToMessage,
   onStudyFollowUp,
+  onYouTubeAction,
+  onRetryMessage,
+  onPinHighlight,
   onScrollToLatest,
   streamingMessageId,
   streamingText = '',
@@ -1567,18 +1573,23 @@ export function ChatMessages({
 
     // YouTube multi-result cards (new Option A flow)
     if (message.role === 'assistant' && Array.isArray(ytResults) && ytResults.length > 0) {
-      return <YouTubeResultsCard results={ytResults} />;
+      return <YouTubeResultsCard results={ytResults} onVideoAction={onYouTubeAction} />;
     }
 
     // YouTube search result preview (legacy single result)
     if (message.role === 'assistant' && yt && yt.videoId) {
       return (
-        <YouTubePreview
-          videoId={yt.videoId}
-          title={yt.title}
-          description={yt.description}
-          thumbnail={yt.thumbnail}
-        />
+        <div className="w-full space-y-2">
+          <YouTubePreview
+            videoId={yt.videoId}
+            title={yt.title}
+            description={yt.description}
+            thumbnail={yt.thumbnail}
+          />
+          {onYouTubeAction && (
+            <YouTubeActionChips videoId={yt.videoId} onAction={onYouTubeAction} language={language} />
+          )}
+        </div>
       );
     }
 
@@ -2504,6 +2515,49 @@ export function ChatMessages({
                       return (
                         <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/30">
                           <div className="flex gap-1">
+                            {/* Pin to Highlights - successful assistant answers only */}
+                            {message.role === 'assistant' && !metadata?.error && !metadata?.loading && onPinHighlight && (
+                              <button
+                                onClick={() => onPinHighlight(message.id)}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors active:scale-95"
+                                title={language === 'ar' ? 'تثبيت في المميزات' : 'Pin to Highlights'}
+                              >
+                                <Star className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {/* Retry Button - failed assistant responses only */}
+                            {message.role === 'assistant' && metadata?.error && onRetryMessage && (
+                              <button
+                                onClick={() => onRetryMessage(message.id)}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors active:scale-95"
+                                title={language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">{language === 'ar' ? 'إعادة المحاولة' : 'Retry'}</span>
+                              </button>
+                            )}
+                            {/* Transcript PDF export - transcript responses only */}
+                            {message.role === 'assistant' && metadata?.transcript && (
+                              <button
+                                onClick={async () => {
+                                  const toastId = toast.loading(language === 'ar' ? 'جاري تجهيز ملف PDF...' : 'Preparing PDF...');
+                                  try {
+                                    const { downloadTranscriptPdf } = await import('@/utils/transcriptPdf');
+                                    await downloadTranscriptPdf({ content: message.content, videoUrl: metadata?.videoUrl || null, language });
+                                    toast.dismiss(toastId);
+                                    toast.success(language === 'ar' ? 'تم تحميل الملف' : 'PDF downloaded');
+                                  } catch {
+                                    toast.dismiss(toastId);
+                                    toast.error(language === 'ar' ? 'تعذر إنشاء الملف' : 'Could not create the PDF');
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors active:scale-95"
+                                title={language === 'ar' ? 'تحميل التفريغ كملف PDF' : 'Download transcript as PDF'}
+                              >
+                                <FileDown className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">{language === 'ar' ? 'PDF' : 'PDF'}</span>
+                              </button>
+                            )}
                             {/* Copy Button - More Visible */}
                             <button
                               onClick={() => {

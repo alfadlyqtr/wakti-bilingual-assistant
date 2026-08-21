@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { smartConversationTitle } from '@/utils/conversationTopics';
 
 export const MAX_CONVERSATIONS = 15;
 
@@ -93,7 +94,7 @@ function generateTitle(messages: any[]): string {
   const userMsg = msgs.find((m: any) => m?.role === 'user');
   const first = userMsg || msgs.find(Boolean) || {};
   const text = typeof first?.content === 'string' ? first.content.trim() : '';
-  return normalizeConversationTitle(text, 'Conversation');
+  return smartConversationTitle(text, 'Conversation');
 }
 
 export const SavedConversationsService = {
@@ -350,6 +351,71 @@ export const SavedConversationsService = {
     const { error } = await query;
     if (error) throw error;
     return true;
+  },
+
+  // Full-text search across every saved conversation (titles + message contents).
+  // Scale-safe: users hold at most MAX_CONVERSATIONS rows, so client-side matching
+  // on a single fetch is fast and avoids any DB schema/RPC work.
+  async searchConversations(query: string): Promise<Array<{
+    id: string;
+    conversationId: string | null;
+    title: string;
+    snippet: string;
+    messageCount: number;
+    lastMessageAt: string;
+    isSaved: boolean;
+  }>> {
+    const q = (query || '').trim().toLowerCase();
+    if (q.length < 2) return [];
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return [];
+    const { data, error } = await (supabase as any)
+      .from('ai_saved_conversations')
+      .select('id, title, messages, message_count, last_message_at, is_saved, conversation_id')
+      .eq('user_id', user.id)
+      .order('last_message_at', { ascending: false })
+      .limit(50);
+    if (error || !Array.isArray(data)) return [];
+
+    const results: Array<{ id: string; conversationId: string | null; title: string; snippet: string; messageCount: number; lastMessageAt: string; isSaved: boolean }> = [];
+    for (const row of data) {
+      const title = typeof row.title === 'string' ? row.title : '';
+      const msgs = Array.isArray(row.messages) ? row.messages : [];
+      const titleHit = title.toLowerCase().includes(q);
+      let snippet = '';
+      for (const m of msgs) {
+        const content = typeof m?.content === 'string' ? m.content : '';
+        const idx = content.toLowerCase().indexOf(q);
+        if (idx !== -1) {
+          snippet = content.slice(Math.max(0, idx - 40), idx + 80).replace(/\s+/g, ' ').trim();
+          break;
+        }
+      }
+      if (titleHit || snippet) {
+        results.push({
+          id: row.id,
+          conversationId: row.conversation_id || null,
+          title: title || 'Conversation',
+          snippet,
+          messageCount: row.message_count || msgs.length,
+          lastMessageAt: row.last_message_at,
+          isSaved: row.is_saved === true,
+        });
+      }
+    }
+    return results.slice(0, 10);
+  },
+
+  // Set (or clear) the public share token for a conversation row.
+  // Accepts either the DB row id or the frontend conversation_id.
+  async setShareToken(conversationKey: string, shareToken: string | null): Promise<void> {
+    const db = supabase as any;
+    const { error } = await db
+      .from('ai_saved_conversations')
+      .update({ share_token: shareToken, updated_at: new Date().toISOString() })
+      .or(`conversation_id.eq.${conversationKey},id.eq.${conversationKey}`);
+    if (error) throw error;
   },
 
   // Legacy compat wrappers

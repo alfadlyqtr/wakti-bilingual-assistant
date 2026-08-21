@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Plus, RefreshCw, Trash2, Eraser, Zap, SlidersHorizontal } from 'lucide-react';
+import { MessageSquare, Plus, RefreshCw, Trash2, Eraser, Zap, SlidersHorizontal, Search, Star, X, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ConversationMetaUpdate, MAX_CONVERSATIONS } from '@/services/SavedConversationsService';
+import { ConversationMetaUpdate, MAX_CONVERSATIONS, SavedConversationsService } from '@/services/SavedConversationsService';
+import { HighlightsService, HighlightItem } from '@/services/HighlightsService';
+import { deriveTopic } from '@/utils/conversationTopics';
 import { ConversationManagerDialog } from './ConversationManagerDialog';
 import {
   AlertDialog,
@@ -39,6 +41,7 @@ interface ConversationsListProps {
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onShareConversation?: (id: string) => void;
   onRefresh: () => void;
   onClose?: () => void;
   onNewConversation?: () => Promise<boolean> | boolean;
@@ -53,6 +56,7 @@ export function ConversationsList({
   currentConversationId,
   onSelectConversation,
   onDeleteConversation,
+  onShareConversation,
   onRefresh,
   onClose,
   onNewConversation,
@@ -64,6 +68,28 @@ export function ConversationsList({
   const { language } = useTheme();
   const [isClearing, setIsClearing] = useState(false);
   const [managingConversation, setManagingConversation] = useState<Conversation | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Awaited<ReturnType<typeof SavedConversationsService.searchConversations>> | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [highlights, setHighlights] = useState<HighlightItem[]>(() => HighlightsService.list());
+  const [showHighlights, setShowHighlights] = useState(false);
+
+  // Debounced full-text search across all saved chats (titles + message contents)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) { setSearchResults(null); setSearchLoading(false); return; }
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        setSearchResults(await SavedConversationsService.searchConversations(q));
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Limit to 10 — active first, then by recency
   const limitedConversations = conversations.slice(0, MAX_CONVERSATIONS);
@@ -104,7 +130,9 @@ export function ConversationsList({
   const handleClearAll = async () => {
     setIsClearing(true);
     try {
-      for (const conversation of limitedConversations) {
+      // Saved (protected) chats survive Delete All — that's their whole purpose.
+      const deletable = limitedConversations.filter((conversation) => conversation.is_saved !== true);
+      for (const conversation of deletable) {
         await onDeleteConversation(conversation.id);
       }
       onRefresh();
@@ -168,6 +196,26 @@ export function ConversationsList({
             <RefreshCw className="h-3 w-3" />
           </Button>
 
+        </div>
+
+        {/* Search all conversations (titles + contents) */}
+        <div className="mt-3 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={language === 'ar' ? 'ابحث في كل المحادثات...' : 'Search all chats...'}
+            className="w-full h-9 pl-9 pr-8 rounded-full text-xs bg-background border border-border/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              title={language === 'ar' ? 'مسح البحث' : 'Clear search'}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         {(sessionMessages.length > 0 || limitedConversations.length > 0) && (
@@ -239,8 +287,8 @@ export function ConversationsList({
                   </AlertDialogTitle>
                   <AlertDialogDescription>
                     {language === 'ar'
-                      ? 'هل أنت متأكد من حذف جميع المحادثات؟ لا يمكن التراجع عن هذا الإجراء.'
-                      : 'Are you sure you want to delete all conversations? This action cannot be undone.'
+                      ? 'سيتم حذف جميع المحادثات غير المحفوظة. المحادثات المحفوظة (المحمية) تبقى كما هي. لا يمكن التراجع عن هذا الإجراء.'
+                      : 'This will delete all unsaved conversations. Saved (protected) chats stay safe. This action cannot be undone.'
                     }
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -278,15 +326,75 @@ export function ConversationsList({
         </div>
       </div>
 
+      {/* Pinned Highlights */}
+      {highlights.length > 0 && searchResults === null && (
+        <div className="border-b bg-amber-500/5 dark:bg-amber-500/10">
+          <button
+            onClick={() => setShowHighlights((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-300"
+          >
+            <span className="flex items-center gap-1.5">
+              <Star className="h-3.5 w-3.5 fill-current" />
+              {language === 'ar' ? `المميزات (${highlights.length})` : `Highlights (${highlights.length})`}
+            </span>
+            <span className="text-[10px] opacity-70">{showHighlights ? '▲' : '▼'}</span>
+          </button>
+          {showHighlights && (
+            <div className="px-4 pb-3 space-y-2">
+              {highlights.map((h) => (
+                <div key={h.id} className="flex items-start gap-2 rounded-xl border border-amber-300/40 bg-background/80 p-2.5">
+                  <button
+                    className="flex-1 min-w-0 text-left"
+                    onClick={() => { if (h.conversationId) handleSelectConversation(h.conversationId); }}
+                    title={h.conversationTitle}
+                  >
+                    <p className="text-xs leading-5 line-clamp-2 text-foreground/90">{h.content}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground truncate">{h.conversationTitle}</p>
+                  </button>
+                  <button
+                    onClick={() => setHighlights(HighlightsService.remove(h.id))}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    title={language === 'ar' ? 'إزالة' : 'Remove'}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Unified Conversations List */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-2">
-          {limitedConversations.map((conversation) => {
+          {searchResults !== null ? (
+            searchLoading ? (
+              <p className="text-center text-xs text-muted-foreground py-6">{language === 'ar' ? 'جاري البحث...' : 'Searching...'}</p>
+            ) : searchResults.length === 0 ? (
+              <p className="text-center text-xs text-muted-foreground py-6">{language === 'ar' ? 'لا نتائج مطابقة' : 'No matches found'}</p>
+            ) : (
+              searchResults.map((result) => (
+                <button
+                  key={result.id}
+                  onClick={() => handleSelectConversation(result.conversationId || result.id)}
+                  className="w-full text-left rounded-2xl border border-[rgba(233,206,176,0.82)] bg-background/80 p-3 hover:border-[rgba(79,141,246,0.34)] transition-all"
+                >
+                  <p className="truncate text-sm font-semibold text-[hsl(243_84%_14%)]">{result.title}</p>
+                  {result.snippet && (
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">…{result.snippet}…</p>
+                  )}
+                </button>
+              ))
+            )
+          ) : (
+          limitedConversations.map((conversation) => {
             const isActive = (conversation as any).is_active === true;
             const dateVal = conversation.lastMessageAt || conversation.last_message_at;
             const matchesCurrent = currentConversationId === conversation.id || currentConversationId === conversation.conversation_id;
             const isCurrent = currentConversationId ? matchesCurrent : isActive;
             const messageCount = conversation.messageCount ?? conversation.message_count ?? 0;
+            const topicEmoji = /^\p{Extended_Pictographic}/u.test(conversation.title || '') ? null : (deriveTopic(conversation.title || '')?.emoji || null);
             return (
               <div
                 key={conversation.id}
@@ -303,7 +411,7 @@ export function ConversationsList({
                   <div className="min-w-0 flex-1 pr-1">
                     <div className="mb-1 flex items-center gap-2">
                       <p className="truncate text-sm font-semibold text-[hsl(243_84%_14%)]">
-                        {conversation.title}
+                        {topicEmoji ? `${topicEmoji} ` : ''}{conversation.title}
                       </p>
                       {conversation.is_saved && (
                         <Badge className="border border-[rgba(16,185,129,0.18)] bg-[rgba(16,185,129,0.10)] text-[10px] text-[hsl(160_80%_28%)]">
@@ -324,6 +432,20 @@ export function ConversationsList({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    {onShareConversation && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white px-0 text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.05)] hover:bg-[rgba(6,5,65,0.03)]"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onShareConversation(conversation.id);
+                        }}
+                        title={language === 'ar' ? 'مشاركة المحادثة' : 'Share chat'}
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -341,9 +463,10 @@ export function ConversationsList({
                 </div>
               </div>
             );
-          })}
+          })
+          )}
 
-          {limitedConversations.length === 0 && (
+          {searchResults === null && limitedConversations.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-medium mb-1">

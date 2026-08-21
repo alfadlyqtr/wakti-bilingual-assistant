@@ -12,6 +12,7 @@ interface ChatDrawersProps {
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onShareConversation?: (id: string) => void;
   fetchConversations: () => void;
   onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
   activeTrigger: string;
@@ -31,6 +32,7 @@ export function ChatDrawers({
   currentConversationId,
   onSelectConversation,
   onDeleteConversation,
+  onShareConversation,
   fetchConversations,
   onSendMessage,
   activeTrigger,
@@ -59,6 +61,7 @@ export function ChatDrawers({
           currentConversationId={currentConversationId}
           onSelectConversation={onSelectConversation}
           onDeleteConversation={onDeleteConversation}
+          onShareConversation={onShareConversation}
           onRefresh={fetchConversations}
           onClose={() => setShowConversations(false)}
           onNewConversation={onNewConversation}

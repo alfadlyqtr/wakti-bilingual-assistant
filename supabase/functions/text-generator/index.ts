@@ -13,11 +13,10 @@ const corsHeaders = {
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-// Claude Haiku - cheapest cost-effective Claude model for text generation
-const CLAUDE_MODEL = 'claude-3-5-haiku-latest';
+// Gemini Flash - primary model for all writing tasks (OpenAI is the fallback)
+const GEMINI_MODEL = 'gemini-3.7-flash';
 
 const WEB_SEARCH_ALLOWED_CONTENT_TYPES = new Set([
   'research_brief',
@@ -178,7 +177,7 @@ function toSseEvent(payload: Record<string, unknown>) {
   return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
-async function streamClaudeResponse(args: {
+async function streamGeminiResponse(args: {
   req: Request;
   systemPrompt: string;
   userPrompt: string;
@@ -217,31 +216,26 @@ async function streamClaudeResponse(args: {
   } = args;
 
   const startedAt = Date.now();
-  const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+  const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY || "",
-      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-      temperature,
-      max_tokens: maxTokens,
-      stream: true,
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      generationConfig: { temperature, maxOutputTokens: maxTokens },
     }),
   });
 
-  if (!claudeResponse.ok || !claudeResponse.body) {
-    const errTxt = await claudeResponse.text();
-    throw new Error(`Claude API error (${claudeResponse.status}): ${errTxt}`);
+  if (!geminiResponse.ok || !geminiResponse.body) {
+    const errTxt = await geminiResponse.text();
+    throw new Error(`Gemini API error (${geminiResponse.status}): ${errTxt}`);
   }
 
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-  const upstreamReader = claudeResponse.body.getReader();
+  const upstreamReader = geminiResponse.body.getReader();
   let fullText = "";
   let buffer = "";
 
@@ -264,13 +258,35 @@ async function streamClaudeResponse(args: {
 
             try {
               const eventData = JSON.parse(dataStr);
-              const deltaText = eventData?.type === "content_block_delta"
-                ? eventData?.delta?.text || ""
+              const parts = eventData?.candidates?.[0]?.content?.parts;
+              const combined = Array.isArray(parts)
+                ? parts.map((p: { text?: string }) => p?.text || "").join("")
                 : "";
 
-              if (deltaText) {
-                fullText += deltaText;
-                controller.enqueue(encoder.encode(toSseEvent({ type: "chunk", text: deltaText })));
+              if (combined) {
+                // Gemini SSE can send cumulative or delta chunks — handle both plus overlaps
+                let deltaText = "";
+                if (!fullText) {
+                  deltaText = combined;
+                } else if (combined === fullText) {
+                  deltaText = "";
+                } else if (combined.startsWith(fullText)) {
+                  deltaText = combined.slice(fullText.length);
+                } else {
+                  const overlapWindow = Math.min(fullText.length, combined.length);
+                  for (let overlap = overlapWindow; overlap > 0; overlap -= 1) {
+                    if (fullText.slice(-overlap) === combined.slice(0, overlap)) {
+                      deltaText = combined.slice(overlap);
+                      break;
+                    }
+                  }
+                  if (!deltaText && !combined.startsWith(fullText)) deltaText = combined;
+                }
+
+                if (deltaText) {
+                  fullText += deltaText;
+                  controller.enqueue(encoder.encode(toSseEvent({ type: "chunk", text: deltaText })));
+                }
               }
             } catch (_err) {
               // Ignore malformed upstream SSE chunks
@@ -286,8 +302,8 @@ async function streamClaudeResponse(args: {
 
         await logAIFromRequest(req, {
           functionName: "text-generator",
-          provider: "anthropic",
-          model: CLAUDE_MODEL,
+          provider: "google",
+          model: GEMINI_MODEL,
           inputText: originalPrompt,
           outputText: fullText,
           durationMs,
@@ -307,7 +323,7 @@ async function streamClaudeResponse(args: {
           generatedText: fullText,
           mode,
           language,
-          modelUsed: modelUsedLabel || CLAUDE_MODEL,
+          modelUsed: modelUsedLabel || GEMINI_MODEL,
           temperatureUsed: temperature,
           contentType: contentType || null,
           webSearchSources: webSearchSources || [],
@@ -346,12 +362,12 @@ serve(async (req) => {
     console.log("🎯 Text Generator: Request method:", req.method);
     console.log("🎯 Text Generator: Request headers:", Object.fromEntries(req.headers.entries()));
     
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
       console.error("🚨 Text Generator: No AI provider keys found in environment");
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "No AI provider configured. Please add ANTHROPIC_API_KEY or OPENAI_API_KEY to Supabase Edge Function Secrets." 
+          error: "No AI provider configured. Please add GEMINI_API_KEY or OPENAI_API_KEY to Supabase Edge Function Secrets." 
         }),
         { 
           status: 500, 
@@ -470,29 +486,17 @@ serve(async (req) => {
 
         let summaryText = contentText.slice(0, 4000);
 
-        if (ANTHROPIC_API_KEY) {
-          const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": ANTHROPIC_API_KEY,
-              "anthropic-version": "2023-06-01",
-            },
-            body: JSON.stringify({
-              model: CLAUDE_MODEL,
-              system: language === 'ar'
-                ? 'أنت مساعد يلخص محتوى الروابط بوضوح وبأسلوب موجز، بدون أي HTML أو أكواد.'
-                : 'You summarize URL content clearly and concisely in plain text with no HTML or code.',
-              messages: [{ role: "user", content: summaryPrompt }],
-              temperature: 0.3,
-              max_tokens: 700,
-            }),
-          });
-
-          if (claudeResponse.ok) {
-            const claudeResult = await claudeResponse.json();
-            summaryText = claudeResult.content?.[0]?.text?.trim() || summaryText;
-          }
+        if (GEMINI_API_KEY) {
+          const geminiResult = await generateGemini(
+            GEMINI_MODEL,
+            [{ role: "user", parts: [{ text: summaryPrompt }] }],
+            language === 'ar'
+              ? 'أنت مساعد يلخص محتوى الروابط بوضوح وبأسلوب موجز، بدون أي HTML أو أكواد.'
+              : 'You summarize URL content clearly and concisely in plain text with no HTML or code.',
+            { temperature: 0.3, maxOutputTokens: 700 }
+          );
+          const geminiText = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (geminiText) summaryText = geminiText;
         } else if (OPENAI_API_KEY) {
           const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
@@ -571,7 +575,7 @@ serve(async (req) => {
             
             try {
               const geminiResponse = await generateGemini(
-                "gemini-2.5-flash",
+                GEMINI_MODEL,
                 [
                   {
                     role: "user",
@@ -897,7 +901,7 @@ ${urlText}
 
 User request:
 ${finalPrompt}`;
-          return await streamClaudeResponse({
+          return await streamGeminiResponse({
             req,
             systemPrompt,
             userPrompt: claudePrompt,
@@ -905,7 +909,7 @@ ${finalPrompt}`;
             language,
             mode,
             contentType,
-            modelUsedLabel: `${CLAUDE_MODEL} (url)`,
+            modelUsedLabel: `${GEMINI_MODEL} (url)`,
             temperature: genParams.temperature,
             maxTokens: genParams.max_tokens,
             metadata: {
@@ -926,10 +930,10 @@ ${finalPrompt}`;
       }
     }
 
-    // ── Web Search: Tavily + Claude ──
+    // ── Web Search: Tavily + Gemini ──
     if (webSearchEnabled && TAVILY_API_KEY && !generatedText) {
       try {
-        console.log("🎯 Text Generator: Web Search enabled - using Tavily + Claude");
+        console.log("🎯 Text Generator: Web Search enabled - using Tavily + Gemini");
         const startWebSearch = Date.now();
 
         const tavilyPayload: Record<string, unknown> = {
@@ -995,7 +999,7 @@ ${contextChunks}
 
 User request:
 ${finalPrompt}`;
-            return await streamClaudeResponse({
+            return await streamGeminiResponse({
               req,
               systemPrompt,
               userPrompt: claudePrompt,
@@ -1003,7 +1007,7 @@ ${finalPrompt}`;
               language,
               mode,
               contentType,
-              modelUsedLabel: `${CLAUDE_MODEL} (tavily)`,
+              modelUsedLabel: `${GEMINI_MODEL} (tavily)`,
               temperature: genParams.temperature,
               maxTokens: genParams.max_tokens,
               metadata: {
@@ -1028,11 +1032,11 @@ ${finalPrompt}`;
       }
     }
 
-    // ── Primary: Claude Haiku (non-web-search) ──
-    if (ANTHROPIC_API_KEY && !generatedText && !(contentType === 'email_signature' && OPENAI_API_KEY)) {
+    // ── Primary: Gemini Flash (non-web-search) ──
+    if (GEMINI_API_KEY && !generatedText && !(contentType === 'email_signature' && OPENAI_API_KEY)) {
       try {
-        console.log(`🎯 Text Generator: PRIMARY - Claude (${CLAUDE_MODEL})`);
-        return await streamClaudeResponse({
+        console.log(`🎯 Text Generator: PRIMARY - Gemini (${GEMINI_MODEL})`);
+        return await streamGeminiResponse({
           req,
           systemPrompt,
           userPrompt: finalPrompt,
@@ -1040,7 +1044,7 @@ ${finalPrompt}`;
           language,
           mode,
           contentType,
-          modelUsedLabel: CLAUDE_MODEL,
+          modelUsedLabel: GEMINI_MODEL,
           temperature: genParams.temperature,
           maxTokens: genParams.max_tokens,
           metadata: {
@@ -1051,7 +1055,7 @@ ${finalPrompt}`;
           trialContext: trialContext ?? undefined,
         });
       } catch (e) {
-        console.warn("🎯 Text Generator: Claude threw error:", e);
+        console.warn("🎯 Text Generator: Gemini threw error:", e);
       }
     }
 
@@ -1129,62 +1133,7 @@ ${finalPrompt}`;
       }
     }
 
-    // ── Fallback 2: Gemini ──
-    if (GEMINI_API_KEY && !generatedText) {
-      try {
-        console.log("🎯 Text Generator: FALLBACK 2 - Gemini gemini-2.5-flash-lite");
-        const startGemini = Date.now();
-        const result = await generateGemini(
-          'gemini-2.5-flash-lite',
-          [{ role: 'user', parts: [{ text: finalPrompt }] }],
-          systemPrompt,
-          { temperature: genParams.temperature, maxOutputTokens: genParams.max_tokens },
-          []
-        );
-        const geminiDuration = Date.now() - startGemini;
-        const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (content) {
-          generatedText = applyWordCount(sanitizeEmDashes(content));
-
-          const trialPayload = trialContext
-            ? buildTrialSuccessPayload(
-                trialContext.trialKey,
-                await checkAndConsumeTrialToken(trialContext.supabaseAdmin, trialContext.userId, trialContext.trialKey, 2),
-              )
-            : null;
-
-          await logAIFromRequest(req, {
-            functionName: "text-generator",
-            provider: "gemini",
-            model: "gemini-2.5-flash",
-            inputText: prompt,
-            outputText: generatedText,
-            durationMs: geminiDuration,
-            status: "success",
-            metadata: {
-              ...logMetadataBase,
-              webSearchUsed: false,
-            }
-          });
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              generatedText,
-              mode,
-              language,
-              modelUsed: 'gemini-2.5-flash-lite',
-              temperatureUsed: genParams.temperature,
-              contentType: contentType || null,
-              trial: trialPayload,
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      } catch (e) {
-        console.warn("🎯 Text Generator: Gemini fallback threw:", e);
-      }
-    }
+    // (Gemini is now the primary engine above; OpenAI fallback is the last stop before error)
 
     return new Response(
       JSON.stringify({ 
@@ -1207,8 +1156,8 @@ ${finalPrompt}`;
     
     await logAIFromRequest(req, {
       functionName: "text-generator",
-      provider: "anthropic",
-      model: CLAUDE_MODEL,
+      provider: "google",
+      model: GEMINI_MODEL,
       status: "error",
       errorMessage: err.message,
       metadata: {

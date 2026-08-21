@@ -646,6 +646,19 @@ export function ChatInput({
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg'].includes(ext);
   };
 
+  // PDFs are supported too — the brain reads them inline via Gemini
+  const isPdfFile = (file: File): boolean => {
+    if (file.type === 'application/pdf') return true;
+    return (file.name.split('.').pop()?.toLowerCase() || '') === 'pdf';
+  };
+
+  const readFileAsDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
   // Chat mode: handle simple image uploads from '+' button
   const handleChatUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isGuest) {
@@ -668,8 +681,9 @@ export function ChatInput({
       for (let i = 0; i < maxToProcess; i++) {
         const file = files[i];
         console.log('📁 ChatInput processing:', file.name, 'type:', file.type, 'size:', file.size);
-        if (!isImageFile(file)) {
-          console.warn('❌ ChatInput rejected - not image:', file.name, file.type);
+        const isPdf = isPdfFile(file);
+        if (!isImageFile(file) && !isPdf) {
+          console.warn('❌ ChatInput rejected - not image/PDF:', file.name, file.type);
           continue;
         }
         if (file.size > 5 * 1024 * 1024) {
@@ -677,12 +691,13 @@ export function ChatInput({
           continue;
         }
         try {
-          // Use EXIF-aware normalization to fix sideways mobile photos
-          const base64DataUrl = await normalizeImageOrientation(file);
+          // Images: EXIF-aware normalization fixes sideways mobile photos.
+          // PDFs: plain read (no image pipeline).
+          const base64DataUrl = isPdf ? await readFileAsDataUrl(file) : await normalizeImageOrientation(file);
           validFiles.push({
             id: `${Date.now()}-${i}`,
             name: file.name,
-            type: file.type,
+            type: isPdf ? 'application/pdf' : file.type,
             size: file.size,
             url: base64DataUrl,
             preview: base64DataUrl,
@@ -1617,7 +1632,7 @@ export function ChatInput({
       type="file"
       ref={chatUploadInputRef}
       onChange={handleChatUploadChange}
-      accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
+      accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff,.pdf,application/pdf"
       multiple
       hidden
     />

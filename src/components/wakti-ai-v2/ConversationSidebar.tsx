@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { MessageSquare, Plus, Trash2, X, SlidersHorizontal } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, X, SlidersHorizontal, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { ConversationMetaUpdate, MAX_CONVERSATIONS } from '@/services/SavedConversationsService';
+import { deriveTopic } from '@/utils/conversationTopics';
 import { ConversationManagerDialog } from './ConversationManagerDialog';
 
 interface ConversationSidebarProps {
@@ -16,6 +17,7 @@ interface ConversationSidebarProps {
   currentConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  onShareConversation?: (conversationId: string) => void;
   onNewConversation: () => Promise<boolean> | boolean;
   onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
   onRefreshConversations: () => void;
@@ -28,6 +30,7 @@ export function ConversationSidebar({
   currentConversationId,
   onSelectConversation,
   onDeleteConversation,
+  onShareConversation,
   onNewConversation,
   onUpdateConversationMeta,
   onRefreshConversations
@@ -134,6 +137,7 @@ export function ConversationSidebar({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm truncate">
+                        {/^\p{Extended_Pictographic}/u.test(conversation.title || '') ? '' : (deriveTopic(conversation.title || '')?.emoji ? deriveTopic(conversation.title || '')!.emoji + ' ' : '')}
                         {conversation.title}
                       </p>
                       {conversation.is_saved && (
@@ -164,6 +168,20 @@ export function ConversationSidebar({
                     >
                       <SlidersHorizontal className="h-4 w-4" />
                     </Button>
+                    {onShareConversation && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white text-[#060541]"
+                        title={language === 'ar' ? 'مشاركة المحادثة' : 'Share conversation'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onShareConversation(conversation.id);
+                        }}
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

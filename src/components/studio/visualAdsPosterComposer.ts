@@ -11,6 +11,7 @@ export type VisualAdsPosterTextSpec = {
   textPresence: VisualAdsTextPresence;
   textColorStyle: VisualAdsTextColorStyle;
   language: 'en' | 'ar';
+  brandAccent?: string | null;
 };
 
 type PresenceProfile = {
@@ -194,7 +195,7 @@ const sampleSceneBrightness = (ctx: CanvasRenderingContext2D, width: number, hei
   return count ? total / count : 128;
 };
 
-const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: boolean): OverlayPalette => {
+const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: boolean, brandAccent?: string | null): OverlayPalette => {
   if (textColorStyle === 'minimal-monochrome') {
     const ctaFill = sceneIsLight ? '#0c0f14' : '#fcfefd';
     return {
@@ -212,7 +213,7 @@ const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: b
   }
 
   if (textColorStyle === 'brand-accent') {
-    const accent = sceneIsLight ? '#b76f1f' : '#d88a2c';
+    const accent = brandAccent || (sceneIsLight ? '#b76f1f' : '#d88a2c');
     return {
       ctaFill: accent,
       ctaText: getContrastText(accent),
@@ -308,7 +309,7 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
   const groupTop = canvas.height - bottomMargin - totalHeight;
   const sceneBrightness = sampleSceneBrightness(ctx, canvas.width, canvas.height);
   const sceneIsLight = sceneBrightness > 162;
-  const palette = resolvePalette(spec.textColorStyle, sceneIsLight);
+  const palette = resolvePalette(spec.textColorStyle, sceneIsLight, spec.brandAccent);
 
   const scrim = ctx.createLinearGradient(0, Math.max(0, groupTop - bottomMargin), 0, canvas.height);
   scrim.addColorStop(0, palette.scrim[0]);

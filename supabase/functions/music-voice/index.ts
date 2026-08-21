@@ -33,6 +33,7 @@ type MusicVoiceRow = {
   verify_audio_url: string | null;
   generation_task_id: string | null;
   kie_voice_id: string | null;
+  singer_skill_level?: string | null;
   status: VoiceStatus;
   status_detail: string | null;
   error_message: string | null;
@@ -93,12 +94,20 @@ function normalizeValidateLanguage(language?: string): string {
 }
 
 function buildVoiceStyle(row: Pick<MusicVoiceRow, "voice_type" | "accent_note">): string {
+  // Provider format is descriptor-first: "Pop, Female Vocal" — accent/genre leads,
+  // vocal type closes. Ours: "Qatari, Male Vocal".
   const parts: string[] = [];
+  if (row.accent_note?.trim()) parts.push(row.accent_note.trim());
   if (row.voice_type === "male") parts.push("Male Vocal");
   else if (row.voice_type === "female") parts.push("Female Vocal");
   else parts.push("Custom Vocal");
-  if (row.accent_note?.trim()) parts.push(row.accent_note.trim());
   return parts.join(", ");
+}
+
+const SINGER_SKILL_LEVELS = new Set(["beginner", "intermediate", "advanced", "professional"]);
+function normalizeSingerSkillLevel(value?: string): string {
+  const candidate = (value || "").trim().toLowerCase();
+  return SINGER_SKILL_LEVELS.has(candidate) ? candidate : "beginner";
 }
 
 async function requireUser(req: Request, supabase: SupabaseClient) {
@@ -295,6 +304,7 @@ serve(async (req) => {
       const audioDataUrl = (body?.audioDataUrl || "").toString();
       const sourceDurationSeconds = typeof body?.sourceDurationSeconds === "number" ? Math.max(1, Math.round(body.sourceDurationSeconds)) : null;
       const validateLanguage = normalizeValidateLanguage((body?.validateLanguage || "").toString());
+      const singerSkillLevel = normalizeSingerSkillLevel(typeof body?.singerSkillLevel === "string" ? body.singerSkillLevel : undefined);
 
       if (!name) throw new Error("Voice name is required");
       if (!clipLabel) throw new Error("Voice clip is required");
@@ -330,6 +340,7 @@ serve(async (req) => {
           clip_label: clipLabel,
           source_duration_seconds: sourceDurationSeconds,
           validate_language: validateLanguage,
+          singer_skill_level: singerSkillLevel,
           status: "phrase_pending",
           status_detail: "uploading_source",
         })
@@ -346,8 +357,18 @@ serve(async (req) => {
         audioDataUrl,
       });
 
-      const vocalStartS = 0;
-      const vocalEndS = Math.max(vocalStartS + 1, Math.min(sourceDurationSeconds ?? 10, 30));
+      // Vocal segment: the user can pick which part of the clip actually contains
+      // their voice (dead air at the start kills the provider's voice analysis).
+      // Defaults keep the old behavior: clip start → up to 30s window.
+      let vocalStartS = typeof body?.vocalStartS === "number" ? Math.max(0, Math.round(body.vocalStartS)) : 0;
+      if (sourceDurationSeconds && vocalStartS >= sourceDurationSeconds) {
+        vocalStartS = Math.max(0, sourceDurationSeconds - 1);
+      }
+      const fallbackEnd = Math.max(vocalStartS + 1, Math.min(sourceDurationSeconds ?? 10, 30));
+      let vocalEndS = typeof body?.vocalEndS === "number" ? Math.round(body.vocalEndS) : fallbackEnd;
+      vocalEndS = Math.min(vocalEndS, vocalStartS + 30); // max 30s analysis window
+      if (sourceDurationSeconds) vocalEndS = Math.min(vocalEndS, sourceDurationSeconds);
+      if (vocalEndS <= vocalStartS) vocalEndS = vocalStartS + 1;
       const kieResp = await fetch("https://api.kie.ai/api/v1/voice/validate", {
         method: "POST",
         headers: {
@@ -416,8 +437,8 @@ serve(async (req) => {
         voiceName: row.name,
         description: row.accent_note ? `Music voice - ${row.accent_note}` : `Music voice - ${row.voice_type}`,
         style: buildVoiceStyle(row),
+        singerSkillLevel: normalizeSingerSkillLevel(row.singer_skill_level ?? undefined),
         callBackUrl: CALLBACK_URL,
-        calBackUrl: CALLBACK_URL,
       };
 
       const kieResp = await fetch("https://api.kie.ai/api/v1/voice/generate", {

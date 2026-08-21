@@ -33,10 +33,6 @@ const getCorsHeaders = (origin: string | null) => {
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || '';
-// Query Recognizer / Summary Box / LLM API all use the SAME commercial AppID.
-// Controlled entirely by the Supabase secret ΓÇö no hardcoded fallbacks.
-const WOLFRAM_LLM_APP_ID = Deno.env.get('WOLFRAM_LLM_APP_ID') || WOLFRAM_APP_ID;
 const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 // Dedicated server-side key for the Google Places API (Text Search + Details + Photos).
 // Uses the GOOGLE_PLACES secret; falls back to GOOGLE_MAPS_API_KEY if unset.
@@ -883,8 +879,10 @@ async function upsertAutoHelpfulMemory(
   supabaseAdmin: any,
   userId: string,
   durableMemoryItems: DurableMemoryItem[]
-): Promise<void> {
-  if (!Array.isArray(durableMemoryItems) || durableMemoryItems.length === 0) return;
+): Promise<boolean> {
+  if (!Array.isArray(durableMemoryItems) || durableMemoryItems.length === 0) return true;
+
+  let allOk = true;
 
   for (const item of durableMemoryItems.slice(0, 6)) {
     const memoryText = normalizeHelpfulMemoryText(item.text, 180);
@@ -918,7 +916,7 @@ async function upsertAutoHelpfulMemory(
         // If the row was already promoted out of candidate (user approved it), don't demote it back.
         const nextLayer = existing.layer && existing.layer !== 'candidate' ? existing.layer : targetLayer;
         const mergedKeywords = extractHelpfulMemoryKeywords(memoryText, ...(Array.isArray(existing.keywords) ? existing.keywords : []), ...keywords);
-        await supabaseAdmin
+        const { error: updErr } = await supabaseAdmin
           .from('user_helpful_memory')
           .update({
             layer: nextLayer,
@@ -932,8 +930,9 @@ async function upsertAutoHelpfulMemory(
             last_confirmed_at: new Date().toISOString()
           })
           .eq('id', existing.id);
+        if (updErr) allOk = false;
       } else {
-        await supabaseAdmin
+        const { error: insErr } = await supabaseAdmin
           .from('user_helpful_memory')
           .insert({
             user_id: userId,
@@ -952,11 +951,14 @@ async function upsertAutoHelpfulMemory(
             updated_at: new Date().toISOString(),
             last_confirmed_at: new Date().toISOString()
           });
+        if (insErr) allOk = false;
       }
     } catch (error) {
+      allOk = false;
       console.warn('auto helpful memory upsert failed', error);
     }
   }
+  return allOk;
 }
 
 // --- Forget flow ----------------------------------------------------------
@@ -991,8 +993,8 @@ async function processForgetItems(
   supabaseAdmin: any,
   userId: string,
   forgetItems: DurableMemoryItem[]
-): Promise<void> {
-  if (!Array.isArray(forgetItems) || forgetItems.length === 0) return;
+): Promise<boolean> {
+  if (!Array.isArray(forgetItems) || forgetItems.length === 0) return true;
 
   try {
     const { data: rows, error } = await supabaseAdmin
@@ -1001,9 +1003,10 @@ async function processForgetItems(
       .eq('user_id', userId)
       .eq('status', 'active');
 
-    if (error || !Array.isArray(rows) || rows.length === 0) return;
+    if (error || !Array.isArray(rows) || rows.length === 0) return false;
 
     const activeMemories = rows as Array<{ id: string; memory_text: string; status: string }>;
+    let matchedAny = false;
 
     for (const forget of forgetItems) {
       const needle = normalizeForMatch(forget.text);
@@ -1034,6 +1037,7 @@ async function processForgetItems(
               // Reflect the rewrite locally so a second forget item in the same
               // request sees the up-to-date text.
               mem.memory_text = rebuilt;
+              matchedAny = true;
               continue;
             } catch (e) {
               console.warn('forget rewrite failed', e);
@@ -1047,6 +1051,7 @@ async function processForgetItems(
                 .update({ status: 'deleted', updated_at: new Date().toISOString() })
                 .eq('id', mem.id);
               mem.status = 'deleted';
+              matchedAny = true;
               continue;
             } catch (e) {
               console.warn('forget list-empty delete failed', e);
@@ -1063,6 +1068,7 @@ async function processForgetItems(
               .update({ status: 'deleted', updated_at: new Date().toISOString() })
               .eq('id', mem.id);
             mem.status = 'deleted';
+            matchedAny = true;
           } catch (e) {
             console.warn('forget soft-delete failed', e);
           }
@@ -1072,8 +1078,10 @@ async function processForgetItems(
         // Otherwise: leave it alone ΓÇö too risky to mutate partial matches
       }
     }
+    return matchedAny;
   } catch (error) {
     console.warn('processForgetItems exception', error);
+    return false;
   }
 }
 
@@ -1191,6 +1199,7 @@ function estimateTokens(text: string): number {
 // Prices per 1M tokens (as of Dec 2024)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-3.1-flash-lite': { input: 0.25, output: 1.50 },
+  'gemini-3.7-flash': { input: 0.75, output: 3.75 }, // intro price through Dec 31 2026; $1.50/$7.50 after
   'gemini-2.5-flash': { input: 0.075, output: 0.30 },
   'gemini-3.1-pro-preview': { input: 2.00, output: 8.00 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
@@ -1359,7 +1368,7 @@ function normalizeMultimodalImageAttachments(attachedFiles: unknown[]): Normaliz
         || resolveMimeTypeFromDataUrl(typeof record.base64 === 'string' ? record.base64 : '');
       const mimeType = (mimeFromPayload || mimeFromData || 'image/jpeg').replace('image/jpg', 'image/jpeg');
 
-      if (!mimeType.startsWith('image/')) {
+      if (!mimeType.startsWith('image/') && mimeType !== 'application/pdf') {
         continue;
       }
 
@@ -1707,9 +1716,47 @@ function isTranscriptRequest(text: string): boolean {
 
 // Forced verbatim transcript behavior — overrides brevity/style/language rules for this request.
 const YOUTUBE_TRANSCRIPT_INSTRUCTION = {
-  en: `[TRANSCRIPT MODE — MUST COMPLY]: The user asked for a TRANSCRIPT of the attached video. Output the full spoken content as a verbatim transcript with timestamped section headers like [00:00 - 01:23]. Do NOT summarize, do NOT paraphrase, do NOT add commentary or analysis. Write the transcript in the exact language spoken in the video — this overrides any response-language rule. Completeness overrides any brevity or style preference. If the video is too long for one response, transcribe as much as possible and end with "[... continues]".`,
-  ar: `[وضع التفريغ — إلزامي]: طلب المستخدم تفريغاً نصياً للفيديو المرفق. أخرج المحتوى المنطوق كاملاً كنص حرفي مع عناوين زمنية مثل [00:00 - 01:23]. لا تلخّص، لا تعِد الصياغة، لا تضف تعليقات أو تحليلاً. اكتب التفريغ بلغة الفيديو المنطوقة نفسها — هذا يتجاوز أي قاعدة للغة الرد. الاكتمال يتجاوز أي تفضيل للاختصار أو الأسلوب. إذا كان الفيديو أطول من رد واحد، فرّغ أكبر قدر ممكن وانهِ بـ "[... يتبع]".`,
+  en: `[TRANSCRIPT MODE — MUST COMPLY]: The user asked for a TRANSCRIPT of the attached video. Output the full spoken content as a verbatim transcript. Do NOT summarize, do NOT paraphrase, do NOT add commentary or analysis. Write the transcript in the exact language spoken in the video — this overrides any response-language rule. Completeness overrides any brevity or style preference. If the video is too long for one response, transcribe as much as possible and end with "[... continues]".
+FORMAT LOCK (non-negotiable): Every section header MUST be exactly "[MM:SS - MM:SS] Short Title" on its own line (e.g. "[00:00 - 01:23] Introduction"). NEVER place timestamps like 0:02 inside sentences or mid-text. Spoken content goes under its section header as clean paragraphs. [music]/[applause] markers go on their own line, never inline.`,
+  ar: `[وضع التفريغ — إلزامي]: طلب المستخدم تفريغاً نصياً للفيديو المرفق. أخرج المحتوى المنطوق كاملاً كنص حرفي. لا تلخّص، لا تعِد الصياغة، لا تضف تعليقات أو تحليلاً. اكتب التفريغ بلغة الفيديو المنطوقة نفسها — هذا يتجاوز أي قاعدة للغة الرد. الاكتمال يتجاوز أي تفضيل للاختصار أو الأسلوب. إذا كان الفيديو أطول من رد واحد، فرّغ أكبر قدر ممكن وانهِ بـ "[... يتبع]".
+قفل التنسيق (غير قابل للتفاوض): كل عنوان قسم يجب أن يكون بالضبط "[MM:SS - MM:SS] عنوان قصير" في سطر مستقل (مثال: "[00:00 - 01:23] المقدمة"). ممنوع وضع الطوابع الزمنية مثل 0:02 داخل الجمل أو وسط النص. المحتوى المنطوق يكون تحت عنوان القسم في فقرات نظيفة. علامات [music]/[applause] تكون في سطر مستقل، وليست داخل النص.`,
 } as const;
+
+// Universal link reading: first non-YouTube http(s) URL in the message.
+function extractGenericUrl(text: string): string | null {
+  const match = /https?:\/\/[^\s<>"')\]]+/i.exec(text || '');
+  if (!match) return null;
+  const url = match[0];
+  if (extractYouTubeWatchUrl(url)) return null; // YouTube is handled by video understanding
+  return url;
+}
+
+// Fetch a web page and reduce it to plain text for the model. Best-effort:
+// 8s timeout, HTML only, capped — any failure returns null and the request
+// proceeds without enrichment (the intent gate may still reroute to search).
+async function fetchPageText(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+    clearTimeout(timeoutId);
+    if (!resp.ok) return null;
+    const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) return null;
+    const html = await resp.text();
+    const text = stripHtmlToText(html).replace(/\s+/g, ' ').trim();
+    if (text.length < 100) return null;
+    return text.slice(0, 10000);
+  } catch {
+    return null;
+  }
+}
 
 // Chat mode: model is determined by engineTier at the call site
 async function streamGemini3FlashChat(
@@ -1719,7 +1766,7 @@ async function streamGemini3FlashChat(
   onToken: (token: string) => void,
   language: string = 'en',
   onSignal?: (meta: Record<string, unknown>) => void,
-  model: string = 'gemini-3.1-flash-lite',
+  model: string = 'gemini-3.7-flash',
   youTubeWatchUrl: string | null = null,
   maxOutputTokens: number = 3200
 ): Promise<string> {
@@ -1784,9 +1831,10 @@ async function streamGemini3FlashChat(
     contents,
     generationConfig: { temperature: 0.4, maxOutputTokens },
   };
-  // Grounding is skipped when a YouTube video is attached — the video itself is the source.
+  // Tool choice: YouTube video = no tools (the video is the source) · math/computational =
+  // real code execution (replaced Wolfram) · everything else = web grounding.
   if (!youTubeWatchUrl) {
-    body.tools = [{ google_search: {} }];
+    body.tools = isWolframQuery(query) ? [{ code_execution: {} }] : [{ google_search: {} }];
   }
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
@@ -1848,7 +1896,7 @@ async function streamGemini3FlashChat(
   return fullText;
 }
 
-// Search mode: dynamic model (gemini-3.1-pro-preview for intelligence tier, gemini-3.1-flash-lite for speed)
+// Search mode: dynamic model (gemini-3.1-pro-preview for intelligence tier, gemini-3.7-flash for speed)
 async function streamGemini3WithSearch(
   query: string,
   systemInstruction: string,
@@ -2035,7 +2083,7 @@ ${introRule}
 Open with one short warm line only. No scripted greetings. No weather unless confidently verified and genuinely useful.
 
 LOCATION RULES:
-1. THE GPS KILL SWITCH: If the Location above says "Unknown (User GPS missing...)" AND the user asks for a "near me" or local business search, YOU MUST REFUSE TO SEARCH. Reply exactly with: "I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again." Do NOT hallucinate places in India or elsewhere.
+1. THE GPS KILL SWITCH: If the Location above says "Unknown (User GPS missing...)" AND the user asks for a "near me" or local business search, YOU MUST REFUSE TO SEARCH. Reply with a short, warm note in the user's selected language: you'd love to help, but nearby spots need their location — ask them to enable location/GPS and ask again, OR offer that they can simply name their area. Never refuse coldly, and do NOT hallucinate places in India or elsewhere.
 2. Never name a neighborhood, street, compound, or tower as the user's exact location.
 3. If the user asked "near me" or "nearby" without naming a city, do not inject a city name into the visible answer.
 4. Use "near you right now" or "closest to you" instead of guessing the exact area.
@@ -2165,7 +2213,7 @@ CORE RULES:
 5. Write fully in the selected language.
 
 LOCATION RULES:
-1. THE GPS KILL SWITCH: If the Location above says "Unknown (User GPS missing...)" AND the user asks for a "near me" or local business search, YOU MUST REFUSE TO SEARCH. Reply exactly with: "I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again." Do NOT hallucinate places in India or elsewhere.
+1. THE GPS KILL SWITCH: If the Location above says "Unknown (User GPS missing...)" AND the user asks for a "near me" or local business search, YOU MUST REFUSE TO SEARCH. Reply with a short, warm note in the user's selected language: you'd love to help, but nearby spots need their location — ask them to enable location/GPS and ask again, OR offer that they can simply name their area. Never refuse coldly, and do NOT hallucinate places in India or elsewhere.
 2. For any near-me or location-dependent query, open with one short natural line that helps the user orient themselves. Keep it personal and practical. Do not force a scripted greeting.
 3. Never name a neighborhood, district, compound, tower, street, or sub-area as if it is the user's exact location.
 4. If the user asked "near me", "nearby", "closest", or a similar local query without naming a city, do not inject a city or country into the visible answer.
@@ -2478,6 +2526,18 @@ async function interceptAndProcessActions(
         continue;
       }
 
+      // Task draft: emit to the frontend for the confirmation card.
+      // NOTHING is created server-side — the user confirms first.
+      if (action === 'create_task') {
+        const taskText = typeof data.text === 'string' ? data.text.trim().slice(0, 200) : '';
+        if (!taskText) continue;
+        const due = typeof data.due === 'string' && data.due.trim() ? data.due.trim() : null;
+        try {
+          controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { taskDraft: { title: taskText, due_date: due, priority: 'normal' } } }) + '\n\n'));
+        } catch { /* stream may be closing */ }
+        continue;
+      }
+
       if (action === 'memory' && typeof data.text === 'string') {
         const memoryText = normalizeHelpfulMemoryText(data.text, 180);
         if (!memoryText) continue;
@@ -2507,8 +2567,8 @@ async function interceptAndProcessActions(
             keywords: [],
             source: 'conversation'
           };
-          await upsertAutoHelpfulMemory(supabaseClient, userId, [memItem]);
-          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { memoryAction: { operation: data.operation } } }) + '\n\n')); } catch {}
+          const memorySaved = await upsertAutoHelpfulMemory(supabaseClient, userId, [memItem]);
+          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { memoryAction: { operation: data.operation, failed: !memorySaved } } }) + '\n\n')); } catch {}
         } else if (operation === 'forget') {
           const forgetItem: DurableMemoryItem = {
             key: `forget_${Date.now()}`,
@@ -2520,8 +2580,8 @@ async function interceptAndProcessActions(
             keywords: [],
             source: 'conversation'
           };
-          await processForgetItems(supabaseClient, userId, [forgetItem]);
-          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { memoryAction: { operation: data.operation } } }) + '\n\n')); } catch {}
+          const forgetDone = await processForgetItems(supabaseClient, userId, [forgetItem]);
+          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { memoryAction: { operation: data.operation, failed: !forgetDone } } }) + '\n\n')); } catch {}
         }
       }
     } catch {
@@ -2539,6 +2599,23 @@ async function interceptAndProcessActions(
 }
 
 // ΓöÇΓöÇΓöÇ LAZY-LOAD DISPATCHER ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Honesty guardrail: never improvise about content we couldn't actually access.
+// Never expose internal providers, models, or tooling — speak as Wakti AI only.
+function _promptHonesty(language: string): string {
+  if (language === 'ar') {
+    return `قاعدة الصدق (إلزامية): إذا تعذر عليك الوصول إلى شيء (رابط لم يُقرأ، فيديو لم يُحمّل، ملف غير متاح)، قل ذلك بصراحة وباختصار ثم اقترح بديلاً. ممنوع منعاً باتاً اختراع أو تخمين محتوى لم تصل إليه فعلياً. لا تذكر أبداً أسماء المزودين أو النماذج أو الأدوات الداخلية — أنت وقتي فقط.`;
+  }
+  return `HONESTY RULE (mandatory): If you cannot actually access something (a link that wasn't read, a video that didn't load, an unavailable file), say so briefly and honestly, then offer an alternative. NEVER invent or guess content you did not actually access. Never mention internal providers, models, or tools — you are simply Wakti AI.`;
+}
+
+// Task creation action: conservative — only on explicit user request to add a task.
+function _promptTaskAction(language: string): string {
+  if (language === 'ar') {
+    return `قاعدة المهام: فقط عندما يطلب المستخدم صراحة إضافة مهمة ("أضف مهمة"، "ضعها في مهامي"، "مهمة جديدة")، ألحق هذا JSON في سطر مستقل في نهاية ردك تماماً، بدون أي نص بعده:\n{"action":"create_task","text":"عنوان المهمة","due":"تاريخ ISO8601 أو null"}\nلا تفعل هذا أبداً للأسئلة أو التذكيرات أو الخطط أو ذكر المهام عرضاً. عند الشك: لا تفعل.`;
+  }
+  return `TASK RULE: Only when the user EXPLICITLY asks to add/create a task ("add a task", "add to my tasks", "new task: X"), append this exact JSON on its own line at the very end of your response, with nothing after it:\n{"action":"create_task","text":"TASK TITLE","due":"ISO8601 datetime or null"}\nNever do this for questions, reminders, plans, or casual mentions of things to do. When in doubt: do NOT emit it.`;
+}
+
 // Builds ONLY the blocks needed for the current mode.
 // Pure chat: ~500 chars. With study/search/reminders: grows as needed.
 function buildSystemPrompt(
@@ -2561,7 +2638,7 @@ function buildSystemPrompt(
   }
 
   // BASE is always included (~500 chars)
-  let prompt = reminderPrefix + buildMemoryActionInstruction() + '\n\n' + _promptBase(language, currentDate, localTime, pt, aiNick);
+  let prompt = reminderPrefix + buildMemoryActionInstruction() + '\n\n' + _promptTaskAction(language) + '\n\n' + _promptHonesty(language) + '\n\n' + _promptBase(language, currentDate, localTime, pt, aiNick);
 
   // MODE-SPECIFIC EXTENSIONS ΓÇö injected only when needed
   if (activeTrigger === 'search') {
@@ -3497,7 +3574,7 @@ function isGoogleMapsLikeUrl(rawUrl: string): boolean {
    let responseText = '';
    try {
      responseText = await generateGeminiText(
-       'gemini-3.1-flash-lite',
+       'gemini-3.7-flash',
        prompt,
        systemInstruction,
        { temperature: 0.2, maxOutputTokens: 1800 },
@@ -4776,204 +4853,6 @@ async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]
   });
 }
 
-// === WOLFRAM UNIVERSAL KNOWLEDGE ENGINE ===
-
-// Strip conversational noise so Wolfram receives a clean subject string
-function getCleanSubject(message: string): string {
-  if (!message) return '';
-  const cleaned = message.replace(/\?+$/, '').replace(/[╪ƒ!]+$/, '').trim();
-
-  // SHORT-CIRCUIT: For person/entity queries, extract proper nouns only (capitalized words after the opener)
-  // "Who was Bill Clinton" ΓåÆ "Bill Clinton"
-  // "Tell me about Albert Einstein" ΓåÆ "Albert Einstein"
-  const entityOpenerMatch = cleaned.match(
-    /^(?:who\s+(?:is|was)|tell\s+me\s+about(?:\s+the)?|what\s+is(?:\s+the)?)\s+(.+)$/i
-  );
-  if (entityOpenerMatch) {
-    const rest = entityOpenerMatch[1].trim();
-    // Extract consecutive capitalized words (proper noun sequence)
-    const properNounMatch = rest.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-    if (properNounMatch && properNounMatch[1].length >= 2) {
-        return properNounMatch[1];
-    }
-    // No proper nouns found ΓÇö return the rest stripped of filler
-    const fillerStripped = rest
-      .replace(/^(the\s+(city|country|life|history|story|process|concept|meaning)\s+of\s+)/i, '')
-      .replace(/^(the\s+)/i, '')
-      .trim();
-    return fillerStripped;
-  }
-
-  let s = cleaned;
-  // Strip bot name references
-  s = s.replace(/\b(wakto|waqti|wakti|jester|assistant|hey|hi|hello|ok|okay)\b/gi, '');
-  // Iteratively strip leading openers (run twice to handle nested: "explain the history of X")
-  const leadingOpeners = /^(what\s+is\s+the\s+(city|country|life|history|story|process|concept|meaning)\s+of|what\s+is|what\s+are|explain\s+the\s+(process|history|concept|life)\s+of|explain|describe|give\s+me\s+info\s+on|information\s+about|facts\s+about|about|define|meaning\s+of|what\s+do\s+you\s+know\s+about|can\s+you\s+explain|can\s+you\s+tell\s+me\s+about|i\s+want\s+to\s+know\s+about|i\s+need\s+to\s+know\s+about|help\s+me\s+understand|show\s+me|list\s+the|summary\s+of|the)\s+/i;
-  s = s.replace(leadingOpeners, '').replace(leadingOpeners, '');
-  // Strip trailing instructional modifiers
-  s = s
-    .replace(/\s+in\s+\d+\s+\w+\s+steps?\s*$/i, '')
-    .replace(/\s+in\s+simple\s+terms?\s*$/i, '')
-    .replace(/\s+in\s+\d+\s+steps?\s*$/i, '')
-    .replace(/\s+(detailed\s+)?report\s*$/i, '')
-    .replace(/\s+for\s+me\s*$/i, '')
-    .replace(/\s+please\s*$/i, '');
-  return s.replace(/\s+/g, ' ').trim();
-}
-
-// Internal translation bridge: translate Arabic subject to English for Wolfram API use only
-async function translateSubjectToEnglish(subject: string): Promise<string> {
-  try {
-    const key = getGeminiApiKey();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`;
-    const body = {
-      contents: [{ role: 'user', parts: [{ text: `Translate this academic topic to English. Return ONLY the translated term, nothing else, no explanation:\n${subject}` }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 50 },
-    };
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 2000);
-    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
-    clearTimeout(tid);
-    if (!resp.ok) return subject;
-    const data = await resp.json();
-    const translated = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (translated && translated.length > 0 && translated.length < 200) {
-      return translated;
-    }
-    return subject;
-  } catch {
-    return subject; // fail silently, use original
-  }
-}
-
-// LLM API: modern endpoint that returns a clean fact sheet for any academic subject
-async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promise<{
-  success: boolean;
-  factSheet?: string;
-  error?: string;
-}> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const url = `https://www.wolframalpha.com/api/v1/llm-api?appid=${WOLFRAM_LLM_APP_ID}&input=${encodeURIComponent(subject)}&maxchars=3000`;
-    const resp = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (!resp.ok) {
-      console.warn(`ΓÜá∩╕Å WOLFRAM LLM: HTTP ${resp.status}`);
-      return { success: false, error: `HTTP ${resp.status}` };
-    }
-    const text = await resp.text();
-    if (!text || text.trim().length < 20) {
-      return { success: false, error: 'Empty response' };
-    }
-    return { success: true, factSheet: text.trim() };
-  } catch (err: unknown) {
-    const isAbort = err && typeof err === 'object' && 'name' in err && (err as { name?: unknown }).name === 'AbortError';
-    console.warn(isAbort ? `ΓÜá∩╕Å WOLFRAM LLM: Timeout after ${timeoutMs}ms` : `ΓÜá∩╕Å WOLFRAM LLM: Error`);
-    return { success: false, error: isAbort ? 'Timeout' : String(err) };
-  }
-}
-
-// === WOLFRAM|ALPHA HELPER (legacy v2/query ΓÇö used for math/calculation outside study mode) ===
-async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{
-  success: boolean;
-  answer?: string;
-  steps?: string[];
-  interpretation?: string;
-  error?: string;
-}> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    const params = new URLSearchParams({
-      appid: WOLFRAM_APP_ID,
-      input: input,
-      output: 'json',
-      format: 'plaintext',
-      units: 'metric',
-    });
-
-    const url = `https://api.wolframalpha.com/v2/query?${params.toString()}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.warn('ΓÜá∩╕Å WOLFRAM: HTTP error', response.status);
-      return { success: false, error: `HTTP ${response.status}` };
-    }
-
-    const data = await response.json();
-    const qr = data?.queryresult;
-
-    if (!qr || qr.success === false || qr.error === true) {
-      return { success: false, error: 'No results' };
-    }
-
-    const pods = qr.pods || [];
-    let answer = '';
-    let interpretation = '';
-    const steps: string[] = [];
-
-    for (const pod of pods) {
-      const id = (pod.id || '').toLowerCase();
-      const title = (pod.title || '').toLowerCase();
-      const text = pod.subpods?.[0]?.plaintext || '';
-
-      if (id === 'input' || title.includes('input')) {
-        interpretation = text;
-      }
-      if (pod.primary || id === 'result' || id === 'solution' || id === 'value' || id === 'decimalapproximation') {
-        if (!answer && text) answer = text;
-      }
-      if (title.includes('step') || id.includes('step')) {
-        if (text) steps.push(text);
-      }
-    }
-
-    // Fallback: grab first non-input pod
-    if (!answer) {
-      for (const pod of pods) {
-        if (pod.id !== 'Input' && pod.subpods?.[0]?.plaintext) {
-          answer = pod.subpods[0].plaintext;
-          break;
-        }
-      }
-    }
-
-    if (!answer) {
-      return { success: false, error: 'No answer found' };
-    }
-
-    return { success: true, answer, steps: steps.length > 0 ? steps : undefined, interpretation };
-
-  } catch (err: unknown) {
-    const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
-    const errMessage = err instanceof Error ? err.message : String(err);
-    if (errName === 'AbortError') {
-      console.warn('ΓÜá∩╕Å WOLFRAM: Timeout after', timeoutMs, 'ms');
-      return { success: false, error: 'Timeout' };
-    }
-    console.error('Γ¥î WOLFRAM: Error:', errMessage);
-    return { success: false, error: errMessage };
-  }
-}
-
-// === WOLFRAM SUMMARY BOXES API (for entity lookups: countries, people, chemicals, etc.) ===
-interface SummaryBoxResult {
-  success: boolean;
-  domain?: string;
-  summary?: string;
-  rawHtml?: string;
-  path?: string;
-  error?: string;
-}
 
 function normalizeSummaryBoxQuery(input: string): string {
   if (!input) return input;
@@ -4990,87 +4869,44 @@ function normalizeSummaryBoxQuery(input: string): string {
   return cleaned.length >= 2 ? cleaned : trimmed;
 }
 
-async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): Promise<SummaryBoxResult> {
+// === GEMINI ENTITY QUICK-FACTS CARD (replaces Wolfram Summary Boxes) ===
+// Generates the same Quick Facts HTML card the frontend renders, sourced by Gemini + grounding.
+async function generateEntityCardHtml(subject: string, language: string): Promise<{ success: boolean; html?: string }> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    // Step 1: Get the summary box path from Query Recognizer
-    // NOTE: Query Recognizer permissions are provisioned on WOLFRAM_LLM_APP_ID
-    // (U2W74EHLQX), not the legacy WOLFRAM_APP_ID. Using the wrong key here
-    // was silently failing for all non-study chat entity lookups.
-    const recognizerUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
-
-    const recognizerResp = await fetch(recognizerUrl, {
-      method: 'GET',
-      signal: controller.signal,
+    const key = getGeminiApiKey();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent`;
+    const prompt = language === 'ar'
+      ? `أنشئ بطاقة حقائق سريعة بصيغة HTML عن: ${subject}\nالقواعد: جدول <table> فقط يحتوي 4-8 صفوف بالشكل <tr><td><strong>الاسم</strong></td><td>القيمة</td></tr> لأهم الحقائق الموثقة. ممنوع <script> أو أنماط أو أي شرح — فقط HTML الجدول.`
+      : `Create a quick-facts HTML card about: ${subject}\nRules: a single <table> with 4-8 rows like <tr><td><strong>Label</strong></td><td>Value</td></tr> covering the most important verified facts. No <script>, no styles, no commentary — ONLY the table HTML.`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 900 },
+        tools: [{ google_search: {} }],
+      }),
     });
-
-    if (!recognizerResp.ok) {
-      clearTimeout(timeoutId);
-      console.warn('ΓÜá∩╕Å WOLFRAM SUMMARY: Recognizer HTTP error', recognizerResp.status);
-      return { success: false, error: `Recognizer HTTP ${recognizerResp.status}` };
-    }
-
-    const recognizerXml = await recognizerResp.text();
-    
-    // Parse XML to extract path and domain
-    const pathMatch = recognizerXml.match(/summarybox\s+path="([^"]+)"/);
-    const domainMatch = recognizerXml.match(/domain="([^"]+)"/);
-    const acceptedMatch = recognizerXml.match(/accepted="([^"]+)"/);
-
-    if (!pathMatch || acceptedMatch?.[1] === 'false') {
-      clearTimeout(timeoutId);
-      return { success: false, error: 'No summary box path' };
-    }
-
-    const path = pathMatch[1];
-    const domain = domainMatch?.[1] || 'unknown';
-
-    // Step 2: Get the summary box content
-    const summaryUrl = `https://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_LLM_APP_ID}&path=${encodeURIComponent(path)}`;
-    
-    const summaryResp = await fetch(summaryUrl, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!summaryResp.ok) {
-      console.warn('ΓÜá∩╕Å WOLFRAM SUMMARY: Summary HTTP error', summaryResp.status);
-      return { success: false, error: `Summary HTTP ${summaryResp.status}` };
-    }
-
-    const summaryHtml = await summaryResp.text();
-    
-    // Extract text content from XHTML (strip tags, get meaningful text)
-    // The summary box returns XHTML with structured data
-    const textContent = summaryHtml
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .substring(0, 1500); // Limit to reasonable size
-
-    if (!textContent || textContent.length < 20) {
-      return { success: false, error: 'Empty summary' };
-    }
-
-    return { success: true, domain, summary: textContent, rawHtml: summaryHtml, path };
-
-  } catch (err: unknown) {
-    const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
-    const errMessage = err instanceof Error ? err.message : String(err);
-    if (errName === 'AbortError') {
-      console.warn('ΓÜá∩╕Å WOLFRAM SUMMARY: Timeout after', timeoutMs, 'ms');
-      return { success: false, error: 'Timeout' };
-    }
-    console.error('Γ¥î WOLFRAM SUMMARY: Error:', errMessage);
-    return { success: false, error: errMessage };
+    if (!resp.ok) return { success: false };
+    const data = await resp.json();
+    const parts = data?.candidates?.[0]?.content?.parts;
+    let html = Array.isArray(parts) ? parts.map((p: { text?: string }) => p?.text || '').join('').trim() : '';
+    if (!html) return { success: false };
+    // Strip code fences, then sanitize: this HTML is rendered via dangerouslySetInnerHTML.
+    html = html.replace(/```html|```/g, '').trim();
+    if (!/<table[\s>]/i.test(html)) return { success: false };
+    html = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<(iframe|object|embed|form)[\s\S]*?<\/\1>/gi, '')
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/javascript:/gi, '');
+    return { success: true, html: html.slice(0, 4000) };
+  } catch {
+    return { success: false };
   }
 }
+
 
 // Detect if query is better suited for Summary Boxes (entity lookups)
 function isSummaryBoxQuery(q: string): boolean {
@@ -5500,13 +5336,28 @@ serve(async (req) => {
           ? classifySearchIntent(message || '', language).catch(() => null)
           : Promise.resolve(null);
 
-        // Resolve intent gate (non-blocking for most messages ΓÇö classifySearchIntent is a local regex classifier)
+        // Universal link reading: fetch non-YouTube pages server-side, in parallel with the
+        // intent gate. If we got the page, chat mode keeps it (gate skipped); if the fetch
+        // failed, the gate still runs and may reroute to search as before.
+        const genericPageUrl = activeTrigger === 'chat' ? extractGenericUrl(message || '') : null;
+        const pageFetchPromise = genericPageUrl
+          ? fetchPageText(genericPageUrl).catch(() => null)
+          : Promise.resolve(null);
+
+        // Resolve intent gate + page fetch (parallel — no added latency)
+        let fetchedPageText: string | null = null;
         try {
-          const gate = await intentGatePromise;
-          if (gate?.needsSearch && gate.confidence >= 0.95) {
+          const [pageText, gate] = await Promise.all([pageFetchPromise, intentGatePromise]);
+          fetchedPageText = pageText;
+          if (!fetchedPageText && gate?.needsSearch && gate.confidence >= 0.95) {
             effectiveTrigger = 'search';
           }
         } catch { /* stay in chat mode */ }
+
+        // Enriched message: fetched page content wraps the user message for chat paths.
+        const enrichedMessage = fetchedPageText
+          ? `[Page content fetched from ${genericPageUrl}]:\n${fetchedPageText}\n\n---\nUser message: ${message}`
+          : message;
 
         requestTrigger = effectiveTrigger;
 
@@ -5886,7 +5737,9 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             const hasRequestCoords = typeof requestLocation?.latitude === 'number' && typeof requestLocation?.longitude === 'number';
             const requestLatitude = hasRequestCoords ? requestLocation.latitude as number : null;
             const requestLongitude = hasRequestCoords ? requestLocation.longitude as number : null;
-            const gpsPermissionMessage = 'I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again.';
+            const gpsPermissionMessage = language === 'ar'
+              ? 'أكيد! 🗺️ عشان ألقى لك أفضل الأماكن القريبة منك، أحتاج موقعك — فعّل الموقع/GPS واسألني مرة ثانية، أو قل لي منطقتك وأكمل من هناك.'
+              : "I'd love to help with that! 🗺️ To find the best spots right around you, I need your location — turn on location/GPS and ask me again, or just tell me your area and I'll take it from there.";
 
             if (explicitNearMeRequest && !hasRequestCoords) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: gpsPermissionMessage, content: gpsPermissionMessage })}\n\n`));
@@ -6244,7 +6097,7 @@ If you are running out of space, keep this order and drop the rest:
             let resolvedParallelPlaces: GroundedPlaceCard[] | null = null;
 
             // Stream tokens to client
-            const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
+            const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.7-flash';
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: effectiveSearchIntent, cardType: normalizeSearchCardType(effectiveSearchIntent), queries: cleanSearchQuery ? [cleanSearchQuery] : [], cards: [], summary: '', isNearMeQuery: isNearMeSearchQuery, nearMeDebug: buildCurrentNearMeDebug(0, false) } } })}\n\n`));
 
             if (parallelPlacesPromise) {
@@ -6732,7 +6585,7 @@ If you are running out of space, keep this order and drop the rest:
             // ΓöÇΓöÇΓöÇ LOCATION FOLLOW-UP DETECTION ΓöÇΓöÇΓöÇ
             // If assistant previously asked for location and user just replied with a place,
             // combine with the original intent and run a proper grounded search
-            let effectiveMessage = message;
+            let effectiveMessage = enrichedMessage;
             try {
               // ΓöÇΓöÇΓöÇ YES/OK FOLLOW-UP RESOLVER (CHAT) ΓöÇΓöÇΓöÇ
               // Users often reply with just "yes" to multi-option follow-ups.
@@ -6797,11 +6650,10 @@ If you are running out of space, keep this order and drop the rest:
             }
 
             try {
-              // Chat early-return path: respect engineTier for model selection
-              // YouTube links need real video understanding — Flash-Lite can't be trusted
-              // with file_data video parts, so those requests ride the full Flash model.
+              // Chat early-return path: all chat rides the full Flash model now
+              // (3.7-flash handles text, video understanding, and transcripts).
               const youTubeWatchUrl = extractYouTubeWatchUrl(message || '');
-              const chatModel = youTubeWatchUrl ? 'gemini-3.7-flash' : 'gemini-3.1-flash-lite';
+              const chatModel = 'gemini-3.7-flash';
               // Transcript intent on a video link: force verbatim transcript, no summarizing.
               const transcriptRequested = !!youTubeWatchUrl && isTranscriptRequest(message || '');
               const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (Flash)';
@@ -6839,6 +6691,10 @@ If you are running out of space, keep this order and drop the rest:
               // Intercept and process trailing action JSON blocks (reminders + memory)
               fullResponseText = await interceptAndProcessActions(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset, helpfulMemorySettings.capture_paused);
 
+              if (transcriptRequested) {
+                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { transcript: true, videoUrl: youTubeWatchUrl } })}\n\n`)); } catch { /* ignore */ }
+              }
+
               await emitAiChatTrialFinished(trialRequestId);
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
@@ -6859,177 +6715,24 @@ If you are running out of space, keep this order and drop the rest:
           // Determine the raw query string
           const rawWolframQuery = message;
 
-          let wolframContext = '';
-          let wolframMetaBase: Record<string, unknown> | null = null;
-          const useSummaryBox = isSummaryBoxQuery(rawWolframQuery);
-          // Widened gate: chat mode now also triggers Wolfram for entity queries
-          // ("who is X", "tell me about X", proper-noun lookups). Previously entity
-          // questions skipped Wolfram entirely because isWolframQuery's regex only
-          // matched math/science subject words ΓÇö exactly Blake's Dec 2025 feedback.
-          // STUDY MODE NO LONGER CALLS WOLFRAM (evidence from ai_logs, Dec 2025 - Jun 2026):
-          // Wolfram returned usable data for only ~29% of study questions, and 0% across the last
-          // two months, while costing 5-8s of latency BEFORE the first token on EVERY question.
-          // It only ever accepted "who is X" / "what is X" lookups and clean textbook equations, and
-          // rejected real studying (photo homework, "solve this and teach me", recursive sequences).
-          // Study mode now uses the Gemini code execution tool instead - see tryGemini below.
-          // Chat mode behaviour is unchanged.
-          const useWolfram = chatSubmode !== 'study' && (isWolframQuery(rawWolframQuery) || useSummaryBox);
-
-          if (useWolfram) {
+          // === ENTITY QUICK-FACTS CARD (Gemini-generated — replaced Wolfram Summary Boxes) ===
+          // Math/computational questions get no prefetch: the main LLM call computes them
+          // for real via the code execution tool (see tryGemini below).
+          if (chatSubmode !== 'study' && isSummaryBoxQuery(rawWolframQuery)) {
             try {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'wolfram' })}\n\n`));
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'entity_card' })}\n\n`));
             } catch { /* ignore */ }
-
-            if (chatSubmode === 'study') {
-              // === STUDY MODE: Universal Knowledge Engine ===
-              const rawSubject = message || '';
-              let cleanSubject = getCleanSubject(rawSubject);
-
-              // STEP 0 ΓÇö Arabic Translation Bridge (internal, never shown to user)
-              if (language === 'ar' && cleanSubject.length > 0) {
-                cleanSubject = await translateSubjectToEnglish(cleanSubject);
-              }
-
-              // STEP 1 ΓÇö Query Recognizer: check accepted + detect summarybox path
-              let recognizerAccepted = true;
-              let summaryBoxPath: string | null = null;
-              let recognizerDomain: string | null = null;
+            const card = await generateEntityCardHtml(normalizeSummaryBoxQuery(rawWolframQuery), language);
+            if (card.success && card.html) {
+              wolframUsedOuter = true; // analytics column kept: now means "fact card was attached"
               try {
-                const recCtrl = new AbortController();
-                const recTid = setTimeout(() => recCtrl.abort(), 1500);
-                const recUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(cleanSubject)}`;
-                const recResp = await fetch(recUrl, { signal: recCtrl.signal });
-                clearTimeout(recTid);
-                if (recResp.ok) {
-                  const recXml = await recResp.text();
-                  const acceptedMatch = recXml.match(/accepted=["']([^"']+)["']/);
-                  recognizerAccepted = acceptedMatch?.[1] !== 'false';
-                  const pathMatch = recXml.match(/<summarybox\s+path=["']([^"']+)["']/i);
-                  summaryBoxPath = pathMatch?.[1] || null;
-                  const domainMatch = recXml.match(/domain=["']([^"']+)["']/);
-                  recognizerDomain = domainMatch?.[1] || null;
-                }
-              } catch {
-                // fail-open
-              }
-
-              if (recognizerAccepted) {
-                const parts: string[] = [];
-                let eliteSummaryBoxResult: SummaryBoxResult | null = null;
-
-                if (summaryBoxPath) {
-                  // STEP 2a ΓÇö ELITE CARD PATH: Summary Box + LLM API in parallel
-                  const [llmResult, summaryBoxResult] = await Promise.all([
-                    queryWolframLLM(cleanSubject, 8000),
-                    queryWolframSummaryBox(cleanSubject, 5000),
-                  ]);
-                  eliteSummaryBoxResult = summaryBoxResult;
-
-                  if (summaryBoxResult.success && summaryBoxResult.summary) {
-                    parts.push(`[WOLFRAM ELITE CARD (${summaryBoxResult.domain || recognizerDomain || 'entity'})]:\n${summaryBoxResult.summary.substring(0, 1000)}`);
-                    wolframUsedOuter = true;
-                  }
-                  if (llmResult.success && llmResult.factSheet) {
-                    parts.push(`[WOLFRAM FACT SHEET]:\n${llmResult.factSheet}`);
-                    wolframUsedOuter = true;
-                  }
-                } else {
-                  // STEP 2b ΓÇö STANDARD PATH: LLM API for deep context
-                  const llmResult = await queryWolframLLM(cleanSubject, 8000);
-                  if (llmResult.success && llmResult.factSheet) {
-                    parts.push(`[WOLFRAM VERIFIED DATA]:\n${llmResult.factSheet}`);
-                    wolframUsedOuter = true;
-                  } else {
-                    // STEP 3 ΓÇö SHORT ANSWER FALLBACK: v1/result for a single verified fact
-                    try {
-                      const saCtrl = new AbortController();
-                      const saTid = setTimeout(() => saCtrl.abort(), 3000);
-                      const saUrl = `https://api.wolframalpha.com/v1/result?appid=${WOLFRAM_LLM_APP_ID}&i=${encodeURIComponent(cleanSubject)}`;
-                      const saResp = await fetch(saUrl, { signal: saCtrl.signal });
-                      clearTimeout(saTid);
-                      if (saResp.ok) {
-                        const saText = (await saResp.text()).trim();
-                        if (saText && saText.length > 3 && !saText.toLowerCase().startsWith('wolfram')) {
-                          parts.push(`[WOLFRAM VERIFIED FACT]:\n${saText}`);
-                          wolframUsedOuter = true;
-                        }
-                      }
-                    } catch { /* best-effort */ }
-                  }
-                }
-
-                wolframMetaBase = {
-                  api: summaryBoxPath ? 'elite_card' : 'llm_api',
-                  mode: 'study',
-                  subject: cleanSubject,
-                  ...(eliteSummaryBoxResult?.success && eliteSummaryBoxResult?.rawHtml
-                    ? { summaryBox: eliteSummaryBoxResult.rawHtml }
-                    : {}),
-                };
-
-                if (parts.length > 0) {
-                  const instruction = language === 'ar'
-                    ? '\n\n╪ú┘å╪¬ ┘à╪»╪▒╪│ ╪«╪¿┘è╪▒ ┘ê╪░┘ê ╪┤╪«╪╡┘è╪⌐. ╪º╪│╪¬╪«╪»┘à ╪º┘ä╪¿┘è╪º┘å╪º╪¬ ╪º┘ä┘à┘ê╪½┘é╪⌐ ╪ú╪╣┘ä╪º┘ç ┘â┘à╪╡╪»╪▒┘â ╪º┘ä╪▒╪ª┘è╪│┘è ┘ä┘ä╪¡┘é╪º╪ª┘é.\n┘é╪º╪╣╪»╪⌐ ╪╡╪º╪▒┘à╪⌐: ╪º┘â╪¬╪¿ ╪¼┘à┘ä╪⌐ ┘à┘ä╪«╪╡ ┘ü╪▒┘è╪»╪⌐ ┘ê╪░╪º╪¬ ╪┤╪«╪╡┘è╪⌐ ╪»╪º╪«┘ä ┘ê╪│┘ê┘à [BOX]...[/BOX] ┘ü┘è ╪¿╪»╪º┘è╪⌐ ╪▒╪»┘â ┘ü┘é╪╖. ╪º┘ä╪¼┘à┘ä╪⌐ ╪»╪º╪«┘ä [BOX] ┘è╪¼╪¿ ╪ú┘å ┘ä╪º ╪¬┘Å┘â╪▒┘Ä┘æ╪▒ ╪ú╪¿╪»╪º┘ï ┘ü┘è ╪º┘ä┘ü┘é╪▒╪⌐ ╪º┘ä╪ú┘ê┘ä┘ë ╪ú┘ê ╪ú┘è ┘à┘â╪º┘å ┘ü┘è ╪º┘ä┘å╪╡.'
-                    : '\n\nYou are an expert tutor with personality. Use the Verified Data above as your primary source of truth.\nSTRICT RULE: Write ONE unique personality-driven sentence inside [BOX]...[/BOX] at the very start. That exact sentence MUST NOT appear again ΓÇö not in the first paragraph, not anywhere in the body. The body explanation starts fresh after the [BOX] tag.';
-                  wolframContext = parts.join('\n\n') + instruction;
-
-                  try {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`));
-                  } catch { /* ignore */ }
-                }
-              }
-
-            } else {
-              // === NON-STUDY MODE: Full Results (math/science) + Summary Box (entities), in parallel ===
-              // Only hit legacy v2/query when the query genuinely looks computational.
-              // Pure entity queries skip it ΓÇö Wolfram's v2/query would return empty and
-              // still be counted as a billable failed Full Results call.
-              const summaryBoxInput = normalizeSummaryBoxQuery(rawWolframQuery);
-              const runFullResults = isWolframQuery(rawWolframQuery);
-              const [fullResultsResult, summaryBoxResult] = await Promise.all([
-                runFullResults
-                  ? queryWolfram(rawWolframQuery, 4000)
-                  : Promise.resolve<{ success: boolean; answer?: string; steps?: string[]; interpretation?: string; error?: string }>({ success: false }),
-                useSummaryBox ? queryWolframSummaryBox(summaryBoxInput, 5000) : Promise.resolve<SummaryBoxResult>({ success: false })
-              ]);
-
-              let fullResultsData = '';
-              let summaryBoxData = '';
-
-              if (fullResultsResult.success && fullResultsResult.answer) {
-                const wolfResult = fullResultsResult;
-                wolframMetaBase = { answer: wolfResult.answer, interpretation: wolfResult.interpretation || null, steps: wolfResult.steps || [], mode: chatSubmode, api: 'full_results' };
-                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`)); } catch { /* ignore */ }
-                fullResultsData = language === 'ar'
-                  ? `[╪¡┘é┘è┘é╪⌐ ┘à┘ê╪½┘é╪⌐: ${wolfResult.answer}]`
-                  : `[Verified fact: ${wolfResult.answer}]`;
-                wolframUsedOuter = true;
-              }
-
-              if (summaryBoxResult.success && summaryBoxResult.summary) {
-                const summaryText = summaryBoxResult.summary || '';
-                try {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: { ...(wolframMetaBase || {}), summaryBox: summaryText.substring(0, 1200), summaryDomain: summaryBoxResult.domain || null, api: wolframMetaBase ? 'full_results+summary_boxes' : 'summary_boxes' } } })}\n\n`));
-                } catch { /* ignore */ }
-                summaryBoxData = language === 'ar'
-                  ? `[┘à╪╣┘ä┘ê┘à╪º╪¬ ╪Ñ╪╢╪º┘ü┘è╪⌐ ╪╣┘å ${summaryBoxResult.domain || '╪º┘ä┘à┘ê╪╢┘ê╪╣'}]\n${summaryText.substring(0, 800)}`
-                  : `[Additional info about ${summaryBoxResult.domain || 'topic'}]\n${summaryText.substring(0, 800)}`;
-                wolframUsedOuter = true;
-              }
-
-              if (fullResultsData || summaryBoxData) {
-                const combinedParts = [fullResultsData, summaryBoxData].filter(Boolean);
-                wolframContext = combinedParts.join('\n\n') + (language === 'ar' ? '\n\n╪º╪│╪¬╪«╪»┘à ┘ç╪░┘ç ╪º┘ä┘à╪╣┘ä┘ê┘à╪º╪¬ ┘ü┘è ╪Ñ╪¼╪º╪¿╪¬┘â ╪¿╪┤┘â┘ä ╪╖╪¿┘è╪╣┘è.' : '\n\nUse this information naturally in your response.');
-              }
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: { summaryBox: card.html, summaryDomain: 'entity', api: 'gemini_card' } } })}\n\n`));
+              } catch { /* ignore */ }
             }
           }
 
           // Build final user message (unified multimodal path — providers read images directly)
-          if (wolframContext) {
-            messages.push({ role: 'user', content: `${wolframContext}\n\nUser question: ${message}` });
-          } else {
-            messages.push({ role: 'user', content: message });
-          }
+          messages.push({ role: 'user', content: enrichedMessage });
         }
 
         let aiProvider = 'none';
@@ -7070,12 +6773,14 @@ If you are running out of space, keep this order and drop the rest:
           }));
           if (normalizedImageAttachments.length === 0) return out;
 
-          const imageParts = normalizedImageAttachments.map((attachment) => ({
-            type: 'image_url',
-            image_url: {
-              url: attachment.dataUrl,
-            },
-          }));
+          const imageParts = normalizedImageAttachments
+            .filter((attachment) => attachment.mimeType.startsWith('image/')) // OpenAI models can't read PDFs inline — Gemini handles those
+            .map((attachment) => ({
+              type: 'image_url',
+              image_url: {
+                url: attachment.dataUrl,
+              },
+            }));
 
           const lastUserIndex = [...out].reverse().findIndex((entry) => entry.role === 'user');
           const targetIndex = lastUserIndex === -1 ? -1 : (out.length - 1 - lastUserIndex);
@@ -7106,7 +6811,7 @@ If you are running out of space, keep this order and drop the rest:
           }
 
           const imageBlocks = normalizedImageAttachments.map((attachment) => ({
-            type: 'image',
+            type: attachment.mimeType === 'application/pdf' ? 'document' : 'image',
             source: {
               type: 'base64',
               media_type: attachment.mimeType,
@@ -7180,12 +6885,8 @@ If you are running out of space, keep this order and drop the rest:
             selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3.7-flash';
             engineLabel = isDeepWork ? 'Intelligence Engine (Pro)' : 'Intelligence Engine (Flash)';
           } else {
-            selectedModel = 'gemini-3.1-flash-lite';
-            engineLabel = isDeepWork ? 'Speed Engine (Flash/Deep)' : 'Speed Engine (Flash)';
-          }
-          // YouTube video parts ride the full Flash model (Flash-Lite video support is unreliable).
-          if (youTubeWatchUrl && selectedModel === 'gemini-3.1-flash-lite') {
             selectedModel = 'gemini-3.7-flash';
+            engineLabel = isDeepWork ? 'Speed Engine (Flash/Deep)' : 'Speed Engine (Flash)';
           }
           modelUsed = engineLabel;
           modelUsedOuter = engineLabel;
@@ -7211,8 +6912,11 @@ If you are running out of space, keep this order and drop the rest:
           // tool combination we step down rather than lose verified computation silently:
           // grounding+code -> code only -> plain. Chat/search behaviour is a single attempt as before.
           const searchAllowed = normalizedImageAttachments.length === 0 && !youTubeWatchUrl;
+          // Code execution: study mode always; any mode when the query is computational
+          // (real math instead of guessing — replaced Wolfram).
+          const wantsCodeExecution = isStudyMode || isWolframQuery(message || '');
           const attempts: Array<{ search: boolean; code: boolean }> = [];
-          if (isStudyMode) {
+          if (wantsCodeExecution) {
             attempts.push({ search: searchAllowed, code: true });
             if (searchAllowed) attempts.push({ search: false, code: true });
             attempts.push({ search: searchAllowed, code: false });
@@ -7237,6 +6941,10 @@ If you are running out of space, keep this order and drop the rest:
 
           if (geminiTokenCount === 0) {
             throw new Error('Gemini produced no tokens');
+          }
+
+          if (transcriptRequested) {
+            try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { transcript: true, videoUrl: youTubeWatchUrl } })}\n\n`)); } catch { /* ignore */ }
           }
         };
 

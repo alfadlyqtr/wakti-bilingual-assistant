@@ -1,8 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Image as ImageIcon } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Plus, Smartphone, Square, Monitor, Wand2, Globe, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
+import {
+  type BrandKit,
+  fetchBrandKits,
+  createBrandKit,
+  deleteBrandKit,
+  uploadBrandKitLogo,
+  extractBrandColors,
+} from '@/components/studio/brandKit';
 
 // Types
 export interface VisualAdsState {
@@ -45,6 +55,13 @@ export interface VisualAdsState {
     textPresence: 'quiet' | 'balanced' | 'strong-cta';
     textColorStyle: 'auto-contrast' | 'brand-accent' | 'minimal-monochrome';
   };
+  brandKit: {
+    kitId: string | null;
+    name: string | null;
+    primaryColor: string | null;
+    accentColor: string | null;
+    tone: string | null;
+  };
 }
 
 interface VisualAdsGeneratorProps {
@@ -53,6 +70,14 @@ interface VisualAdsGeneratorProps {
   isGenerating: boolean;
   progress: number;
   resultUrl?: string;
+  resultUrls?: string[];
+  onSelectResult?: (index: number) => void;
+  onEditText?: (edit: {
+    ctaText: string | null;
+    featureChips: string[];
+    textPresence: VisualAdsState['creativeSoul']['textPresence'];
+    textColorStyle: VisualAdsState['creativeSoul']['textColorStyle'];
+  }) => Promise<void>;
   onSave?: () => void;
   onDownload?: () => void;
   onTryAgain?: () => void;
@@ -75,6 +100,7 @@ const createVisualAdsInitialState = (): VisualAdsState => ({
     textPresence: 'balanced',
     textColorStyle: 'auto-contrast',
   },
+  brandKit: { kitId: null, name: null, primaryColor: null, accentColor: null, tone: null },
   assets: [],
 });
 
@@ -239,8 +265,15 @@ export const textColorStyleChips: PosterAdsChip[] = [
   { id: 'minimal-monochrome', labelEn: '◻️ Minimal Mono', labelAr: '◻️ أحادي بسيط', prompt: 'Keep text mostly monochrome using white, black, or premium neutral tones with elegant contrast. Avoid loud color variety.' },
 ];
 
-const getLocalizedChipLabel = (chip?: PosterAdsChip | null, language?: 'ar' | 'en') => {
-  if (!chip) return '';
+export const brandToneChips: PosterAdsChip[] = [
+  { id: 'playful', labelEn: '🎈 Playful', labelAr: '🎈 مرح', prompt: 'playful and energetic' },
+  { id: 'premium', labelEn: '💎 Premium', labelAr: '💎 فاخر', prompt: 'premium and luxurious' },
+  { id: 'bold', labelEn: '⚡ Bold', labelAr: '⚡ جريء', prompt: 'bold and confident' },
+  { id: 'friendly', labelEn: '🤝 Friendly', labelAr: '🤝 ودود', prompt: 'warm and friendly' },
+  { id: 'calm', labelEn: '🌿 Calm', labelAr: '🌿 هادئ', prompt: 'calm and trustworthy' },
+];
+
+const getLocalizedChipLabel = (chip?: PosterAdsChip | null, language?: 'ar' | 'en') => {  if (!chip) return '';
   return language === 'ar' ? chip.labelAr : chip.labelEn;
 };
 
@@ -395,6 +428,9 @@ export default function VisualAdsGenerator({
   isGenerating,
   progress,
   resultUrl,
+  resultUrls,
+  onSelectResult,
+  onEditText,
   onDownload,
   onSave,
   onTryAgain,
@@ -441,6 +477,143 @@ export default function VisualAdsGenerator({
   const updateCreativeSoul = useCallback((updates: Partial<VisualAdsState['creativeSoul']>) => {
     updateState('creativeSoul', updates);
   }, [updateState]);
+
+  // ─── Brand Kit (saved brand identity: logo + colors + tone) ───
+  const { user } = useAuth();
+  const [brandKits, setBrandKits] = useState<BrandKit[]>([]);
+  const [brandKitDialogOpen, setBrandKitDialogOpen] = useState(false);
+  const [brandKitSaving, setBrandKitSaving] = useState(false);
+  const [kitDraftName, setKitDraftName] = useState('');
+  const [kitDraftLogo, setKitDraftLogo] = useState<string | null>(null);
+  const [kitDraftTone, setKitDraftTone] = useState('');
+  const [kitDraftPrimary, setKitDraftPrimary] = useState<string | null>(null);
+  const [kitDraftAccent, setKitDraftAccent] = useState<string | null>(null);
+  const kitLogoInputRef = useRef<HTMLInputElement>(null);
+  const [kitScanUrl, setKitScanUrl] = useState('');
+  const [kitScanning, setKitScanning] = useState(false);
+
+  // "Paste your website" — AI reads the site and pre-fills the kit for review.
+  const handleScanWebsite = useCallback(async () => {
+    const url = kitScanUrl.trim();
+    if (!url) return;
+    setKitScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('brand-dna-scan', { body: { url } });
+      if (error) throw error;
+      const dna = data?.dna;
+      if (!dna) throw new Error('No scan result');
+      if (dna.name) setKitDraftName(dna.name);
+      if (dna.primary_color) setKitDraftPrimary(dna.primary_color);
+      if (dna.accent_color) setKitDraftAccent(dna.accent_color);
+      if (dna.tone) {
+        const chip = brandToneChips.find((item) => item.prompt === dna.tone);
+        if (chip) setKitDraftTone(chip.id);
+      }
+      if (dna.logo_url) setKitDraftLogo(dna.logo_url);
+      toast.success(language === 'ar' ? 'تم تحليل الموقع — راجع النتائج قبل الحفظ' : 'Website scanned — review the results before saving');
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر تحليل الموقع — جرب رابطاً آخر أو املأ الحقول يدوياً' : 'Could not scan the website — try another link or fill the fields manually');
+    } finally {
+      setKitScanning(false);
+    }
+  }, [kitScanUrl, language]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchBrandKits(user.id).then(setBrandKits).catch(() => {});
+  }, [user?.id]);
+
+  const applyBrandKit = useCallback((kit: BrandKit | null) => {
+    if (!kit) {
+      setState(prev => ({
+        ...prev,
+        brandKit: { kitId: null, name: null, primaryColor: null, accentColor: null, tone: null },
+      }));
+      return;
+    }
+    setState(prev => ({
+      ...prev,
+      brandKit: {
+        kitId: kit.id,
+        name: kit.name,
+        primaryColor: kit.primary_color,
+        accentColor: kit.accent_color,
+        tone: kit.tone,
+      },
+    }));
+    // A brand kit means branded text by default — the user can still change it.
+    updateCreativeSoul({ textColorStyle: 'brand-accent' });
+  }, [updateCreativeSoul]);
+
+  const resetKitDraft = useCallback(() => {
+    setKitDraftName('');
+    setKitDraftLogo(null);
+    setKitDraftTone('');
+    setKitDraftPrimary(null);
+    setKitDraftAccent(null);
+    setKitScanUrl('');
+  }, []);
+
+  const handleKitLogoChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setKitDraftLogo(dataUrl);
+      const colors = await extractBrandColors(dataUrl);
+      if (colors) {
+        setKitDraftPrimary(colors.primary);
+        setKitDraftAccent(colors.accent);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
+  const handleSaveBrandKit = useCallback(async () => {
+    if (!user?.id) return;
+    const name = kitDraftName.replace(/\s+/g, ' ').trim();
+    if (!name) {
+      toast.error(language === 'ar' ? 'اكتب اسم الهوية أولاً' : 'Give your brand kit a name first');
+      return;
+    }
+    setBrandKitSaving(true);
+    try {
+      const logoUrl = kitDraftLogo ? await uploadBrandKitLogo(user.id, kitDraftLogo) : null;
+      const tonePrompt = brandToneChips.find((chip) => chip.id === kitDraftTone)?.prompt || null;
+      const kit = await createBrandKit(user.id, {
+        name,
+        logo_url: logoUrl,
+        primary_color: kitDraftPrimary,
+        accent_color: kitDraftAccent,
+        tone: tonePrompt,
+      });
+      setBrandKits(prev => [kit, ...prev]);
+      setBrandKitDialogOpen(false);
+      resetKitDraft();
+      applyBrandKit(kit);
+      toast.success(language === 'ar' ? 'تم حفظ هوية العلامة' : 'Brand kit saved');
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر حفظ هوية العلامة' : 'Could not save the brand kit');
+    } finally {
+      setBrandKitSaving(false);
+    }
+  }, [user?.id, kitDraftName, kitDraftLogo, kitDraftTone, kitDraftPrimary, kitDraftAccent, language, resetKitDraft, applyBrandKit]);
+
+  const handleDeleteBrandKit = useCallback(async (kitId: string) => {
+    if (!user?.id) return;
+    try {
+      await deleteBrandKit(user.id, kitId);
+      setBrandKits(prev => prev.filter((kit) => kit.id !== kitId));
+      setState(prev => prev.brandKit.kitId === kitId
+        ? { ...prev, brandKit: { kitId: null, name: null, primaryColor: null, accentColor: null, tone: null } }
+        : prev);
+      toast.success(language === 'ar' ? 'تم حذف الهوية' : 'Brand kit deleted');
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر حذف الهوية' : 'Could not delete the brand kit');
+    }
+  }, [user?.id, language]);
 
   const normalizeWordLimitedValue = useCallback((value: string) => value.replace(/\s+/g, ' ').trim(), []);
   const hasMoreThanThreeWords = useCallback((value: string) => {
@@ -742,6 +915,49 @@ export default function VisualAdsGenerator({
     .filter((item): item is { index: number; message: string } => Boolean(item));
   const showPartialAssetStatus = readyAssetIndexes.length > 0 && incompleteAssets.length > 0;
   const [showSavedPicker, setShowSavedPicker] = useState(false);
+
+  // Pick a saved Brand Kit: link its colors/tone and auto-add its logo as a tagged logo asset.
+  const handleBrandKitSelect = useCallback((kitId: string) => {
+    const kit = brandKits.find((item) => item.id === kitId) || null;
+    applyBrandKit(kit);
+    if (!kit?.logo_url) return;
+    if (uploadedImages.some((asset) => asset.image === kit.logo_url)) return;
+    if (uploadedImages.length >= MAX_ASSET_IMAGES) {
+      toast.error(language === 'ar' ? 'الحد الأقصى 6 صور' : 'Max 6 images allowed');
+      return;
+    }
+    const logoAsset = {
+      image: kit.logo_url,
+      type: 'logo' as const,
+      customType: null,
+      customTypeDraft: null,
+      personMode: null,
+      exactPersonStyle: null,
+      referenceStyle: null,
+      logoMode: 'transparent' as const,
+      screenshotDevice: null,
+    };
+    const allImages = [...uploadedImages, logoAsset];
+    setUploadedImages(allImages);
+    setState(prev => ({
+      ...prev,
+      assets: allImages,
+      brandAsset: prev.brandAsset.image
+        ? prev.brandAsset
+        : {
+            image: logoAsset.image,
+            type: logoAsset.type,
+            customType: null,
+            customTypeDraft: null,
+            personMode: null,
+            exactPersonStyle: null,
+            referenceStyle: null,
+            logoMode: logoAsset.logoMode,
+            screenshotDevice: null,
+          },
+    }));
+    setCompletedSteps(prev => new Set([...prev, 1]));
+  }, [brandKits, applyBrandKit, uploadedImages, MAX_ASSET_IMAGES, language]);
 
   useEffect(() => {
     setVisibleSlotCount((prev) => {
@@ -1085,18 +1301,6 @@ export default function VisualAdsGenerator({
       setActiveStep(2);
       return;
     }
-    if (!state.creativeSoul.mainMessage) {
-      toast.error(language === 'ar' ? 'اختر الرسالة الرئيسية قبل الإنشاء' : 'Pick a main message before generating');
-      setActiveStep(3);
-      setOpenBriefSection(1);
-      return;
-    }
-    if (!state.creativeSoul.style) {
-      toast.error(language === 'ar' ? 'اختر نمطاً بصرياً قبل الإنشاء' : 'Pick a visual style before generating');
-      setActiveStep(3);
-      setOpenBriefSection(1);
-      return;
-    }
     if (state.creativeSoul.mainMessage === 'custom' && !normalizeWordLimitedValue(state.creativeSoul.customMainMessage || '')) {
       toast.error(language === 'ar' ? 'اكتب الفكرة المخصصة في القسم الأول' : 'Write your custom ad angle in section 1');
       setActiveStep(3);
@@ -1132,6 +1336,71 @@ export default function VisualAdsGenerator({
   const canRevealMoreSlots = visibleSlotCount < MAX_ASSET_IMAGES;
   const visibleEmptySlots = Math.max(0, visibleSlotCount - uploadedImages.length);
 
+  // ─── Edit poster text after generation (no regeneration needed) ───
+  const [editPanelOpen, setEditPanelOpen] = useState(false);
+  const [editApplying, setEditApplying] = useState(false);
+  const [editCta, setEditCta] = useState('');
+  const [editChips, setEditChips] = useState<string[]>([]);
+  const [editChipDraft, setEditChipDraft] = useState('');
+  const [editPresence, setEditPresence] = useState<VisualAdsState['creativeSoul']['textPresence']>('balanced');
+  const [editColorStyle, setEditColorStyle] = useState<VisualAdsState['creativeSoul']['textColorStyle']>('auto-contrast');
+
+  const openEditPanel = useCallback(() => {
+    const currentCta = state.creativeSoul.cta === 'custom'
+      ? (state.creativeSoul.customCta || '')
+      : getLocalizedChipLabel(getCtaChipById(state.creativeSoul.cta), language);
+    setEditCta(currentCta);
+    setEditChips(state.creativeSoul.featureChips);
+    setEditChipDraft('');
+    setEditPresence(state.creativeSoul.textPresence);
+    setEditColorStyle(state.creativeSoul.textColorStyle);
+    setEditPanelOpen(true);
+  }, [state.creativeSoul, language]);
+
+  const addEditChip = useCallback(() => {
+    const normalized = normalizeWordLimitedValue(editChipDraft);
+    if (!normalized) return;
+    if (hasMoreThanFourWords(normalized)) {
+      toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٤ كلمات كحد أقصى لكل ميزة' : 'Use 1 to 4 words maximum per feature');
+      return;
+    }
+    if (editChips.includes(normalized) || editChips.length >= MAX_FEATURE_CHIPS) return;
+    setEditChips(prev => [...prev, normalized]);
+    setEditChipDraft('');
+  }, [editChipDraft, editChips, hasMoreThanFourWords, language, normalizeWordLimitedValue, MAX_FEATURE_CHIPS]);
+
+  const applyTextEdit = useCallback(async () => {
+    if (!onEditText) return;
+    const cta = normalizeWordLimitedValue(editCta);
+    if (cta && hasMoreThanFiveWords(cta)) {
+      toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى' : 'Use 1 to 5 words maximum');
+      return;
+    }
+    setEditApplying(true);
+    try {
+      await onEditText({
+        ctaText: cta || null,
+        featureChips: editChips,
+        textPresence: editPresence,
+        textColorStyle: editColorStyle,
+      });
+      // Keep the wizard state in sync so "Try Again" reuses the edited text
+      updateCreativeSoul({
+        cta: cta ? 'custom' : '',
+        customCta: cta,
+        featureChips: editChips,
+        textPresence: editPresence,
+        textColorStyle: editColorStyle,
+      });
+      setEditPanelOpen(false);
+      toast.success(language === 'ar' ? 'تم تحديث النص' : 'Text updated');
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر تحديث النص' : 'Could not update the text');
+    } finally {
+      setEditApplying(false);
+    }
+  }, [onEditText, editCta, editChips, editPresence, editColorStyle, language, normalizeWordLimitedValue, hasMoreThanFiveWords, updateCreativeSoul]);
+
   return (
     <div className="w-full max-w-4xl mx-auto px-4 md:px-6">
       {/* Stepper */}
@@ -1147,6 +1416,68 @@ export default function VisualAdsGenerator({
         />
         <StepContent step={1} activeStep={activeStep}>
           <div className="space-y-4">
+            {/* Brand Kit — save logo + colors + tone once, every poster stays on-brand */}
+            {user?.id && (
+              <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
+                <div className="px-4 py-3 bg-white/40 dark:bg-white/5">
+                  <p className="text-sm font-semibold text-foreground">
+                    {language === 'ar' ? 'هوية العلامة' : 'Brand Kit'}
+                    <span className="ml-2 text-[10px] font-medium text-[#858384]">{language === 'ar' ? 'اختياري' : 'Optional'}</span>
+                  </p>
+                  <p className="text-[11px] text-[#858384]">
+                    {language === 'ar'
+                      ? 'احفظ شعارك وألوانك ونبرتك مرة واحدة — وكل بوستر يطلع بهويتك تلقائياً.'
+                      : 'Save your logo, colors, and tone once — every poster comes out on-brand automatically.'}
+                  </p>
+                </div>
+                <div className="px-4 pb-3 pt-1 space-y-2">
+                  <div className="flex gap-2">
+                    <select
+                      value={state.brandKit.kitId || ''}
+                      onChange={(e) => handleBrandKitSelect(e.target.value)}
+                      aria-label={language === 'ar' ? 'اختر هوية العلامة' : 'Choose a brand kit'}
+                      className="flex-1 min-w-0 rounded-lg border border-[#606062]/20 bg-white/70 px-3 py-2 text-xs text-foreground outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 dark:border-[#858384]/30 dark:bg-white/10"
+                    >
+                      <option value="">{language === 'ar' ? 'بدون هوية محفوظة' : 'No saved brand kit'}</option>
+                      {brandKits.map((kit) => (
+                        <option key={kit.id} value={kit.id}>{kit.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setBrandKitDialogOpen(true)}
+                      className="rounded-lg bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2 text-xs font-semibold text-[#060541] shadow-[0_4px_14px_rgba(251,146,60,0.28)] transition-all active:scale-95"
+                    >
+                      {language === 'ar' ? '+ هوية جديدة' : '+ New kit'}
+                    </button>
+                  </div>
+                  {state.brandKit.kitId && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(state.brandKit.primaryColor || state.brandKit.accentColor) && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/60 dark:bg-white/10 border border-[#606062]/15 dark:border-white/10 px-2 py-1">
+                          {state.brandKit.primaryColor && (
+                            <span className="w-3.5 h-3.5 rounded-full border border-black/10" style={{ backgroundColor: state.brandKit.primaryColor }} />
+                          )}
+                          {state.brandKit.accentColor && (
+                            <span className="w-3.5 h-3.5 rounded-full border border-black/10" style={{ backgroundColor: state.brandKit.accentColor }} />
+                          )}
+                          <span className="text-[10px] font-medium text-foreground/80">{language === 'ar' ? 'ألوان علامتك' : 'Your colors'}</span>
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBrandKit(state.brandKit.kitId!)}
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium text-red-500 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        {language === 'ar' ? 'حذف الهوية' : 'Delete kit'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Upload Zone - Smaller with thumbnails */}
             <div className="relative">
               <div className="space-y-3">
@@ -1402,6 +1733,154 @@ export default function VisualAdsGenerator({
                 }}
                 onClose={() => setShowSavedPicker(false)}
               />
+            )}
+
+            {brandKitDialogOpen && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div className="bg-white dark:bg-[#0c0f14] rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-[#606062]/20 dark:border-white/10">
+                  <div className="flex items-center justify-between p-4 border-b border-[#606062]/15 dark:border-white/10">
+                    <h2 className="text-base font-bold text-foreground">
+                      {language === 'ar' ? 'هوية علامة جديدة' : 'New Brand Kit'}
+                    </h2>
+                    <button
+                      onClick={() => { setBrandKitDialogOpen(false); resetKitDraft(); }}
+                      aria-label="Close"
+                      className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
+                      type="button"
+                    >
+                      <X className="w-4 h-4 text-foreground" />
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {/* Website scan — the Pomelli-style shortcut */}
+                    <div className="space-y-1.5 rounded-xl border border-orange-400/30 bg-orange-500/5 p-3">
+                      <p className="text-xs font-semibold text-foreground">
+                        {language === 'ar' ? '⚡ عندك موقع؟ الصق الرابط وخلّ الذكاء الاصطناعي يجهّز كل شيء' : '⚡ Have a website? Paste the link and let AI fill everything'}
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={kitScanUrl}
+                          onChange={(e) => setKitScanUrl(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScanWebsite(); } }}
+                          placeholder={language === 'ar' ? 'example.com' : 'example.com'}
+                          dir="ltr"
+                          className="flex-1 min-w-0 rounded-xl bg-white/70 dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-orange-400/60"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleScanWebsite}
+                          disabled={kitScanning || !kitScanUrl.trim()}
+                          className="rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 px-4 py-2 text-xs font-semibold text-[#060541] shadow-[0_4px_14px_rgba(251,146,60,0.28)] transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          {kitScanning
+                            ? (language === 'ar' ? 'نحلل...' : 'Scanning...')
+                            : (language === 'ar' ? 'تحليل' : 'Scan')}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-[#858384]">
+                        {language === 'ar' ? 'نقرأ موقعك ونستخرج الاسم والألوان والنبرة والشعار — ثم تراجعها قبل الحفظ.' : 'We read your site and extract the name, colors, tone, and logo — then you review before saving.'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground" htmlFor="kit-name">
+                        {language === 'ar' ? 'اسم العلامة' : 'Brand name'}
+                      </label>
+                      <input
+                        id="kit-name"
+                        type="text"
+                        value={kitDraftName}
+                        onChange={(e) => setKitDraftName(e.target.value)}
+                        placeholder={language === 'ar' ? 'مثال: مقهى الروشة' : 'e.g. Sunrise Cafe'}
+                        className="w-full rounded-xl bg-white/70 dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-orange-400/60"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold text-foreground">{language === 'ar' ? 'الشعار' : 'Logo'}</p>
+                      <p className="text-[11px] text-[#858384]">
+                        {language === 'ar' ? 'نستخرج ألوان علامتك من الشعار تلقائياً.' : 'We auto-extract your brand colors from the logo.'}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => kitLogoInputRef.current?.click()}
+                          className="w-20 h-20 rounded-xl border-2 border-dashed border-[#606062]/40 dark:border-[#858384]/30 bg-white/30 dark:bg-white/5 overflow-hidden transition-all active:scale-95 hover:bg-white/50 dark:hover:bg-white/10 flex items-center justify-center"
+                        >
+                          {kitDraftLogo ? (
+                            <img src={kitDraftLogo} alt="Brand logo" className="w-full h-full object-contain" />
+                          ) : (
+                            <Plus className="h-6 w-6 text-[#858384]" />
+                          )}
+                        </button>
+                        {(kitDraftPrimary || kitDraftAccent) && (
+                          <div className="flex items-center gap-2">
+                            <label className="flex flex-col items-center gap-1">
+                              <input
+                                type="color"
+                                value={kitDraftPrimary || '#060541'}
+                                onChange={(e) => setKitDraftPrimary(e.target.value)}
+                                className="w-8 h-8 rounded-full border border-black/10 cursor-pointer bg-transparent p-0"
+                                aria-label={language === 'ar' ? 'اللون الأساسي' : 'Primary color'}
+                              />
+                              <span className="text-[9px] text-[#858384]">{language === 'ar' ? 'أساسي' : 'Primary'}</span>
+                            </label>
+                            <label className="flex flex-col items-center gap-1">
+                              <input
+                                type="color"
+                                value={kitDraftAccent || '#e9ceb0'}
+                                onChange={(e) => setKitDraftAccent(e.target.value)}
+                                className="w-8 h-8 rounded-full border border-black/10 cursor-pointer bg-transparent p-0"
+                                aria-label={language === 'ar' ? 'لون مميز' : 'Accent color'}
+                              />
+                              <span className="text-[9px] text-[#858384]">{language === 'ar' ? 'مميز' : 'Accent'}</span>
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        ref={kitLogoInputRef}
+                        onChange={handleKitLogoChange}
+                        accept="image/*"
+                        hidden
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold text-foreground">{language === 'ar' ? 'نبرة العلامة' : 'Brand tone'}</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {brandToneChips.map((chip) => (
+                          <button
+                            key={chip.id}
+                            type="button"
+                            onClick={() => setKitDraftTone(kitDraftTone === chip.id ? '' : chip.id)}
+                            className={`px-2 py-2 rounded-lg border text-[11px] font-medium transition-all leading-tight ${
+                              kitDraftTone === chip.id
+                                ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
+                                : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                            }`}
+                          >
+                            {getLocalizedChipLabel(chip, language)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveBrandKit}
+                      disabled={brandKitSaving}
+                      className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {brandKitSaving
+                        ? (language === 'ar' ? 'جارِ الحفظ...' : 'Saving...')
+                        : (language === 'ar' ? 'حفظ الهوية' : 'Save Brand Kit')}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {uploadedImages.length > 0 && (
@@ -2026,7 +2505,44 @@ export default function VisualAdsGenerator({
       {resultUrl && (
         <div className="mt-6 rounded-2xl border border-border/50 bg-card overflow-hidden shadow-xl p-4 space-y-4">
           <img src={resultUrl} alt="Generated Ad" className="w-full rounded-xl object-contain" />
+
+          {/* Variation picker — every generation produces 2 different options */}
+          {resultUrls && resultUrls.length > 1 && onSelectResult && (
+            <div className="space-y-2">
+              <p className="text-center text-xs font-semibold text-[#858384]">
+                {language === 'ar' ? 'اختر النسخة الأفضل' : 'Pick your favorite version'}
+              </p>
+              <div className="flex gap-2 justify-center">
+                {resultUrls.map((url, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => onSelectResult(index)}
+                    aria-label={language === 'ar' ? `الخيار ${index + 1}` : `Option ${index + 1}`}
+                    className={`rounded-xl overflow-hidden border-2 transition-all duration-200 active:scale-95 ${
+                      resultUrl === url
+                        ? 'border-orange-400 shadow-lg shadow-orange-500/25 scale-[1.03]'
+                        : 'border-transparent opacity-60 hover:opacity-90'
+                    }`}
+                    style={{ width: 84, height: 84 }}
+                  >
+                    <img src={url} alt={`Option ${index + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-3 justify-center">
+            {onEditText && (
+              <button
+                onClick={() => (editPanelOpen ? setEditPanelOpen(false) : openEditPanel())}
+                className="inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted/80"
+              >
+                <span>✏️</span>
+                <span>{language === 'ar' ? 'تعديل النص' : 'Edit text'}</span>
+              </button>
+            )}
             {onSave && (
               <button
                 onClick={onSave}
@@ -2055,6 +2571,115 @@ export default function VisualAdsGenerator({
               </button>
             )}
           </div>
+
+          {/* Edit text panel — re-draws the text layer instantly, no regeneration */}
+          {editPanelOpen && onEditText && (
+            <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 p-4 space-y-3">
+              <p className="text-xs font-semibold text-foreground">
+                {language === 'ar' ? 'عدّل نص البوستر' : 'Edit the poster text'}
+              </p>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'الدعوة لاتخاذ إجراء' : 'Call to action'}</p>
+                <input
+                  type="text"
+                  value={editCta}
+                  onChange={(e) => setEditCta(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: حمّل الآن' : 'e.g. Download now'}
+                  className="w-full rounded-xl bg-white/70 dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-orange-400/60"
+                />
+                <p className="text-[10px] text-[#858384]">{language === 'ar' ? 'من كلمة إلى ٥ كلمات — اتركه فارغاً لإخفائه' : '1 to 5 words — leave empty to hide it'}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'النقاط الأساسية' : 'Key points'}</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editChipDraft}
+                    onChange={(e) => setEditChipDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditChip(); } }}
+                    placeholder={language === 'ar' ? 'مثال: Text to Video' : 'e.g. Text to Video'}
+                    className="flex-1 rounded-xl bg-white/70 dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-orange-400/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={addEditChip}
+                    disabled={!normalizeWordLimitedValue(editChipDraft) || editChips.length >= MAX_FEATURE_CHIPS}
+                    className="rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2 text-xs font-semibold text-[#060541] disabled:opacity-50"
+                  >
+                    {language === 'ar' ? 'إضافة' : 'Add'}
+                  </button>
+                </div>
+                {editChips.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {editChips.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => setEditChips(prev => prev.filter((item) => item !== chip))}
+                        className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 px-2.5 py-1 text-[10px] font-semibold text-[#060541]"
+                      >
+                        <span>{chip}</span>
+                        <span className="text-[11px] leading-none">×</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'حضور النص' : 'Text presence'}</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {textPresenceChips.map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => setEditPresence(chip.id as VisualAdsState['creativeSoul']['textPresence'])}
+                      className={`px-2 py-2 rounded-lg border text-[11px] font-medium transition-all ${
+                        editPresence === chip.id
+                          ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300'
+                          : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
+                      }`}
+                    >
+                      {getLocalizedChipLabel(chip, language)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'أسلوب ألوان النص' : 'Text color style'}</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {textColorStyleChips.map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => setEditColorStyle(chip.id as VisualAdsState['creativeSoul']['textColorStyle'])}
+                      className={`px-2 py-2 rounded-lg border text-[11px] font-medium transition-all ${
+                        editColorStyle === chip.id
+                          ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300'
+                          : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground'
+                      }`}
+                    >
+                      {getLocalizedChipLabel(chip, language)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={applyTextEdit}
+                disabled={editApplying}
+                className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {editApplying
+                  ? (language === 'ar' ? 'جارِ التحديث...' : 'Updating...')
+                  : (language === 'ar' ? 'تطبيق التعديلات' : 'Apply changes')}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -58,6 +58,11 @@ type VisualAdsSpec = {
   aspect_ratio?: string | null;
   objective?: string | null;
   legacy_prompt?: string | null;
+  brand?: {
+    primary_color?: string | null;
+    accent_color?: string | null;
+    tone?: string | null;
+  } | null;
   assets?: VisualAdsSpecAsset[];
   campaign?: {
     main_message_id?: string | null;
@@ -118,27 +123,6 @@ type VisualAdsSpec = {
     priority_order?: string[] | null;
   } | null;
 };
-
-type TrialFeatureKey =
-  | "ai_chat"
-  | "tasjeel"
-  | "t2i"
-  | "i2i"
-  | "bg_removal"
-  | "music"
-  | "i2v"
-  | "t2v"
-  | "2i2v"
-  | "compose"
-  | "reply"
-  | "diagrams"
-  | "ppt"
-  | "tts"
-  | "translate"
-  | "interpreter"
-  | "voice_clone"
-  | "ai_coder"
-  | "ai_chatbot";
 
 function sanitizeError(msg: string): string {
   return msg
@@ -275,10 +259,10 @@ function buildCampaignDirectives(spec: VisualAdsSpec): string[] {
       lines.push("CAMPAIGN MODE / PREMIUM: Push craftsmanship, exclusivity, and elevated brand perception. Avoid mass-market sale styling.");
       break;
     case "social-proof":
-      lines.push("CAMPAIGN MODE / CUSTOMER LOVE: Communicate trust and popularity through tasteful proof markers and approved short phrases only. Do not invent testimonials or ratings.");
+      lines.push("CAMPAIGN MODE / CUSTOMER LOVE: Communicate trust and popularity through tasteful visual proof cues and badge-like zones. Do not invent testimonials, ratings, or review copy.");
       break;
     case "features":
-      lines.push("CAMPAIGN MODE / SHOW FEATURES: Organize the layout around a clear hero plus concise supporting feature callouts using only the approved short phrases.");
+      lines.push("CAMPAIGN MODE / SHOW FEATURES: Organize the layout around a clear hero plus clean visual emphasis zones where short feature labels will be overlaid later.");
       break;
     case "sale":
       lines.push("CAMPAIGN MODE / SALE: The offer should feel immediate and visible, but still premium. Do not invent discount percentages, prices, coupon codes, or fake deadlines.");
@@ -332,19 +316,19 @@ function buildCampaignDirectives(spec: VisualAdsSpec): string[] {
       lines.push("MESSAGE DETAIL / FLAGSHIP ENERGY: Present the offer like the category-leading flagship product or service.");
       break;
     case "testimonial-cards":
-      lines.push("MESSAGE DETAIL / TESTIMONIAL CARDS: Use approved phrases as clean trust cards or proof labels only. Do not invent quotes.");
+      lines.push("MESSAGE DETAIL / TESTIMONIAL CARDS: Arrange clean card-style zones suitable for short trust labels. Do not invent quotes or review copy.");
       break;
     case "community-love":
       lines.push("MESSAGE DETAIL / COMMUNITY LOVE: Make the poster feel warmly loved by a real audience without fake review language.");
       break;
     case "trust-signals":
-      lines.push("MESSAGE DETAIL / TRUST SIGNALS: Lean into premium proof markers, badges, and confidence cues using only approved content.");
+      lines.push("MESSAGE DETAIL / TRUST SIGNALS: Lean into premium badge-like zones and confidence cues without rendering copy.");
       break;
     case "feature-callouts":
-      lines.push("MESSAGE DETAIL / FEATURE CALLOUTS: Arrange approved points as clean callouts attached to the hero subject or interface.");
+      lines.push("MESSAGE DETAIL / FEATURE CALLOUTS: Arrange clean callout zones attached to the hero subject or interface, leaving room for short labels.");
       break;
     case "hero-plus-benefits":
-      lines.push("MESSAGE DETAIL / HERO PLUS BENEFITS: Keep one strong hero subject with concise benefit labels supporting it.");
+      lines.push("MESSAGE DETAIL / HERO PLUS BENEFITS: Keep one strong hero subject with calm supporting zones for benefit highlights.");
       break;
     case "smart-breakdown":
       lines.push("MESSAGE DETAIL / SMART BREAKDOWN: Organize the visual like a premium, intelligent breakdown of capabilities.");
@@ -477,7 +461,7 @@ function buildCompositionDirectives(spec: VisualAdsSpec): string[] {
     lines.push(`SECONDARY SUBJECT RULE: ${secondarySubjects.join(", ")} must stay supportive and must not overpower the primary subjects.`);
   }
   if (spec.composition?.logo_source) {
-    lines.push(`LOGO PLACEMENT RULE: ${spec.composition.logo_source} should sit in a clean brand-safe placement, typically near a top or bottom edge, fully visible.`);
+    lines.push(`LOGO PLACEMENT RULE: ${spec.composition.logo_source} should sit in a clean brand-safe placement, preferably near a top edge, fully visible. Keep it away from the lower area, which is reserved for a text overlay.`);
   }
   if (spec.composition?.face_must_remain_visible) {
     lines.push("FACE VISIBILITY RULE: Any important face must remain readable, unobstructed, and clearly recognizable.");
@@ -492,78 +476,6 @@ function buildCompositionDirectives(spec: VisualAdsSpec): string[] {
   return lines;
 }
 
-function buildCtaDirectives(spec: VisualAdsSpec): string[] {
-  const ctaId = (spec.campaign?.cta_id || "").toLowerCase();
-  const ctaText = (spec.campaign?.cta_text || "").trim();
-  if (!ctaText) return [];
-
-  const lines = [`CTA MODE: Render "${ctaText}" inside the final poster as the single main action. Place it once only with clear hierarchy and strong readability.`];
-
-  switch (ctaId) {
-    case "download-now":
-    case "get-started":
-    case "start-free":
-      lines.push("CTA BEHAVIOR: Present the action like a strong conversion-focused onboarding or app-start button.");
-      break;
-    case "shop-now":
-      lines.push("CTA BEHAVIOR: Present the action like a commerce-ready purchase invitation.");
-      break;
-    case "learn-more":
-      lines.push("CTA BEHAVIOR: Present the action like a softer information-first invitation rather than a hard sale.");
-      break;
-    case "book-now":
-      lines.push("CTA BEHAVIOR: Present the action like a booking or reservation trigger with service-oriented clarity.");
-      break;
-    case "try-today":
-      lines.push("CTA BEHAVIOR: Present the action as low-friction and immediately approachable.");
-      break;
-    case "join-now":
-      lines.push("CTA BEHAVIOR: Present the action like a membership or community entry point.");
-      break;
-    case "subscribe":
-      lines.push("CTA BEHAVIOR: Present the action like an ongoing membership or subscription conversion point.");
-      break;
-  }
-
-  lines.push("CTA PLACEMENT: Keep the CTA in a clean protected area. In screenshot-led layouts, do not let it cover important device edges, app UI, or key readable screen content.");
-
-  return lines;
-}
-
-function buildTextSystemDirectives(spec: VisualAdsSpec): string[] {
-  const textPresenceId = (spec.text_policy?.text_presence_id || "").toLowerCase();
-  const textColorStyleId = (spec.text_policy?.text_color_style_id || "").toLowerCase();
-  const lines: string[] = [];
-
-  switch (textPresenceId) {
-    case "quiet":
-      lines.push("TEXT PRESENCE / QUIET: Keep the approved text restrained, compact, and elegant. Feature callouts should feel refined and supportive, while the CTA stays present but controlled.");
-      break;
-    case "balanced":
-      lines.push("TEXT PRESENCE / BALANCED: Use a clear premium hierarchy with compact feature callouts and one readable CTA. Keep the text noticeable but not oversized or loud.");
-      break;
-    case "strong-cta":
-      lines.push("TEXT PRESENCE / STRONG CTA: Make the CTA the strongest text element while keeping the feature callouts compact and supportive. The text system should feel conversion-focused without overwhelming the poster.");
-      break;
-  }
-
-  lines.push("TEXT PLACEMENT: When the layout is screenshot-led, place callouts and CTA around the device in protected negative space. Do not cover important screen content, key app UI, or the dominant screenshot read.");
-
-  switch (textColorStyleId) {
-    case "auto-contrast":
-      lines.push("TEXT COLOR / AUTO CONTRAST: Choose a clean high-contrast treatment that stays readable against the actual poster background without looking harsh or cheap.");
-      break;
-    case "brand-accent":
-      lines.push("TEXT COLOR / BRAND ACCENT: Keep most text neutral and premium. Use restrained accent color mainly on the CTA or tiny highlights rather than coloring every text element.");
-      break;
-    case "minimal-monochrome":
-      lines.push("TEXT COLOR / MINIMAL MONOCHROME: Keep the full text treatment monochrome, crisp, and elegant with a luxury-minimal feel.");
-      break;
-  }
-
-  return lines;
-}
-
 function _normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
   const record = asRecord(raw) || {};
   const assetsRaw = Array.isArray(record.assets) ? record.assets : [];
@@ -572,12 +484,18 @@ function _normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
   const composition = asRecord(record.composition);
   const textPolicy = asRecord(record.text_policy);
   const hardConstraints = asRecord(record.hard_constraints);
+  const brand = asRecord(record.brand);
 
   return {
     language: asString(record.language, 12) || "en",
     aspect_ratio: asString(record.aspect_ratio, 10) || "1:1",
     objective: asString(record.objective, 120) || null,
     legacy_prompt: asString(record.legacy_prompt, 20000) || null,
+    brand: brand ? {
+      primary_color: asString(brand.primary_color, 20) || null,
+      accent_color: asString(brand.accent_color, 20) || null,
+      tone: asString(brand.tone, 60) || null,
+    } : null,
     assets: assetsRaw
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item))
@@ -659,7 +577,6 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
 
   const ratio = spec.aspect_ratio || "1:1";
   const objective = (spec.objective || "").trim();
-  const campaignId = (spec.campaign?.main_message_id || "").toLowerCase();
   const campaignText = (spec.campaign?.main_message_custom_text || spec.campaign?.main_message_prompt || "").trim();
   const campaignDetail = (spec.campaign?.main_message_detail_prompt || "").trim();
   const featureChips = (spec.campaign?.feature_chips || []).filter(Boolean);
@@ -713,6 +630,20 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     lines.push("");
     lines.push(...compositionDirectives);
   }
+  const brandPrimary = (spec.brand?.primary_color || "").trim();
+  const brandAccent = (spec.brand?.accent_color || "").trim();
+  const brandTone = (spec.brand?.tone || "").trim();
+  if (brandPrimary || brandAccent || brandTone) {
+    lines.push("");
+    lines.push("Brand DNA:");
+    lines.push("");
+    if (brandPrimary || brandAccent) {
+      lines.push(`BRAND PALETTE: Weave the brand colors (${[brandPrimary, brandAccent].filter(Boolean).join(" and ")}) into the poster's lighting, gradients, and accent details so the artwork feels native to the brand. Do not recolor protected uploads (logo, product, screenshot, person).`);
+    }
+    if (brandTone) {
+      lines.push(`BRAND TONE: The overall mood should feel ${brandTone}.`);
+    }
+  }
   lines.push("");
   lines.push("Use the provided images with strict role assignment:");
   lines.push("");
@@ -754,7 +685,7 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
         lines.push(`Keep the logo fully visible, uncropped, flat, and 2D with a clean alpha channel and zero opacity bleed from the background.`);
         lines.push(`Treat the logo as a protected brand mark, not as a decorative object, scenic prop, sticker, sculpture, or 3D design element.`);
       } else {
-        lines.push(`BRAND OVERLAY: Integrate the logo (${sourceKey}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided.`);
+        lines.push(`BRAND OVERLAY: Integrate the logo (${sourceKey}) naturally into the composition, preferably near a clean top edge, keeping it exactly as provided.`);
         lines.push(`Preserve it as a solid asset with sharp high-fidelity edges, high contrast, zero opacity bleed, no redesign, no recolor, and no distortion.`);
         lines.push(`Keep the logo fully visible and uncropped. Do not transform it into an icon tile, prop, badge, product object, or scenic element.`);
       }
@@ -832,31 +763,18 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     }
   }
 
-  if (featureChips.length > 0) {
-    if (campaignId == "social-proof") {
-      lines.push("Render each approved key point once as a tasteful proof marker, trust label, or premium endorsement chip without inventing quotes or reviews.");
-    } else if (campaignId == "features") {
-      lines.push("Render each approved key point once as a concise feature callout or benefit label connected clearly to the hero subject or interface. Keep them compact, premium, and outside important screenshot UI.");
-    } else if (campaignId == "sale") {
-      lines.push("Render each approved key point once as a compact supporting offer or benefit chip while keeping the hierarchy clean and premium.");
-    } else {
-      lines.push("Render each approved key point once as a concise premium support label or callout chip around the main subject.");
-    }
+  if (featureChips.length > 0 || ctaText) {
+    lines.push("NOTE: Short marketing text (key points and a call-to-action) will be overlaid on the poster separately after generation. Reserve clean, calm space for it — do not render it yourself.");
   }
 
   lines.push("");
-  lines.push("Allowed Text ONLY:");
+  lines.push("Text-Free Artwork:");
   lines.push("");
-  const allowedText = ctaText ? [ctaText, ...featureChips.filter((chip) => chip !== ctaText)] : featureChips;
-  if (allowedText.length) {
-    lines.push("The following approved short text is the only new poster text you may render in the final image:");
-    for (const item of allowedText) lines.push(`\"${item}\"`);
-  } else {
-    lines.push("No extra on-poster text beyond what is already approved in the brief.");
-  }
+  lines.push("Render absolutely NO new text anywhere in the artwork: no headline, no tagline, no call-to-action, no labels, no captions, no prices, no badges or chips containing text, no numbers, no watermarks, no gibberish lettering.");
   if (hasScreenshot || hasAnyLogo || hasProduct) {
-    lines.push("Existing text already embedded inside a protected uploaded screenshot, logo, or product package may remain exactly as it appears in that asset.");
+    lines.push("Text that already exists inside a protected uploaded screenshot, logo, or product package must remain exactly as it appears in that asset. Do not erase, rewrite, or hallucinate it.");
   }
+  lines.push("Keep the lower area of the composition visually calm and uncluttered — a separate text overlay will be placed there after generation.");
 
   lines.push("");
   lines.push("Style & Mood:");
@@ -880,41 +798,14 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     lines.push(...styleDirectives);
   }
 
-  const textSystemDirectives = buildTextSystemDirectives(spec);
-  if (textSystemDirectives.length > 0) {
-    lines.push("");
-    lines.push("Text System:");
-    lines.push("");
-    lines.push(...textSystemDirectives);
-  }
-
-  const ctaDirectives = buildCtaDirectives(spec);
-  if (ctaDirectives.length > 0) {
-    lines.push("");
-    lines.push("CTA System:");
-    lines.push("");
-    lines.push(...ctaDirectives);
-  }
-
-  if (ctaText) {
-    lines.push("");
-    lines.push("CTA Guidance:");
-    lines.push("");
-    lines.push(`Render \"${ctaText}\" as the main CTA inside the final poster.`);
-    lines.push("Do not duplicate the CTA in multiple places, and do not let it cover important screenshot or device content.");
-  }
-
   lines.push("");
   lines.push("Strict Rules:");
   lines.push("");
-  lines.push("Do NOT add any extra text beyond the allowed phrases listed above.");
-  lines.push("Do NOT render any new text that is not in the approved allowed-text list unless that text already exists inside a protected uploaded asset.");
-  lines.push("Do NOT duplicate approved phrases in multiple places or repeat the same chip or CTA more than once.");
-  lines.push("Do NOT invent names, headlines, taglines, or brand copy.");
-  lines.push("Do NOT invent testimonials, ratings, reviews, or social proof copy.");
+  lines.push("Do NOT render any text of your own anywhere in the image. The only acceptable text is text already embedded inside a protected uploaded screenshot, logo, or product package.");
+  lines.push("Do NOT render headlines, taglines, CTAs, labels, captions, prices, discount percentages, coupon codes, reviews, ratings, or social-proof copy.");
+  lines.push("Do NOT invent names, brand copy, or fake deadlines.");
   if (hasScreenshot || hasAnyLogo || hasProduct) lines.push("Do NOT erase, rewrite, or hallucinate text that already exists inside a protected uploaded screenshot, logo, or product package.");
   if (hasScreenshot) lines.push("Do NOT show uploader chrome, Image 1/2 boxes, red X icons, browser chrome, or recursive interfaces around any screenshot.");
-  if (hasScreenshot) lines.push("Do NOT place feature callouts or CTA on top of important app UI, key readable screen content, or the dominant screenshot read.");
   if (hasAnyLogo) lines.push("Do NOT crop, cut off, restyle, reinterpret, or transform any uploaded logo into an object, badge, sticker, prop, sculpture, or scenic element.");
   if (hasTransparentLogo) {
     lines.push("Do NOT place the logo inside a background box, card, frame, or shape — it must stay transparent and flat.");
@@ -938,7 +829,6 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   if (hasTexture) lines.push("Do NOT turn any uploaded texture into a literal object, logo, character, or replacement scene. Keep textures subtle and subordinate.");
   if (hasIllustration || hasMascot) lines.push("Do NOT convert any illustration or mascot into a 3D real-world object. Preserve flat/vector/hand-drawn character.");
   if (hasCustomRole) lines.push("Do NOT repurpose any custom-role asset into a different asset category. Respect the uploaded job label exactly.");
-  if (featureChips.length > 0) lines.push("Use the approved key points exactly as written without renaming, paraphrasing, or substituting them.");
   if (hasExactPerson && hasScreenshot) lines.push("Keep the face clearly visible. The device mockup must not block the face.");
   lines.push("Keep everything sharp, high-resolution, cohesive, and production-ready while preserving 2D assets as 2D assets and real-world assets as real-world assets.");
 
@@ -953,179 +843,10 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
 }
 
 
-function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
-  const sections: string[] = [];
-  const assets = spec.assets || [];
-  const allowedText = (spec.text_policy?.allowed_text || []).filter(Boolean);
-  const allowedFeatureLabels = (spec.text_policy?.allowed_feature_labels || []).filter(Boolean);
-
-  const addSection = (title: string, lines: Array<string | null | undefined>) => {
-    const validLines = lines.filter((line): line is string => Boolean(line && line.trim()));
-    if (!validLines.length) return;
-    sections.push([title, ...validLines].join("\n"));
-  };
-
-  addSection("STRUCTURED_INPUT_APPENDIX", [
-    "- purpose: Supporting structured summary of the approved Poster Ads inputs.",
-    "- precedence: Structured asset, campaign, style, composition, text, and hard-constraint inputs are authoritative. If any generic frontend brief conflicts with them, the structured input wins.",
-    spec.objective ? `- objective: ${spec.objective}` : null,
-    spec.language ? `- language: ${spec.language}` : null,
-    spec.aspect_ratio ? `- aspect_ratio: ${spec.aspect_ratio}` : null,
-  ]);
-
-  addSection("SOURCE_REFERENCE_MAP", assets.map((asset, index) => {
-    const sourceKey = getSourceKey(asset, index);
-    const details = [
-      `role=${getRoleLabel(asset)}`,
-      `purpose=${getRolePurpose(spec, asset, sourceKey)}`,
-      asset.person_mode ? `person_mode=${asset.person_mode}` : null,
-      asset.pose_mode ? `pose_mode=${asset.pose_mode}` : null,
-      asset.reference_style ? `reference_style=${asset.reference_style}` : null,
-      asset.logo_mode ? `logo_mode=${asset.logo_mode}` : null,
-      asset.screenshot_device ? `screenshot_device=${asset.screenshot_device}` : null,
-    ].filter(Boolean).join("; ");
-    return `- ${sourceKey}: ${details}`;
-  }));
-
-  addSection("CAMPAIGN_SUMMARY", [
-    spec.campaign?.main_message_id ? `- main_message_id: ${spec.campaign.main_message_id}` : null,
-    spec.campaign?.main_message_prompt ? `- main_message_prompt: ${spec.campaign.main_message_prompt}` : null,
-    spec.campaign?.main_message_custom_text ? `- main_message_custom_text: ${spec.campaign.main_message_custom_text}` : null,
-    spec.campaign?.main_message_detail_id ? `- main_message_detail_id: ${spec.campaign.main_message_detail_id}` : null,
-    spec.campaign?.main_message_detail_prompt ? `- main_message_detail_prompt: ${spec.campaign.main_message_detail_prompt}` : null,
-    spec.campaign?.feature_chips?.length ? `- feature_chips: ${spec.campaign.feature_chips.join(", ")}` : null,
-    spec.campaign?.require_exact_feature_chips != null ? `- require_exact_feature_chips: ${spec.campaign.require_exact_feature_chips}` : null,
-    spec.campaign?.cta_id ? `- cta_id: ${spec.campaign.cta_id}` : null,
-    spec.campaign?.cta_text ? `- cta_text: ${spec.campaign.cta_text}` : null,
-    spec.campaign?.cta_prompt ? `- cta_prompt: ${spec.campaign.cta_prompt}` : null,
-  ]);
-
-  addSection("STYLE_SUMMARY", [
-    spec.style?.primary_style_id ? `- primary_style_id: ${spec.style.primary_style_id}` : null,
-    spec.style?.primary_style_prompt ? `- primary_style_prompt: ${spec.style.primary_style_prompt}` : null,
-    spec.style?.primary_style_custom_text ? `- primary_style_custom_text: ${spec.style.primary_style_custom_text}` : null,
-    spec.style?.style_detail_id ? `- style_detail_id: ${spec.style.style_detail_id}` : null,
-    spec.style?.style_detail_prompt ? `- style_detail_prompt: ${spec.style.style_detail_prompt}` : null,
-  ]);
-
-  addSection("COMPOSITION_SUMMARY", [
-    spec.composition?.layout_type ? `- layout_type: ${spec.composition.layout_type}` : null,
-    spec.composition?.primary_subjects?.length ? `- primary_subjects: ${spec.composition.primary_subjects.join(", ")}` : null,
-    spec.composition?.secondary_subjects?.length ? `- secondary_subjects: ${spec.composition.secondary_subjects.join(", ")}` : null,
-    spec.composition?.background_source ? `- background_source: ${spec.composition.background_source}` : null,
-    spec.composition?.logo_source ? `- logo_source: ${spec.composition.logo_source}` : null,
-    spec.composition?.face_must_remain_visible != null ? `- face_must_remain_visible: ${spec.composition.face_must_remain_visible}` : null,
-    spec.composition?.device_must_not_block_face != null ? `- device_must_not_block_face: ${spec.composition.device_must_not_block_face}` : null,
-    spec.composition?.must_feel_unified != null ? `- must_feel_unified: ${spec.composition.must_feel_unified}` : null,
-  ]);
-
-  addSection("TEXT_POLICY_SUMMARY", [
-    allowedText.length ? `- allowed_text: ${allowedText.join(", ")}` : null,
-    allowedFeatureLabels.length ? `- allowed_feature_labels: ${allowedFeatureLabels.join(", ")}` : null,
-    spec.text_policy?.text_presence_id ? `- text_presence_id: ${spec.text_policy.text_presence_id}` : null,
-    spec.text_policy?.text_presence_prompt ? `- text_presence_prompt: ${spec.text_policy.text_presence_prompt}` : null,
-    spec.text_policy?.text_color_style_id ? `- text_color_style_id: ${spec.text_policy.text_color_style_id}` : null,
-    spec.text_policy?.text_color_style_prompt ? `- text_color_style_prompt: ${spec.text_policy.text_color_style_prompt}` : null,
-    spec.text_policy?.allow_generated_headline != null ? `- allow_generated_headline: ${spec.text_policy.allow_generated_headline}` : null,
-    spec.text_policy?.allow_generated_tagline != null ? `- allow_generated_tagline: ${spec.text_policy.allow_generated_tagline}` : null,
-    spec.text_policy?.allow_generated_social_proof_copy != null ? `- allow_generated_social_proof_copy: ${spec.text_policy.allow_generated_social_proof_copy}` : null,
-    spec.text_policy?.allow_generated_testimonials != null ? `- allow_generated_testimonials: ${spec.text_policy.allow_generated_testimonials}` : null,
-  ]);
-
-  addSection("HARD_CONSTRAINTS_SUMMARY", [
-    spec.hard_constraints?.must_follow_tagged_roles != null ? `- must_follow_tagged_roles: ${spec.hard_constraints.must_follow_tagged_roles}` : null,
-    spec.hard_constraints?.must_preserve_exact_person_identity != null ? `- must_preserve_exact_person_identity: ${spec.hard_constraints.must_preserve_exact_person_identity}` : null,
-    spec.hard_constraints?.must_preserve_reference_person_anchor != null ? `- must_preserve_reference_person_anchor: ${spec.hard_constraints.must_preserve_reference_person_anchor}` : null,
-    spec.hard_constraints?.must_preserve_reference_person_silhouette != null ? `- must_preserve_reference_person_silhouette: ${spec.hard_constraints.must_preserve_reference_person_silhouette}` : null,
-    spec.hard_constraints?.must_preserve_reference_person_styling != null ? `- must_preserve_reference_person_styling: ${spec.hard_constraints.must_preserve_reference_person_styling}` : null,
-    spec.hard_constraints?.must_preserve_reference_pose_direction != null ? `- must_preserve_reference_pose_direction: ${spec.hard_constraints.must_preserve_reference_pose_direction}` : null,
-    spec.hard_constraints?.must_preserve_logo_fidelity != null ? `- must_preserve_logo_fidelity: ${spec.hard_constraints.must_preserve_logo_fidelity}` : null,
-    spec.hard_constraints?.must_keep_logo_flat_and_fully_visible != null ? `- must_keep_logo_flat_and_fully_visible: ${spec.hard_constraints.must_keep_logo_flat_and_fully_visible}` : null,
-    spec.hard_constraints?.must_preserve_screenshot_fidelity != null ? `- must_preserve_screenshot_fidelity: ${spec.hard_constraints.must_preserve_screenshot_fidelity}` : null,
-    spec.hard_constraints?.must_preserve_background_identity != null ? `- must_preserve_background_identity: ${spec.hard_constraints.must_preserve_background_identity}` : null,
-    spec.hard_constraints?.allow_invented_text != null ? `- allow_invented_text: ${spec.hard_constraints.allow_invented_text}` : null,
-    spec.hard_constraints?.allow_invented_names != null ? `- allow_invented_names: ${spec.hard_constraints.allow_invented_names}` : null,
-    spec.hard_constraints?.allow_invented_testimonials != null ? `- allow_invented_testimonials: ${spec.hard_constraints.allow_invented_testimonials}` : null,
-    spec.hard_constraints?.hard_constraints_override_style != null ? `- hard_constraints_override_style: ${spec.hard_constraints.hard_constraints_override_style}` : null,
-    spec.hard_constraints?.priority_order?.length ? `- priority_order: ${spec.hard_constraints.priority_order.join(" > ")}` : null,
-  ]);
-
-  return sections.join("\n\n").trim();
-}
-
-function buildVisualAdsPriorityReinforcement(spec: VisualAdsSpec): string {
-  const lines: string[] = [];
-  const hard = spec.hard_constraints;
-  const assets = spec.assets || [];
-  const hasIllustrationOrMascot = assets.some((asset) => {
-    const role = (asset.role || "").toLowerCase();
-    return role === "illustration" || role === "mascot";
-  });
-  const hasScreenshot = assets.some((asset) => (asset.role || "").toLowerCase() === "screenshot");
-  const hasProduct = assets.some((asset) => (asset.role || "").toLowerCase() === "product");
-  const hasIcon = assets.some((asset) => (asset.role || "").toLowerCase() === "icon");
-  const hasTexture = assets.some((asset) => (asset.role || "").toLowerCase() === "texture");
-  const layoutType = (spec.composition?.layout_type || "").toLowerCase();
-  const campaignId = (spec.campaign?.main_message_id || "").toLowerCase();
-
-  if (hard?.must_preserve_exact_person_identity) {
-    lines.push("- exact_person_identity: Any person tagged as exact is a fixed identity asset. Preserve the exact face and the exact original art style with no face swap, no replacement identity, and no style conversion.");
-  }
-  if (hard?.must_preserve_reference_person_anchor || hard?.must_preserve_reference_person_silhouette || hard?.must_preserve_reference_person_styling || hard?.must_preserve_reference_pose_direction) {
-    lines.push("- reference_person_anchor: Any person tagged as reference must stay clearly anchored to the uploaded source. Preserve the source face direction, silhouette, styling, accessories, and pose direction. Do not replace them with a generic different person.");
-  }
-  if (hasScreenshot) {
-    lines.push("- screenshot_cleanup: Remove uploader chrome, Image 1/2 boxes, red X icons, browser chrome, and recursive interface artifacts. Only the inner app content may appear inside the selected device mockup.");
-  }
-  if (hard?.must_preserve_logo_fidelity || hard?.must_keep_logo_flat_and_fully_visible) {
-    lines.push("- logo_fidelity: Any uploaded logo must remain a flat protected brand mark, fully visible, uncropped, and not transformed into an object, prop, badge, sticker, sculpture, or scenic design element.");
-  }
-  if (hard?.must_preserve_screenshot_fidelity) {
-    lines.push("- screenshot_fidelity: Any uploaded screenshot must remain unchanged, readable, and free from UI redesign or distortion.");
-  }
-  if (hard?.must_preserve_background_identity) {
-    lines.push("- background_identity: Any uploaded background must remain the real base scene and must not be swapped for a different environment.");
-  }
-  if (hasIllustrationOrMascot) {
-    lines.push("- vector_preservation: Any illustration or mascot must preserve its flat/vector/hand-drawn 2D nature and must not be transformed into a 3D real-world object.");
-  }
-  if (layoutType === "screenshot-led-poster") {
-    lines.push("- screenshot_led_hierarchy: In screenshot-led layouts, the screenshot or device must remain one of the dominant first-read subjects and supporting assets must not overpower it.");
-  }
-  if (hasProduct) {
-    lines.push("- product_fidelity: Any uploaded product must preserve its exact package shape, materials, silhouette, and recognizable branded form with no redesign or substitution.");
-  }
-  if (hasIcon) {
-    lines.push("- icon_flatness: Any uploaded icon must remain crisp, flat, and supportive rather than being inflated into a 3D object or dominant hero.");
-  }
-  if (hasTexture) {
-    lines.push("- texture_subordination: Any uploaded texture must remain a subtle supporting texture layer and must not become a literal object or replacement backdrop.");
-  }
-  if (campaignId === "features" && (spec.campaign?.feature_chips || []).length > 0) {
-    lines.push("- feature_layout: Render the approved feature chips once each as concise feature callouts or benefit labels. Keep them outside important screenshot UI and do not duplicate them.");
-  }
-  if ((spec.text_policy?.allowed_text || []).length > 0) {
-    lines.push("- approved_text_only: Any new poster text must come only from the approved allowed-text list. Do not add extra copy and do not repeat the same approved phrase multiple times.");
-  }
-  if (campaignId === "sale" || campaignId === "limited-offer") {
-    lines.push("- offer_hierarchy: Keep urgency and CTA visually clear without inventing prices, discount percentages, coupon codes, or extra offer text.");
-  }
-
-  return lines.join("\n").trim();
-}
-
-
 function _compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: string): string {
   const hasStructuredAssets = (spec.assets || []).length > 0;
   if (hasStructuredAssets) {
-    const sections = [
-      compileVisualAdsFallbackPrompt(spec, ""),
-      buildVisualAdsPriorityReinforcement(spec)
-        ? ["Priority Reinforcement:", "", buildVisualAdsPriorityReinforcement(spec)].join("\n")
-        : "",
-      buildVisualAdsStructuredAppendix(spec),
-    ].filter((section) => section.trim().length > 0);
-    return sections.join("\n\n").trim();
+    return compileVisualAdsFallbackPrompt(spec, "");
   }
 
   const authoritativePrompt = (frontendCompiledPrompt || spec.legacy_prompt || "").trim();
@@ -1188,6 +909,49 @@ function mapKieState(state: string): string {
       return "IN_QUEUE";
     default:
       return "IN_PROGRESS";
+  }
+}
+
+const KIE_BG_REMOVAL_MODEL = "recraft/remove-background";
+
+// Real AI background cutout for logos tagged "transparent".
+// Returns the cutout URL, or null on any failure (caller falls back to the original logo).
+async function cutoutLogoWithKie(imageUrl: string): Promise<string | null> {
+  try {
+    const submitResp = await fetch(KIE_CREATE_URL, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: KIE_BG_REMOVAL_MODEL, input: { image: imageUrl } }),
+    });
+    if (!submitResp.ok) return null;
+    const submitJson = await submitResp.json().catch(() => null);
+    const taskId = submitJson?.data?.taskId;
+    if (!taskId) return null;
+
+    const deadline = Date.now() + 100000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      const statusResp = await fetch(`${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`, {
+        headers: { "Authorization": `Bearer ${KIE_API_KEY}` },
+      });
+      if (!statusResp.ok) continue;
+      const statusJson = await statusResp.json().catch(() => null);
+      const state = (statusJson?.data?.state || "").toString().toLowerCase();
+      if (state === "fail" || state === "failed" || state === "error") return null;
+      if (state === "success" || state === "completed" || state === "succeeded") {
+        try {
+          const parsed = statusJson?.data?.resultJson ? JSON.parse(statusJson.data.resultJson) : {};
+          const urls = Array.isArray(parsed?.resultUrls) ? parsed.resultUrls : [];
+          if (typeof urls[0] === "string" && urls[0]) return urls[0] as string;
+        } catch {
+          // fall through to null
+        }
+        return null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -1406,6 +1170,16 @@ serve(async (req) => {
       });
     }
 
+    // Real AI cutout for logos tagged "transparent" (replaces client-side pixel guesswork).
+    // Runs after the trial gate so blocked users never consume provider credits.
+    await Promise.all((spec.assets || []).map(async (asset, index) => {
+      const isTransparentLogo = (asset.role || "").toLowerCase() === "logo"
+        && (asset.logo_mode || "").toLowerCase() === "transparent";
+      if (!isTransparentLogo || !imageUrls[index]) return;
+      const cutoutUrl = await cutoutLogoWithKie(imageUrls[index]);
+      if (cutoutUrl) imageUrls[index] = cutoutUrl;
+    }));
+
     const requestBody = {
       model: KIE_VISUAL_ADS_MODEL,
       input: {
@@ -1423,44 +1197,62 @@ serve(async (req) => {
     console.log("[freepik-visual-ads] Final prompt:\n" + finalPrompt);
     console.log("[freepik-visual-ads] KIE create payload:", JSON.stringify(requestBody));
 
-    const createRes = await fetch(KIE_CREATE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${KIE_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const createPosterTask = async (promptText: string): Promise<string> => {
+      const payload = { ...requestBody, input: { ...requestBody.input, prompt: promptText } };
+      const res = await fetch(KIE_CREATE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${KIE_API_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      console.log(`[freepik-visual-ads] KIE create response ${res.status}: ${text.slice(0, 1000)}`);
+      if (!res.ok) {
+        throw new Error(`Visual ads generation service error ${res.status}: ${text}`);
+      }
+      let data: KieCreateResponse;
+      try {
+        data = JSON.parse(text) as KieCreateResponse;
+      } catch {
+        throw new Error(`Visual ads generation service returned an invalid response: ${text.slice(0, 300)}`);
+      }
+      if (data.code !== 200 || !data.data?.taskId) {
+        throw new Error(sanitizeError(data.msg || data.message || "Failed to create task"));
+      }
+      return data.data.taskId;
+    };
 
-    const createText = await createRes.text();
-    console.log(`[freepik-visual-ads] KIE create response ${createRes.status}: ${createText.slice(0, 1000)}`);
+    const firstTaskId = await createPosterTask(promptSafety.normalizedPrompt);
 
-    if (!createRes.ok) {
-      throw new Error(`Visual ads generation service error ${createRes.status}: ${createText}`);
-    }
-
-    let createData: KieCreateResponse;
+    // Second variation: same brand rules, different composition — the user picks the winner.
+    // If it fails, we silently continue with a single result.
+    let secondTaskId: string | null = null;
     try {
-      createData = JSON.parse(createText) as KieCreateResponse;
-    } catch {
-      throw new Error(`Visual ads generation service returned an invalid response: ${createText.slice(0, 300)}`);
-    }
-    if (createData.code !== 200 || !createData.data?.taskId) {
-      throw new Error(sanitizeError(createData.msg || createData.message || "Failed to create task"));
+      secondTaskId = await createPosterTask(
+        promptSafety.normalizedPrompt + "\n\nVARIATION: Create a distinctly different composition and layout from any other version of this poster while following the exact same brand rules.",
+      );
+    } catch (variationError) {
+      console.warn("[freepik-visual-ads] Second variation failed, continuing with one:", variationError);
     }
 
-    const { error: insertErr } = await serviceDb.from("visual_ads_jobs").insert({
-      user_id: user.id,
-      task_id: createData.data.taskId,
-      status: "waiting",
-    });
+    const taskIds = secondTaskId ? [firstTaskId, secondTaskId] : [firstTaskId];
+    const { error: insertErr } = await serviceDb.from("visual_ads_jobs").insert(
+      taskIds.map((taskId) => ({
+        user_id: user.id,
+        task_id: taskId,
+        status: "waiting",
+      })),
+    );
     if (insertErr) {
       throw new Error(`Failed to register visual ads job: ${insertErr.message || "insert failed"}`);
     }
 
     return new Response(JSON.stringify({
       ok: true,
-      task_id: createData.data.taskId,
+      task_id: firstTaskId,
+      task_ids: taskIds,
       status: "waiting",
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

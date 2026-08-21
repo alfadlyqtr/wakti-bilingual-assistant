@@ -48,6 +48,7 @@ const Maw3dManage = lazyRetry(() => import("@/pages/Maw3dManage"));
 const Maw3dView = lazyRetry(() => import("@/pages/Maw3dView"));
 const Maw3dEdit = lazyRetry(() => import("@/pages/Maw3dEdit"));
 const SharedTask = lazyRetry(() => import("@/pages/SharedTask"));
+const SharedConversation = lazyRetry(() => import("@/pages/SharedConversation"));
 const ContactUs = lazyRetry(() => import("@/pages/ContactUs"));
 const Help = lazyRetry(() => import("@/pages/Help"));
 const PrivacyTerms = lazyRetry(() => import("@/pages/PrivacyTerms"));
@@ -160,6 +161,7 @@ export default function ConsumerRouter() {
         <Route path="/session-ended" element={<SessionEnded />} />
 
         {/* ── Public share / viewer routes ──────────────────────────────── */}
+        <Route path="/shared/:token" element={<SharedConversation />} />
         <Route path="/shared-task/:shareLink" element={<SharedTask />} />
         <Route path="/p/:token" element={<PresentationSharePlayer />} />
         <Route path="/chat/:token" element={<ChatbotPage />} />

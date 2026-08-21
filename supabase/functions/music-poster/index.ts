@@ -76,7 +76,10 @@ async function uploadVideoToStorage(db: any, supabaseUrl: string, serviceKey: st
     const resp = await fetch(videoUrl);
     if (!resp.ok) return null;
     const blob = await resp.arrayBuffer();
-    const storagePath = `music-posters/${posterId}.mp4`;
+    // Store in the existing public "posters" bucket under a music-posters/ folder.
+    // (Previously targeted a non-existent "music-posters" bucket — uploads silently
+    // failed and poster URLs expired with the provider's 14-day retention.)
+    const storagePath = `posters/music-posters/${posterId}.mp4`;
     const uploadResp = await fetch(
       `${supabaseUrl}/storage/v1/object/${storagePath}`,
       {
