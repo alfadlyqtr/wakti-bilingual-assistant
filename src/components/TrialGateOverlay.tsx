@@ -110,7 +110,7 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
     }
 
     if (overlayState.reason === 'trial_expired') {
-      return isArabic ? 'انتهت تجربة الـ 24 ساعة' : '24-Hour Trial Ended';
+      return isArabic ? 'انتهت تجربة الـ 48 ساعة' : '48-Hour Trial Ended';
     }
 
     return isArabic ? `انتهت حصتك المجانية — ${labelAr}` : `Free Trial Used Up — ${labelEn}`;
@@ -124,14 +124,14 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
 
     if (overlayState.reason === 'feature_locked') {
       return isArabic
-        ? `${labelAr} غير متاحة ضمن تجربة الـ 24 ساعة. اشترك لفتحها.`
-        : `${labelEn} is not included in the 24-hour trial. Subscribe to unlock it.`;
+        ? `${labelAr} غير متاحة ضمن تجربة الـ 48 ساعة. اشترك لفتحها.`
+        : `${labelEn} is not included in the 48-hour trial. Subscribe to unlock it.`;
     }
 
     if (overlayState.reason === 'trial_expired') {
       return isArabic
-        ? 'انتهت فترة الوصول المجاني لمدة 24 ساعة. اشترك للمتابعة.'
-        : 'Your 24-hour free access has ended. Subscribe to continue.';
+        ? 'انتهت فترة الوصول المجاني لمدة 48 ساعة. اشترك للمتابعة.'
+        : 'Your 48-hour free access has ended. Subscribe to continue.';
     }
 
     return isArabic

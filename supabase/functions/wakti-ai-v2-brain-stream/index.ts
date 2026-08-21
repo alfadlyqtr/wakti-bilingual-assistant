@@ -44,7 +44,7 @@ const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES') || GOOGLE_MAPS_API_K
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const AI_CHAT_TRIAL_LIMIT = 15;
+const AI_CHAT_TRIAL_LIMIT = 7;
 const ANONYMOUS_AI_CHAT_LIMIT = 7;
 
 type IpGeoLite = {
@@ -5526,7 +5526,7 @@ serve(async (req) => {
         const trialRequestId = (req.headers.get('x-request-id') || '').trim() || crypto.randomUUID();
         const aiChatTrialLimit = identity.isAnonymous ? ANONYMOUS_AI_CHAT_LIMIT : AI_CHAT_TRIAL_LIMIT;
 
-        // Trial gate: ai_chat ΓÇö 15 messages for free users
+        // Trial gate: ai_chat ΓÇö 7 messages for free users
         if (userId) {
           if (identity.isAnonymous) {
             await ensureAnonymousTrialReady(supabaseAdmin, identity);

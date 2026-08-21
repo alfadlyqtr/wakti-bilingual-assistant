@@ -3,6 +3,7 @@ import { ArrowLeft, Save, Loader2, ChevronDown, ChevronUp, Cpu, MessageSquare, F
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChatbotBot, ChatbotService } from '@/services/chatbotService';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -88,6 +89,8 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function ChatbotAISettings({ bot, onBack, onSave, isRTL }: Props) {
+  const { isSubscribed, isAdminGifted } = useUserProfile();
+  const canWriteBots = isSubscribed || isAdminGifted;
   const [openSection, setOpenSection] = useState<SectionId | null>('basic');
   const [saving, setSaving] = useState(false);
 
@@ -115,6 +118,10 @@ export default function ChatbotAISettings({ bot, onBack, onSave, isRTL }: Props)
   const toggle = (id: SectionId) => setOpenSection(prev => prev === id ? null : id);
 
   const handleSave = async () => {
+    if (!canWriteBots) {
+      toast.error(isRTL ? 'وضع التجربة للعرض فقط — اشترك لحفظ الإعدادات' : 'Trial is view-only — subscribe to save settings');
+      return;
+    }
     setSaving(true);
     try {
       await ChatbotService.updateBot(bot.id, {

@@ -103,7 +103,7 @@ serve(async (req) => {
       );
     }
 
-    // ── Trial check: Cinema is locked for 24-hour trial users ──
+    // ── Trial check: Cinema is locked for 48-hour trial users ──
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_subscribed, admin_gifted, payment_method, next_billing_date, free_access_start_at')
@@ -118,7 +118,7 @@ serve(async (req) => {
       const isOn24hTrial = isTrialTimerActive(profile as TrialProfileShape);
       if (!isPaid && !isGifted && !hasActivePaid && isOn24hTrial) {
         return new Response(
-          JSON.stringify({ success: false, error: 'Cinema is not available during the 24-hour trial.' }),
+          JSON.stringify({ success: false, error: 'Cinema is not available during the 48-hour trial.' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

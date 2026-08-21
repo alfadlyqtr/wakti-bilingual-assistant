@@ -18,7 +18,13 @@ export type TrialFeatureKey =
   | 'interpreter'
   | 'voice_clone'
   | 'ai_coder'
-  | 'ai_chatbot';
+  | 'ai_chatbot'
+  | 'visual_ads'
+  | 'music_mp4'
+  | 'music_poster'
+  | 'music_voice'
+  | 'a4_document'
+  | 'talk_back';
 
 export type TrialBlockReason = 'feature_locked' | 'limit_reached' | 'trial_expired' | 'profile_unavailable';
 

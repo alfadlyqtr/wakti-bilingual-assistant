@@ -21,5 +21,5 @@ export const accountAr = {
   uploading: "جاري الرفع",
   changeImage: "تغيير الصورة",
   errorUpdatingEmail: "خطأ في تحديث البريد الإلكتروني",
-  emailUpdated: "تم تحديث البريد الإلكتروني بنجاح"
+  emailUpdated: "تم إرسال رابط التأكيد إلى بريدك الإلكتروني الجديد — اضغط على الرابط لإتمام التغيير"
 };

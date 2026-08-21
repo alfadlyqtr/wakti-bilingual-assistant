@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { checkMusicExtraQuota, logMusicExtra, extraLimitResponse } from "../_shared/music-extra-quota.ts";
+import { buildTrialErrorPayload, checkTrialAccess, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -305,6 +306,19 @@ serve(async (req) => {
         return extraLimitResponse("voice", voiceQuota.used, voiceQuota.limit, corsHeaders);
       }
 
+      // Trial gate: music_voice — trial users get 1 custom voice total (paid/gifted pass through)
+      const trial = await checkTrialAccess(supabaseService, user.id, "music_voice", 1);
+      if (!trial.allowed) {
+        return new Response(JSON.stringify({
+          ...buildTrialErrorPayload("music_voice", trial),
+          message: "Free trial allows 1 custom voice. Subscribe for more!",
+          messageAr: "التجربة المجانية تسمح بصوت مخصص واحد فقط. اشترك للمزيد!",
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { data: inserted, error: insertError } = await supabaseService
         .from("user_music_voices")
         .insert({
@@ -357,6 +371,12 @@ serve(async (req) => {
 
       // Log the accepted voice-clone job against the monthly quota
       await logMusicExtra(supabaseService, user.id, "voice", kieData.data.taskId);
+
+      // Consume the trial token once per accepted KIE validation job (no-op for paid/gifted)
+      const trialConsume = await checkAndConsumeTrialTokenOnce(supabaseService, user.id, "music_voice", 1, kieData.data.taskId);
+      if (!trialConsume.allowed) {
+        console.warn("[music-voice] Trial consume skipped after success:", trialConsume.reason);
+      }
 
       const nextRow = await updateVoiceRow(supabaseService, row.id, {
         source_storage_path: uploaded.storagePath,

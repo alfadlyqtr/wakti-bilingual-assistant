@@ -1382,7 +1382,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     'reply':        { key: 'reply',    limit: 2, en: 'Reply',         ar: 'رد' },
     'diagrams':     { key: 'diagrams', limit: 2, en: 'Diagrams',      ar: 'الرسوم البيانية' },
     'presentation': { key: '',         limit: 0, en: '',               ar: '' }, // PresentationTab has its own gate
-    'translate':    { key: '',         limit: 0, en: '',               ar: '' }, // 250 char limit handled separately
+    'translate':    { key: 'translate', limit: 2, en: 'Translation',   ar: 'الترجمة' },
     'generated':    { key: '',         limit: 0, en: '',               ar: '' }, // viewing only
     'a4':           { key: '',         limit: 0, en: '',               ar: '' }, // A4Tab has its own UI/gating
   };

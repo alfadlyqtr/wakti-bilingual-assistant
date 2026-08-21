@@ -44,13 +44,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     const offLimitReached = onEvent('wakti-trial-limit-reached', ({ feature, reason }) => {
       const msg = (() => {
         if (language === 'ar') {
-          if (reason === 'feature_locked') return 'هذه الميزة غير مشمولة في تجربة الـ 24 ساعة. اشترك لفتحها.';
-          if (reason === 'trial_expired') return 'انتهت تجربة الـ 24 ساعة. اشترك للمتابعة من الحساب والفوترة.';
+          if (reason === 'feature_locked') return 'هذه الميزة غير مشمولة في تجربة الـ 48 ساعة. اشترك لفتحها.';
+          if (reason === 'trial_expired') return 'انتهت تجربة الـ 48 ساعة. اشترك للمتابعة من الحساب والفوترة.';
           return 'لقد استخدمت حصتك المجانية لهذه الميزة. اشترك للمتابعة بدون حدود.';
         }
 
-        if (reason === 'feature_locked') return 'This feature is not included in the 24-hour trial. Subscribe to unlock it.';
-        if (reason === 'trial_expired') return 'Your 24-hour trial has ended. Subscribe from Account & Billing to continue.';
+        if (reason === 'feature_locked') return 'This feature is not included in the 48-hour trial. Subscribe to unlock it.';
+        if (reason === 'trial_expired') return 'Your 48-hour trial has ended. Subscribe from Account & Billing to continue.';
         return 'You used your free quota for this feature. Subscribe to continue without limits.';
       })();
 

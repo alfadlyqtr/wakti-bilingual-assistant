@@ -22,6 +22,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { generateGemini, buildVisionContent } from "../_shared/gemini.ts";
+import { buildTrialErrorPayload, checkTrialAccess, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 import { findTheme, getThemeDocumentLane, maxPagesForTheme, themeRequiresPurpose } from "../_shared/a4-themes.ts";
 import {
   buildNormalizedA4Content,
@@ -506,6 +507,21 @@ serve(async (req) => {
     return json(400, { success: false, error: `Unknown theme_id: ${body.theme_id}` });
   }
 
+  // Trial gate: a4_document — trial users get 1 full document total.
+  // Only the default generate mode counts; "expand" (idea preview) and
+  // "retry_page" (fixing a page of an existing doc) stay free.
+  if (body.mode !== "expand" && body.mode !== "retry_page") {
+    const trial = await checkTrialAccess(supabaseService, user.id, "a4_document", 1);
+    if (!trial.allowed) {
+      return json(403, {
+        success: false,
+        ...buildTrialErrorPayload("a4_document", trial),
+        message: "Free trial allows 1 A4 document. Subscribe to create more!",
+        messageAr: "التجربة المجانية تسمح بمستند A4 واحد فقط. اشترك لإنشاء المزيد!",
+      });
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // EXPAND MODE — just call Gemini idea-expansion and return { title, content }.
   // No DB writes, no Kie dispatch. Used by the "I have just an idea" UI flow
@@ -961,6 +977,12 @@ serve(async (req) => {
       reference_image_url: logoSignedUrl, // store logo ref for pages 2+ to reuse
     })
     .eq("id", page1Row.id);
+
+  // Consume the trial token once per document batch (no-op for paid/gifted)
+  const trialConsume = await checkAndConsumeTrialTokenOnce(supabaseService, user.id, "a4_document", 1, batchId);
+  if (!trialConsume.allowed) {
+    console.warn("[a4-generate] Trial consume skipped after success:", trialConsume.reason);
+  }
 
   return json(200, {
     success: true,

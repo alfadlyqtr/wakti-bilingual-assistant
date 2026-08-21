@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { buildTrialErrorPayload, checkAndConsumeTrialToken, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -368,6 +369,21 @@ serve(async (req: Request) => {
 
     if (!text) {
       throw new Error('Missing required field: text is required');
+    }
+
+    // Trial gate: talk_back — trial users get 5 voice plays total (paid/gifted pass through).
+    // client_ref (message id sent by the frontend) makes multi-chunk playback count ONCE per message.
+    const clientRef = typeof requestBody?.client_ref === 'string' ? requestBody.client_ref.trim() : '';
+    const supabaseAdmin = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const trial = clientRef
+      ? await checkAndConsumeTrialTokenOnce(supabaseAdmin, user.id, 'talk_back', 5, clientRef)
+      : await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'talk_back', 5);
+    if (!trial.allowed) {
+      return new Response(JSON.stringify({
+        ...buildTrialErrorPayload('talk_back', trial),
+        message: 'Free trial allows 5 voice replies. Subscribe for unlimited Talk Back!',
+        messageAr: 'التجربة المجانية تسمح بـ 5 ردود صوتية فقط. اشترك للاستماع بلا حدود!',
+      }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Determine if text is Arabic

@@ -587,14 +587,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const updateEmail = async (email: string) => {
+    // No toasts here — callers own the messaging (email is NOT changed until
+    // the user clicks the confirmation link sent to the new address).
     const { error } = await supabase.auth.updateUser({ email });
-    
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Check your email to confirm the change!');
-    }
-    
     return { error };
   };
 

@@ -7,6 +7,7 @@ import SharedInboxUI from '@/components/chatbot/SharedInboxUI';
 import KnowledgeBaseEditor from '@/components/chatbot/KnowledgeBaseEditor';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -314,9 +315,30 @@ type WizardStep = 'list' | 'platform' | 'instagram-connect' | 'purpose' | 'dashb
 export default function WaktiAssistant() {
   const { language, theme } = useTheme();
   const { user, isGuest } = useAuth();
+  const { isSubscribed, isAdminGifted } = useUserProfile();
   const navigate = useNavigate();
   const isRTL = language === 'ar';
   const isDark = theme === 'dark';
+
+  // Trial = view-only for the Chatbot Builder. RLS on chatbot_* tables enforces
+  // this server-side; this guard just gives a friendly message instead of a DB error.
+  const canWriteBots = isSubscribed || isAdminGifted;
+  const guardBotWrite = (): boolean => {
+    if (canWriteBots) return true;
+    toast.error(
+      isRTL
+        ? 'وضع التجربة للعرض فقط — اشترك لحفظ البوت وربطه وتشغيله'
+        : 'Trial is view-only — subscribe to save, connect, and launch your bot',
+      {
+        duration: 6000,
+        action: {
+          label: isRTL ? 'اشترك' : 'Subscribe',
+          onClick: () => navigate('/account?tab=billing'),
+        },
+      },
+    );
+    return false;
+  };
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   // Wizard state
@@ -554,6 +576,7 @@ export default function WaktiAssistant() {
       setGuestDialogOpen(true);
       return;
     }
+    if (!guardBotWrite()) return;
     if (!user?.id || !selectedPurpose) return;
     setCreating(true);
     try {
@@ -646,6 +669,7 @@ export default function WaktiAssistant() {
   // ============================================
   const handleSaveFlow = async () => {
     if (!activeBot) return;
+    if (!guardBotWrite()) return;
     setSaving(true);
     try {
       const flowNodes = nodes.map((n: any) => ({
@@ -857,6 +881,7 @@ export default function WaktiAssistant() {
   // DELETE BOT
   // ============================================
   const handleDeleteBot = async (botId: string) => {
+    if (!guardBotWrite()) return;
     try {
       await ChatbotService.deleteBot(botId);
       setBots(prev => prev.filter(b => b.id !== botId));
@@ -874,6 +899,7 @@ export default function WaktiAssistant() {
   // TOGGLE BOT ACTIVE
   // ============================================
   const toggleBotActive = async (bot: ChatbotBot) => {
+    if (!guardBotWrite()) return;
     try {
       await ChatbotService.updateBot(bot.id, { is_active: !bot.is_active });
       setBots(prev => prev.map(b => b.id === bot.id ? { ...b, is_active: !b.is_active } : b));
@@ -1301,6 +1327,7 @@ export default function WaktiAssistant() {
                   onClick={async () => {
                     // First create the bot, then redirect to Meta OAuth
                     if (!user?.id) return;
+                    if (!guardBotWrite()) return;
                     setIgConnecting(true);
                     try {
                       const bot = await ChatbotService.createBot({
@@ -2857,6 +2884,7 @@ export default function WaktiAssistant() {
     const accentColor = activeBot.primary_color || '#060541';
 
     const saveKnowledgeBase = async (nextKnowledgeBase: string) => {
+      if (!guardBotWrite()) return;
       setSavingKB(true);
       try {
         const updatedBot = await ChatbotService.updateBot(activeBot.id, { knowledge_base: nextKnowledgeBase });
@@ -2976,6 +3004,7 @@ export default function WaktiAssistant() {
                 onBlur={async () => {
                   const name = botNameDraft.trim();
                   if (name && name !== activeBot.name) {
+                    if (!guardBotWrite()) return;
                     await ChatbotService.updateBot(activeBot.id, { name });
                     setActiveBot(prev => prev ? { ...prev, name } : null);
                     setBots(prev => prev.map(b => b.id === activeBot.id ? { ...b, name } : b));

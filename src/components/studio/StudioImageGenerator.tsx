@@ -1843,7 +1843,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     'image2image':        { key: 'i2i',        limit: 2, en: 'Image to Image',     ar: 'صورة إلى صورة' },
     'background-removal': { key: 'bg_removal', limit: 2, en: 'Background Removal', ar: 'إزالة الخلفية' },
     'draw':               { key: '',           limit: 0, en: '',                   ar: '' },
-    'visual-ads':         { key: 'visual_ads', limit: 2, en: 'Poster Ads',         ar: 'إعلانات بوستر' },
+    'visual-ads':         { key: 'visual_ads', limit: 1, en: 'Poster Ads',         ar: 'إعلانات بوستر' },
     'pro-studio':         { key: 't2i',        limit: 2, en: 'Pro Image Studio',   ar: 'استوديو برو للصور' },
   };
   const activeTrialInfo = submodeTrialMap[submode];

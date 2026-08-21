@@ -268,7 +268,12 @@ async function getEdgeFunctionErrorMessage(error: unknown): Promise<string> {
     const text = await ctx.text();
     if (!text) return fallback;
     try {
-      const parsed = JSON.parse(text) as { error?: string; message?: string };
+      const parsed = JSON.parse(text) as { error?: string; message?: string; code?: string };
+      // Trial 403 payloads carry a machine code in `error` and a human message in
+      // `message` — prefer the human one for those.
+      if (typeof parsed.code === 'string' && parsed.code.startsWith('TRIAL')) {
+        return parsed.message || parsed.error || text;
+      }
       return parsed.error || parsed.message || text;
     } catch {
       return text;

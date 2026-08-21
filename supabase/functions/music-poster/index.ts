@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { verifyKieWebhookSignature } from "../_shared/kie-webhook.ts";
 import { checkMusicExtraQuota, logMusicExtra, extraLimitResponse } from "../_shared/music-extra-quota.ts";
+import { buildTrialErrorPayload, checkTrialAccess, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -271,6 +272,19 @@ serve(async (req) => {
         return extraLimitResponse("poster", posterQuota.used, posterQuota.limit, corsHeaders);
       }
 
+      // ── Trial gate: music_poster — trial users get 1 poster total (paid/gifted pass through) ──
+      const trial = await checkTrialAccess(db, user.id, "music_poster", 1);
+      if (!trial.allowed) {
+        return new Response(JSON.stringify({
+          ...buildTrialErrorPayload("music_poster", trial),
+          message: "Free trial allows 1 music poster. Subscribe for more!",
+          messageAr: "التجربة المجانية تسمح ببوستر موسيقي واحد فقط. اشترك للمزيد!",
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // ── Call KIE exactly per docs ──
       const callBackUrl = `${SUPABASE_URL}/functions/v1/music-poster?cb=1`;
       const kieBody = { taskId, audioId, callBackUrl, author, domainName: "wakti.ai" };
@@ -329,6 +343,12 @@ serve(async (req) => {
 
       // Log the accepted job against the monthly poster quota
       await logMusicExtra(db, user.id, "poster", kiePosterTaskId);
+
+      // Consume the trial token once per accepted KIE job (no-op for paid/gifted)
+      const trialConsume = await checkAndConsumeTrialTokenOnce(db, user.id, "music_poster", 1, kiePosterTaskId ?? `${user.id}:${trackId}`);
+      if (!trialConsume.allowed) {
+        console.warn("[poster] Trial consume skipped after success:", trialConsume.reason);
+      }
 
       const { data: row } = await upsertPosterForCurrentUser(db, user.id, trackId, taskId, audioId, author, {
         status: "generating",

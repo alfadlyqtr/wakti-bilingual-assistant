@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkMusicExtraQuota, logMusicExtra, extraLimitResponse } from "../_shared/music-extra-quota.ts";
+import { buildTrialErrorPayload, checkTrialAccess, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,6 +67,19 @@ Deno.serve(async (req) => {
       return extraLimitResponse("mp4", quota.used, quota.limit, corsHeaders);
     }
 
+    // Trial gate: music_mp4 — trial users get 1 MP4 render total (paid/gifted pass through)
+    const trial = await checkTrialAccess(supabaseService, user.id, "music_mp4", 1);
+    if (!trial.allowed) {
+      return new Response(JSON.stringify({
+        ...buildTrialErrorPayload("music_mp4", trial),
+        message: "Free trial allows 1 video render. Subscribe for more!",
+        messageAr: "التجربة المجانية تسمح بإنشاء فيديو واحد فقط. اشترك للمزيد!",
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     console.log(`[music-track-to-mp4] Calling render server for user ${user.id}, track ${trackId}`);
 
     // Delegate to the Render server which has real FFmpeg installed.
@@ -108,6 +122,12 @@ Deno.serve(async (req) => {
 
     // Log the successful render against the monthly quota
     await logMusicExtra(supabaseService, user.id, "mp4", trackId || null);
+
+    // Consume the trial token AFTER a successful render (once per track)
+    const trialConsume = await checkAndConsumeTrialTokenOnce(supabaseService, user.id, "music_mp4", 1, trackId || crypto.randomUUID());
+    if (!trialConsume.allowed) {
+      console.warn("[music-track-to-mp4] Trial consume skipped after success:", trialConsume.reason);
+    }
 
     return new Response(
       JSON.stringify({ success: true, video_url: videoUrl, storage_path: result?.storage_path }),

@@ -18,6 +18,7 @@ import { SearchResultActions } from './SearchResultActions';
 // Note: ToolUsageIndicator, ErrorExplanationCard, MessageTimestamp, EnhancedQuickActions
 // are for WAKTI AI Coder (ProjectDetail.tsx), not for the main WAKTI AI assistant
 import { supabase } from '@/integrations/supabase/client';
+import { emitEvent } from '@/utils/eventBus';
 import { StreamingBubble, StreamingBubbleHandle } from './StreamingBubble';
 import { getSelectedVoices } from './TalkBackSettings';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
@@ -1151,11 +1152,17 @@ export function ChatMessages({
             'Accept': 'audio/wav, audio/mpeg, audio/*',
             ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
           },
-          body: JSON.stringify({ text: chunkText, voice_id, gender, user_name }),
+          body: JSON.stringify({ text: chunkText, voice_id, gender, user_name, client_ref: messageId }),
         });
 
         if (!resp.ok) {
           const errorText = await resp.text();
+          try {
+            const errJson = JSON.parse(errorText);
+            if (typeof errJson?.code === 'string' && errJson.code.startsWith('TRIAL')) {
+              emitEvent('wakti-trial-limit-reached', { feature: 'talk_back', reason: errJson.reason, consumed: errJson.consumed, limit: errJson.limit });
+            }
+          } catch {}
           throw new Error(`TTS service failed: ${resp.status} ${errorText}`);
         }
 
@@ -1203,11 +1210,17 @@ export function ChatMessages({
             'Accept': 'audio/wav, audio/mpeg, audio/*',
             ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
           },
-          body: JSON.stringify({ text: spokenText, voice_id, gender, user_name }),
+          body: JSON.stringify({ text: spokenText, voice_id, gender, user_name, client_ref: messageId }),
         });
 
         if (!response.ok) {
           const errorText = await response.text();
+          try {
+            const errJson = JSON.parse(errorText);
+            if (typeof errJson?.code === 'string' && errJson.code.startsWith('TRIAL')) {
+              emitEvent('wakti-trial-limit-reached', { feature: 'talk_back', reason: errJson.reason, consumed: errJson.consumed, limit: errJson.limit });
+            }
+          } catch {}
           throw new Error(`TTS service failed: ${response.status} ${errorText}`);
         }
 

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Poem Reader status — frontend polling fallback in case a webhook is missed.
@@ -106,6 +107,15 @@ serve(async (req) => {
           error_message: errorMessage,
         })
         .eq("id", trackId);
+
+      // Poem succeeded — consume the shared 'music' trial token once per poem
+      // (ledger dedupes against the poem-callback path; no-op for paid/gifted)
+      if (overallStatus === "mixing" || overallStatus === "ready") {
+        const consume = await checkAndConsumeTrialTokenOnce(supabaseService, user.id, "music", 1, `poem:${trackId}`);
+        if (!consume.allowed) {
+          console.warn("[poem-status] Trial consume skipped after success:", consume.reason);
+        }
+      }
     }
 
     return respond({

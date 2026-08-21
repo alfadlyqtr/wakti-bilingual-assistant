@@ -1706,6 +1706,27 @@ function VoicesTab({
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
+
+  // Trial/quota 403s from edge functions arrive as FunctionsHttpError — dig the JSON
+  // payload out of error.context and surface the bilingual message + trial toast.
+  const surfaceEdgeFunctionTrialError = async (error: unknown): Promise<boolean> => {
+    try {
+      const ctx = (error as { context?: Response })?.context;
+      if (!ctx || typeof ctx.json !== 'function') return false;
+      const body = await ctx.json();
+      const code = body?.code;
+      if (typeof code === 'string' && (code.startsWith('TRIAL') || code === 'EXTRA_LIMIT_REACHED')) {
+        if (code.startsWith('TRIAL')) {
+          emitEvent('wakti-trial-limit-reached', { feature: body.feature || 'music', reason: body.reason, consumed: body.consumed, limit: body.limit });
+        }
+        const msg = isAr ? (body.messageAr || body.message || body.error) : (body.message || body.error);
+        if (msg) toast.error(msg);
+        return true;
+      }
+    } catch { /* fall through to generic handling */ }
+    return false;
+  };
+
   const [createOpen, setCreateOpen] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftType, setDraftType] = useState<MusicVoiceShellType>('custom');
@@ -1923,7 +1944,10 @@ function VoicesTab({
           validateLanguage: 'en',
         },
       });
-      if (error) throw error;
+      if (error) {
+        if (await surfaceEdgeFunctionTrialError(error)) return;
+        throw error;
+      }
 
       const nextVoice = normalizeMusicVoiceShell(data?.voice);
       if (!nextVoice) throw new Error(isAr ? 'تعذر حفظ الصوت' : 'Could not save the voice');
@@ -10440,6 +10464,14 @@ function EditorTab() {
         body: JSON.stringify({ trackId: track.id, taskId, audioId, author }),
       });
       const json = await resp.json();
+      if (!resp.ok && typeof json?.code === 'string' && (json.code.startsWith('TRIAL') || json.code === 'EXTRA_LIMIT_REACHED')) {
+        if (json.code.startsWith('TRIAL')) {
+          emitEvent('wakti-trial-limit-reached', { feature: json.feature || 'music_poster', reason: json.reason, consumed: json.consumed, limit: json.limit });
+        }
+        toast.error(isAr ? (json.messageAr || json.message || json.error) : (json.message || json.error));
+        setGeneratingPosterTrackIds(prev => prev.filter(id => id !== track.id));
+        return;
+      }
       if (json.error) throw new Error(json.error);
       const newPoster: MusicPoster = {
         id: json.posterId,

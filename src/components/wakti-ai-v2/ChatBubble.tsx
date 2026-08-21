@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
+import { emitEvent } from '@/utils/eventBus';
 import { getSelectedVoices } from './TalkBackSettings';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { GroundedPlacesBlock, hasGroundedPlaces, resolveGroundedBrowsingData, stripDuplicatePlaceDetails } from './GroundedPlacesBlock';
@@ -292,10 +293,16 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             'Accept': 'audio/wav, audio/mpeg, audio/*',
             ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
           },
-          body: JSON.stringify({ text: chunkText, voice_id, gender, style: 'neutral' })
+          body: JSON.stringify({ text: chunkText, voice_id, gender, style: 'neutral', client_ref: message?.id })
         });
         if (!resp.ok) {
           const errText = await resp.text().catch(() => '');
+          try {
+            const errJson = JSON.parse(errText);
+            if (typeof errJson?.code === 'string' && errJson.code.startsWith('TRIAL')) {
+              emitEvent('wakti-trial-limit-reached', { feature: 'talk_back', reason: errJson.reason, consumed: errJson.consumed, limit: errJson.limit });
+            }
+          } catch {}
           throw new Error(`TTS failed: ${resp.status} ${errText}`);
         }
         const mime = resp.headers.get('content-type') || 'audio/mpeg';

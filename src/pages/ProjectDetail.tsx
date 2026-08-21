@@ -6684,7 +6684,7 @@ ${fixInstructions}
       className={cn("h-full w-full flex flex-col bg-background overflow-hidden", isRTL && "rtl")}
       style={{ height: 'calc(100vh - 84px)', maxHeight: 'calc(100vh - 84px)' }}
     >
-      <TrialGateOverlay featureKey="ai_coder" limit={5} featureLabel={{ en: 'AI Coder', ar: 'مبرمج الذكاء' }} />
+      <TrialGateOverlay featureKey="ai_coder" limit={1} featureLabel={{ en: 'AI Coder', ar: 'مبرمج الذكاء' }} />
 
       {/* Celebratory Modal for Project Completion */}
       {showProjectCompleteModal && (

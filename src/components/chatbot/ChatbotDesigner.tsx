@@ -3,6 +3,7 @@ import { ArrowLeft, Save, Send, Smile, X, Check, Loader2, Monitor, Smartphone, E
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChatbotBot, ChatbotService } from '@/services/chatbotService';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -180,6 +181,8 @@ interface DesignState {
 export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { isSubscribed, isAdminGifted } = useUserProfile();
+  const canWriteBots = isSubscribed || isAdminGifted;
 
   const [activeTab, setActiveTab] = useState<DesignTab>('content');
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
@@ -201,6 +204,10 @@ export default function ChatbotDesigner({ bot, onBack, onSave, isRTL }: Props) {
   }, []);
 
   const handleSave = async () => {
+    if (!canWriteBots) {
+      toast.error(isRTL ? 'وضع التجربة للعرض فقط — اشترك لحفظ التصميم' : 'Trial is view-only — subscribe to save the design');
+      return;
+    }
     setSaving(true);
     try {
       await ChatbotService.updateBot(bot.id, {

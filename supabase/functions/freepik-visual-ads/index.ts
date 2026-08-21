@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { inspectGenerationPrompt } from "../_shared/promptSafety.ts";
+import { buildTrialErrorPayload, checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1291,36 +1292,6 @@ async function getTaskStatus(taskId: string, serviceClient?: any, userId?: strin
   };
 }
 
-async function _checkAndConsumeTrialToken(serviceClient: any, userId: string, featureKey: TrialFeatureKey, maxLimit: number): Promise<boolean> {
-  const { data: profile, error: fetchError } = await serviceClient
-    .from("profiles")
-    .select("trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at")
-    .eq("id", userId)
-    .single();
-
-  if (fetchError || !profile) return false;
-
-  const isPaid = profile.is_subscribed === true;
-  const isGifted = profile.admin_gifted === true;
-  const pm = profile.payment_method;
-  const hasRealPaymentMethod = pm != null && typeof pm === "string" && pm.trim().length > 0 && pm !== "manual";
-  const isActiveSubscriber = hasRealPaymentMethod && profile.next_billing_date != null && new Date(profile.next_billing_date as string) > new Date();
-  const isOn24hTrial = profile.free_access_start_at != null;
-
-  if (isPaid || isActiveSubscriber || isGifted || !isOn24hTrial) return true;
-
-  const usage: Record<string, number> = (profile.trial_usage as Record<string, number> | null) ?? {};
-  const current = typeof usage[featureKey] === "number" ? usage[featureKey] : 0;
-  if (current >= maxLimit) return false;
-
-  const { error: updateError } = await serviceClient
-    .from("profiles")
-    .update({ trial_usage: { ...usage, [featureKey]: current + 1 } })
-    .eq("id", userId);
-
-  return !updateError;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1417,6 +1388,23 @@ serve(async (req) => {
     }
     const aspectRatio = ["1:1", "16:9", "9:16"].includes(body?.aspect_ratio || "") ? body.aspect_ratio : "1:1";
     const callbackUrl = `${supabaseUrl}/functions/v1/webhook-visual-ads`;
+
+    // Trial gate: visual_ads — 1 free poster ad during the 48h trial.
+    // Consumed atomically BEFORE task creation so parallel requests can't slip through.
+    // (If KIE task creation fails right after this, the token is unfortunately spent —
+    //  logged as a warning; KIE create failures are rare.)
+    const trialConsume = await checkAndConsumeTrialToken(serviceDb, user.id, 'visual_ads', 1);
+    if (!trialConsume.allowed) {
+      return new Response(JSON.stringify({
+        ok: false,
+        ...buildTrialErrorPayload('visual_ads', trialConsume),
+        message: 'Free trial allows 1 poster ad. Subscribe to create more!',
+        messageAr: 'التجربة المجانية تسمح بإعلان واحد فقط. اشترك لإنشاء المزيد!',
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const requestBody = {
       model: KIE_VISUAL_ADS_MODEL,

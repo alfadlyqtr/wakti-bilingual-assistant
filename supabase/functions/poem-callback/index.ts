@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Poem Reader callback — receives KIE webhooks for TWO independent job types:
@@ -130,7 +131,7 @@ async function handleSpeechCallback(supabaseService: AnyClient, taskId: string, 
 
   const { data: rows } = await supabaseService
     .from("user_poem_tracks")
-    .select("id, instrumental_status")
+    .select("id, user_id, instrumental_status")
     .eq("speech_task_id", taskId)
     .limit(1);
   const row = rows?.[0];
@@ -146,6 +147,15 @@ async function handleSpeechCallback(supabaseService: AnyClient, taskId: string, 
       status: instrumentalTerminal ? "mixing" : "processing",
     })
     .eq("id", row.id);
+
+  // Poem speech succeeded — consume the shared 'music' trial token once per poem
+  // (ledger dedupes against the poem-status polling path; no-op for paid/gifted)
+  if (row.user_id) {
+    const consume = await checkAndConsumeTrialTokenOnce(supabaseService, row.user_id, "music", 1, `poem:${row.id}`);
+    if (!consume.allowed) {
+      console.warn("[poem-callback] Trial consume skipped after success:", consume.reason);
+    }
+  }
 }
 
 // ── Job 2: Suno instrumental-only bed (Suno-specific callback shape) ──

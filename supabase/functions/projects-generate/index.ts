@@ -4251,18 +4251,18 @@ serve(async (req: Request) => {
       });
     };
 
-    // Trial gate: ai_coder — 5 prompts for free users (only on 'start' — status/get_files are reads)
+    // Trial gate: ai_coder — 1 prompt for free users (only on 'start' — status/get_files are reads)
     if (action === 'start') {
       const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
       const SUPA_SVC = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const adminForTrial = createClient(SUPA_URL, SUPA_SVC);
-      const trial = await checkAndConsumeTrialToken(adminForTrial, userId, 'ai_coder', 5);
+      const trial = await checkAndConsumeTrialToken(adminForTrial, userId, 'ai_coder', 1);
       if (!trial.allowed) {
         return new Response(JSON.stringify({
           ok: false,
           ...buildTrialErrorPayload('ai_coder', trial),
-          message: 'Free trial allows 5 prompts. Subscribe for unlimited access!',
-          messageAr: 'التجربة المجانية تسمح بـ 5 أوامر فقط. اشترك للحصول على وصول غير محدود!',
+          message: 'Free trial allows 1 prompt. Subscribe for unlimited access!',
+          messageAr: 'التجربة المجانية تسمح بأمر واحد فقط. اشترك للحصول على وصول غير محدود!',
         }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

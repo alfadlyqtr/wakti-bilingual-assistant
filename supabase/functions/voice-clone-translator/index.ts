@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { generateGemini } from "../_shared/gemini.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialToken, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -96,6 +97,21 @@ serve(async (req) => {
         error: 'Missing required fields: original_text and target_language are required'
       }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Trial gate: translate — 2 free translations during the 48h trial
+    const supabaseAdmin = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const trial = await checkTrialAccess(supabaseAdmin, user.id, 'translate', 2);
+    if (!trial.allowed) {
+      return new Response(JSON.stringify({
+        success: false,
+        ...buildTrialErrorPayload('translate', trial),
+        message: 'Free trial allows 2 translations. Subscribe to keep translating!',
+        messageAr: 'التجربة المجانية تسمح بترجمتين فقط. اشترك للمتابعة!',
+      }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -199,11 +215,16 @@ serve(async (req) => {
       status: "success"
     });
 
+    // Consume one trial token AFTER success (no-op for paid/gifted users)
+    const consume = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'translate', 2);
+    const trialPayload = buildTrialSuccessPayload('translate', consume);
+
     return new Response(JSON.stringify({
       success: true,
       original_text,
       translated_text: translatedText,
-      target_language
+      target_language,
+      trial: trialPayload
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

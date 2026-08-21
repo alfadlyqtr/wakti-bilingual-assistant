@@ -295,6 +295,10 @@ export default function Account() {
     && !isProfileLoading
     && (user.app_metadata?.provider ?? 'email') === 'email'
     && profile?.email_confirmed !== true;
+  // Green "Confirmed" pill: OAuth users count as confirmed (provider-verified);
+  // email/password users need our profiles.email_confirmed flag.
+  const isEmailConfirmed = !!user && !isGuest && !isProfileLoading
+    && ((user.app_metadata?.provider ?? 'email') !== 'email' || profile?.email_confirmed === true);
   const [isResendingConfirm, setIsResendingConfirm] = useState(false);
   const handleResendConfirm = async () => {
     setIsResendingConfirm(true);
@@ -619,8 +623,12 @@ export default function Account() {
     setIsUpdatingEmail(true);
     
     try {
-      await updateEmail(email);
-      toast.success(t("emailUpdated", language));
+      const { error } = await updateEmail(email);
+      if (error) {
+        toast.error(t("errorUpdatingEmail", language));
+      } else {
+        toast.success(t("emailUpdated", language));
+      }
     } catch (error: any) {
       toast.error(t("errorUpdatingEmail", language));
     } finally {
@@ -925,6 +933,11 @@ export default function Account() {
                   {needsEmailConfirm && (
                     <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                       {language === 'ar' ? 'غير مؤكد' : 'Unconfirmed'}
+                    </span>
+                  )}
+                  {isEmailConfirmed && (
+                    <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      {language === 'ar' ? 'مؤكد' : 'Confirmed'}
                     </span>
                   )}
                 </p>

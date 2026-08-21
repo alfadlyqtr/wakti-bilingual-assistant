@@ -234,7 +234,18 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
         body: JSON.stringify({ text: text.trim(), voice_id: selectedVoiceId, style: selectedStyle }),
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        let friendly: string | null = null;
+        try {
+          const errJson = JSON.parse(errText);
+          if (typeof errJson?.code === 'string' && errJson.code.startsWith('TRIAL')) {
+            emitEvent('wakti-trial-limit-reached', { feature: 'tts', reason: errJson.code === 'TRIAL_EXPIRED' ? 'trial_expired' : 'feature_locked' });
+            friendly = errJson.error || null;
+          }
+        } catch { /* not JSON — keep raw text */ }
+        throw new Error(friendly || `HTTP ${response.status}: ${errText}`);
+      }
 
       const contentType = response.headers.get('content-type') || '';
       let audioBlob: Blob;

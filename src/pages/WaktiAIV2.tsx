@@ -355,7 +355,7 @@ const WaktiAIV2 = () => {
     if (cachedProfile && !isSubscribed && !isAdminGifted && hasTrialStarted) {
       const usage = (cachedProfile.trial_usage as Record<string, number>) ?? {};
       const aiChatUsed = typeof usage['ai_chat'] === 'number' ? usage['ai_chat'] : 0;
-      if (aiChatUsed >= 15) {
+      if (aiChatUsed >= 7) {
         setChatTrialLimitReached(true);
       }
     }
@@ -1693,7 +1693,7 @@ const WaktiAIV2 = () => {
 
   return (
     <div className="wakti-ai-page-container" style={{ position: 'relative' }}>
-      {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={15} featureLabel={{ en: 'WAKTI AI Chat', ar: 'Ã˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  AI' }} /> : null}
+      {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={7} featureLabel={{ en: 'WAKTI AI Chat', ar: 'Ã˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  AI' }} /> : null}
       <StudioGuestLoginDialog
         open={guestUpgradeOpen}
         onOpenChange={setGuestUpgradeOpen}

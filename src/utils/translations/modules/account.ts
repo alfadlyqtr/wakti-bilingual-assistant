@@ -21,7 +21,7 @@ export const account = {
   pickDate: "Pick a date",
   useCalendarPicker: "Use calendar picker",
   errorUpdatingEmail: "Error updating email",
-  emailUpdated: "Email updated successfully",
+  emailUpdated: "Confirmation link sent to your new email — click it to finish the change",
   deleteAccount: "Delete Account",
   deleteAccountDescription: "Permanently delete your account and all associated data",
   deleteMyAccount: "Delete My Account",
