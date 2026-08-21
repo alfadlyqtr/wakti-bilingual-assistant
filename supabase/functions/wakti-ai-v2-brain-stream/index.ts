@@ -5305,8 +5305,9 @@ serve(async (req) => {
           chatSubmode = 'chat', // 'chat' or 'study'
           location = null,
           clientTimezone = 'UTC',
-          attachedFiles = [] // Multimodal image attachments for unified chat/search/study
-        } = body as { message?: string; language?: string; recentMessages?: unknown[]; conversationId?: string | null; conversationSummary?: string; durableMemory?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
+          attachedFiles = [], // Multimodal image attachments for unified chat/search/study
+          searchSubmode = '' // 'web' | 'youtube' | 'research'
+        } = body as { message?: string; language?: string; recentMessages?: unknown[]; conversationId?: string | null; conversationSummary?: string; durableMemory?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[]; searchSubmode?: string };
         const requestLocation = (location && typeof location === 'object')
           ? location as { city?: string; country?: string; latitude?: number; longitude?: number }
           : null;
@@ -5701,6 +5702,77 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
         // Search mode: Use Gemini 3 Flash with Google Search grounding (STREAMING)
         if (effectiveTrigger === 'search') {
           try {
+            // === RESEARCH SUBMODE: plan → gather (parallel) → synthesize a cited report ===
+            if (searchSubmode === 'research') {
+              const reportLanguage = language === 'ar' ? 'ar' : 'en';
+              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { researchMode: true, stage: 'planning' } })}\n\n`)); } catch { /* ignore */ }
+
+              // 1) PLAN: split the question into focused sub-queries
+              let subQueries: string[] = [];
+              try {
+                const planRaw = await generateGeminiText(
+                  'gemini-3.1-flash-lite',
+                  `Break this research question into 3-4 focused web search queries that together fully answer it. Return ONLY a JSON array of strings, no commentary.\nQuestion: ${message}`,
+                  undefined,
+                  { temperature: 0.2, maxOutputTokens: 300 },
+                  false
+                );
+                const parsed = JSON.parse((planRaw || '').replace(/```json|```/g, '').trim());
+                if (Array.isArray(parsed)) subQueries = parsed.filter((q) => typeof q === 'string' && q.trim()).slice(0, 4);
+              } catch { /* planner failed — fallback to the raw question */ }
+              if (subQueries.length === 0) subQueries = [message || ''];
+
+              // 2) GATHER: run all sub-queries in parallel
+              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { researchMode: true, stage: 'gathering', queries: subQueries } })}\n\n`)); } catch { /* ignore */ }
+              const gathered = await Promise.all(subQueries.map((q) => executeRegularSearch(q, reportLanguage).catch(() => null)));
+              const sourceBlocks: string[] = [];
+              const sourceList: Array<{ title: string; url: string }> = [];
+              gathered.forEach((res, i) => {
+                if (!res?.success || !res.data) return;
+                const results = Array.isArray(res.data.results) ? res.data.results : [];
+                const lines: string[] = [];
+                for (const r of results.slice(0, 4)) {
+                  const rec = r as Record<string, unknown>;
+                  const title = typeof rec.title === 'string' ? rec.title : '';
+                  const url = typeof rec.url === 'string' ? rec.url : '';
+                  const content = typeof rec.content === 'string' ? rec.content.slice(0, 600) : '';
+                  if (content) lines.push(`- ${title} (${url})\n  ${content}`);
+                  if (title && url) sourceList.push({ title, url });
+                }
+                if (lines.length > 0) sourceBlocks.push(`SUB-QUERY ${i + 1}: ${subQueries[i]}\n${lines.join('\n')}`);
+              });
+              const researchMaterial = sourceBlocks.join('\n\n').slice(0, 12000);
+
+              // 3) SYNTHESIZE: stream a structured, cited report with the Pro model
+              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { researchMode: true, stage: 'writing' } })}\n\n`)); } catch { /* ignore */ }
+              const researchSystemPrompt = reportLanguage === 'ar'
+                ? `أنت "وقتي ريسيرش" — محرّر بحثي محترف. أنتج تقريراً بحثياً عميقاً ومنظماً بالعربية فقط: ابدأ بملخص تنفيذي من 2-3 جمل بخط **عريض**، ثم أقسام بعناوين ##، ونقاط محددة بالتفاصيل والأرقام والتواريخ، واختم بقسم ## المصادر بقائمة المصادر المستخدمة (العنوان + الرابط). استخدم المواد البحثية المرفقة فقط — ممنوع اختراع الحقائق.`
+                : `You are Wakti Research — a professional research editor. Produce a deep, well-structured research report: open with a 2-3 sentence **bold executive summary**, then themed sections with ## headers, specific findings as bullets with numbers and dates, and end with a ## Sources section listing every source used (title + URL). Use ONLY the attached research material — never invent facts. Write fully in English.`;
+
+              const researchQuery = `${message}\n\n=== RESEARCH MATERIAL (sub-queries + sources) ===\n${researchMaterial || 'No material gathered — answer from verified knowledge and clearly say what could not be verified.'}`;
+
+              await streamGemini(
+                'gemini-3.1-pro-preview',
+                [buildTextContent('user', researchQuery)],
+                (token) => {
+                  try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
+                },
+                researchSystemPrompt,
+                { temperature: 0.3, maxOutputTokens: 8000 },
+                true,
+                false
+              );
+
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { researchMode: true, sources: sourceList.slice(0, 12), queries: subQueries } })}\n\n`));
+              } catch { /* ignore */ }
+
+              await emitAiChatTrialFinished(trialRequestId);
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+              return;
+            }
+
             // Build search-specific system prompt with Personal Touch
             const pt = (personalTouch || {}) as Record<string, unknown>;
             const userNick = ((pt.nickname as string | undefined) || '').toString().trim();

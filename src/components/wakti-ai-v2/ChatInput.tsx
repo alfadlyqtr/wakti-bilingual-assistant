@@ -101,11 +101,11 @@ export function ChatInput({
   // Button ref and viewport position for Search submode dropdown (Web/YouTube)
   const searchModeBtnRef = useRef<HTMLButtonElement>(null);
   const [searchMenuPos, setSearchMenuPos] = useState<{ top: number; left: number } | null>(null);
-  // Search submode: 'web' | 'youtube'
-  const [searchSubmode, setSearchSubmode] = useState<'web' | 'youtube'>(() => {
+  // Search submode: 'web' | 'youtube' | 'research'
+  const [searchSubmode, setSearchSubmode] = useState<'web' | 'youtube' | 'research'>(() => {
     try {
       const v = localStorage.getItem('wakti_search_submode');
-      return (v === 'youtube' || v === 'web') ? (v as 'web' | 'youtube') : 'web';
+      return (v === 'youtube' || v === 'web' || v === 'research') ? (v as 'web' | 'youtube' | 'research') : 'web';
     } catch { return 'web'; }
   });
   // TTS Auto Play toggle (persisted)
@@ -616,7 +616,9 @@ export function ChatInput({
       // If Search + YouTube submode, prefix with lightweight marker for routing in service
       const maybePrefixed = (finalTrigger === 'search' && searchSubmode === 'youtube')
         ? `yt: ${outgoingMessage}`
-        : outgoingMessage;
+        : (finalTrigger === 'search' && searchSubmode === 'research')
+          ? `research: ${outgoingMessage}`
+          : outgoingMessage;
 
       const sendPromise = onSendMessage(
         maybePrefixed, 
@@ -775,6 +777,9 @@ export function ChatInput({
     if (activeTrigger === 'search' && message.trim() === '') {
       if (searchSubmode === 'youtube') {
         return language === 'ar' ? 'ابحث على يوتيوب: عنوان، موضوع، أو قناة' : 'search youtube,  song title + artist  or vedio title';
+      }
+      if (searchSubmode === 'research') {
+        return language === 'ar' ? 'اسأل سؤالاً كبيراً — نبحث بعمق ونكتب تقريراً' : 'Ask a big question — we dig deep and write a cited report';
       }
       return language === 'ar' ? 'ابحث في الويب: موضوع أو سؤال' : 'search the web !! News, sport reaults, topics and more.';
     }
@@ -1214,6 +1219,18 @@ export function ChatInput({
                         >
                           <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'youtube' ? 'bg-red-500' : 'bg-gray-400'}`}></span>
                           <span className="text-xs">YouTube</span>
+                        </button>
+                        {/* Research Button */}
+                        <button
+                          onPointerUp={() => setSearchSubmode('research')}
+                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-xs font-medium leading-none border align-middle transition-colors ${
+                            searchSubmode === 'research'
+                              ? 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600/50'
+                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-violet-50 hover:text-violet-600'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'research' ? 'bg-violet-500' : 'bg-gray-400'}`}></span>
+                          <span className="text-xs">{language === 'ar' ? 'ريسيرش' : 'Research'}</span>
                         </button>
                       </div>
                     ) : (activeTrigger === 'chat' || activeTrigger === 'vision' || activeTrigger === 'search') ? (

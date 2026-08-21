@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Mic, Search, MessageCircle } from 'lucide-react';
+import { X, Mic, Search, MessageCircle, Camera } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
@@ -185,6 +185,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [userName, setUserName] = useState<string>('');
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('male');
   const [aiTranscript, setAiTranscript] = useState<string>('');
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [conversationHistory, setConversationHistory] = useState<TalkTurn[]>([]);
   const [talkSummary, setTalkSummary] = useState<string>('');
   const [debugHint, setDebugHint] = useState<string>('');
@@ -2157,6 +2159,59 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, [beginAssistantTurn, language, sendRealtimeClientEvent, tLang]);
 
+  // Downscale a picked photo so it travels light over the realtime data channel
+  const readImageDownscaled = useCallback((file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSide = 1024;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(reader.result as string); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => resolve(reader.result as string);
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  }), []);
+
+  // Share an image into the live voice conversation (Realtime API input_image).
+  // Wakti sees it immediately, reacts briefly, then the user asks about it by voice.
+  const handleTalkImageSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    try {
+      const dataUrl = await readImageDownscaled(file);
+      setAttachedImage(dataUrl);
+      if (dcRef.current && dcRef.current.readyState === 'open' && isConnectionReady) {
+        sendRealtimeClientEvent({
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [
+              { type: 'input_text', text: language === 'ar'
+                ? 'شاركني المستخدم هذه الصورة للتو. علّق عليها بجملة قصيرة ودودة ثم اسأله ماذا يريد أن يعرف عنها.'
+                : 'The user just shared this image with you. Acknowledge it in one short friendly sentence, then ask what they want to know about it.' },
+              { type: 'input_image', image_url: dataUrl },
+            ],
+          },
+        }, 'image-share');
+        sendResponseCreate();
+      }
+    } catch {
+      setError(t('Could not read that image. Try another one.', 'تعذرت قراءة الصورة. جرّب صورة أخرى.'));
+    }
+  }, [isConnectionReady, language, readImageDownscaled, sendRealtimeClientEvent, sendResponseCreate, t]);
+
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
     setIsConversationActive(false);
@@ -2231,6 +2286,7 @@ ${memoryContext ? memoryContext : ''}`
     pendingAutoStartAfterConnectRef.current = false;
     flushConversationToChat(true);
     stopRecording();
+    setAttachedImage(null);
     onClose();
   }, [flushConversationToChat, onClose, stopRecording]);
 
@@ -2648,6 +2704,32 @@ ${memoryContext ? memoryContext : ''}`
             <Mic className="w-16 h-16 text-white drop-shadow-lg relative z-10 pointer-events-none" />
           </button>
         </div>
+
+        {/* Camera / photo share — show Wakti what you see mid-conversation */}
+        {isConnectionReady && (
+          <div className="flex flex-col items-center gap-2 mt-1">
+            {attachedImage && (
+              <div className="relative">
+                <img src={attachedImage} alt="shared" className="w-20 h-20 rounded-xl object-cover border-2 border-white/30 shadow-lg" />
+                <button
+                  onClick={() => setAttachedImage(null)}
+                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center"
+                  aria-label={t('Remove image', 'حذف الصورة')}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border transition-all active:scale-95 ${theme === 'dark' ? 'border-white/20 text-white/80 hover:bg-white/10' : 'border-[#060541]/20 text-[#060541]/80 hover:bg-[#060541]/5'}`}
+            >
+              <Camera className="w-4 h-4" />
+              {attachedImage ? t('Change photo', 'غيّر الصورة') : t('Show Wakti a photo', 'أرِ وقتي صورة')}
+            </button>
+          </div>
+        )}
+        <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleTalkImageSelected} />
 
         {/* Status text */}
         <div className={`text-xl font-medium select-none ${theme === 'dark' ? 'text-white/90' : 'text-[#060541]/90'}`}>

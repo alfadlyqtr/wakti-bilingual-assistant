@@ -1172,6 +1172,9 @@ class WaktiAIV2ServiceClass {
             const pt_version = pt?.pt_version ?? null;
             const pt_updated_at = pt?.pt_updated_at ?? null;
             const pt_hash = this.hashPersonalTouch(pt);
+            // Research submode routing: strip the lightweight marker and flag the brain
+            const isResearchRequest = /^(?:\s*research:\s*)/i.test(message || '');
+            const outgoingMessage = isResearchRequest ? (message || '').replace(/^(?:\s*research:\s*)/i, '') : message;
             response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
               method: 'POST',
               mode: 'cors',
@@ -1185,12 +1188,13 @@ class WaktiAIV2ServiceClass {
                 'x-request-id': requestId
               },
               body: JSON.stringify({
-                message,
+                message: outgoingMessage,
                 language,
                 conversationId,
                 inputType,
                 activeTrigger,
                 chatSubmode,
+                searchSubmode: isResearchRequest ? 'research' : undefined,
                 attachedFiles: streamAttachedFiles,
                 recentMessages: transportMessages,
                 conversationSummary: finalSummary,
