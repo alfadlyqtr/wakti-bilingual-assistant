@@ -56,6 +56,25 @@ export async function deleteBrandKit(userId: string, kitId: string): Promise<voi
   if (error) throw error;
 }
 
+export async function updateBrandKit(userId: string, kitId: string, draft: BrandKitDraft): Promise<BrandKit> {
+  const { data, error } = await (supabase as any)
+    .from('brand_kits')
+    .update({
+      name: draft.name,
+      logo_url: draft.logo_url,
+      primary_color: draft.primary_color,
+      accent_color: draft.accent_color,
+      tone: draft.tone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', kitId)
+    .eq('user_id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as BrandKit;
+}
+
 export async function uploadBrandKitLogo(userId: string, imageSource: string): Promise<string> {
   try {
     const res = await fetch(imageSource);

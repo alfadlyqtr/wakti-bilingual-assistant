@@ -187,6 +187,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [aiTranscript, setAiTranscript] = useState<string>('');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [conversationHistory, setConversationHistory] = useState<TalkTurn[]>([]);
   const [talkSummary, setTalkSummary] = useState<string>('');
   const [debugHint, setDebugHint] = useState<string>('');
@@ -2159,13 +2160,14 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, [beginAssistantTurn, language, sendRealtimeClientEvent, tLang]);
 
-  // Downscale a picked photo so it travels light over the realtime data channel
+  // Downscale a picked photo so it travels light over the realtime data channel.
+  // Heavy images (hundreds of KB of base64 in one event) can kill the connection.
   const readImageDownscaled = useCallback((file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const maxSide = 1024;
+        const maxSide = 768;
         const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(img.width * scale);
@@ -2173,7 +2175,7 @@ ${memoryContext ? memoryContext : ''}`
         const ctx = canvas.getContext('2d');
         if (!ctx) { resolve(reader.result as string); return; }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
       img.onerror = () => resolve(reader.result as string);
       img.src = reader.result as string;
@@ -2720,16 +2722,26 @@ ${memoryContext ? memoryContext : ''}`
                 </button>
               </div>
             )}
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border transition-all active:scale-95 ${theme === 'dark' ? 'border-white/20 text-white/80 hover:bg-white/10' : 'border-[#060541]/20 text-[#060541]/80 hover:bg-[#060541]/5'}`}
-            >
-              <Camera className="w-4 h-4" />
-              {attachedImage ? t('Change photo', 'غيّر الصورة') : t('Show Wakti a photo', 'أرِ وقتي صورة')}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border transition-all active:scale-95 ${theme === 'dark' ? 'border-white/20 text-white/80 hover:bg-white/10' : 'border-[#060541]/20 text-[#060541]/80 hover:bg-[#060541]/5'}`}
+              >
+                <Camera className="w-4 h-4" />
+                {t('Take photo', 'التقط صورة')}
+              </button>
+              <button
+                onClick={() => imageInputRef.current?.click()}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border transition-all active:scale-95 ${theme === 'dark' ? 'border-white/20 text-white/80 hover:bg-white/10' : 'border-[#060541]/20 text-[#060541]/80 hover:bg-[#060541]/5'}`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                {attachedImage ? t('Change photo', 'غيّر الصورة') : t('Choose photo', 'اختر صورة')}
+              </button>
+            </div>
           </div>
         )}
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleTalkImageSelected} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleTalkImageSelected} />
 
         {/* Status text */}
         <div className={`text-xl font-medium select-none ${theme === 'dark' ? 'text-white/90' : 'text-[#060541]/90'}`}>

@@ -61,7 +61,7 @@ const PRESENCE_PROFILES: Record<VisualAdsTextPresence, PresenceProfile> = {
     sectionGapRatio: 0.017,
     bottomMarginRatio: 0.065,
     ctaMaxWidthRatio: 0.46,
-    scrimAlpha: 0.16,
+    scrimAlpha: 0.42,
     shadowBlurRatio: 0.020,
   },
   balanced: {
@@ -75,7 +75,7 @@ const PRESENCE_PROFILES: Record<VisualAdsTextPresence, PresenceProfile> = {
     sectionGapRatio: 0.020,
     bottomMarginRatio: 0.070,
     ctaMaxWidthRatio: 0.54,
-    scrimAlpha: 0.20,
+    scrimAlpha: 0.5,
     shadowBlurRatio: 0.028,
   },
   'strong-cta': {
@@ -89,7 +89,7 @@ const PRESENCE_PROFILES: Record<VisualAdsTextPresence, PresenceProfile> = {
     sectionGapRatio: 0.022,
     bottomMarginRatio: 0.074,
     ctaMaxWidthRatio: 0.64,
-    scrimAlpha: 0.24,
+    scrimAlpha: 0.56,
     shadowBlurRatio: 0.036,
   },
 };
@@ -195,20 +195,26 @@ const sampleSceneBrightness = (ctx: CanvasRenderingContext2D, width: number, hei
   return count ? total / count : 128;
 };
 
-const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: boolean, brandAccent?: string | null): OverlayPalette => {
+const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: boolean, scrimAlpha: number, brandAccent?: string | null): OverlayPalette => {
+  // Scrim: a strong bottom fade so the text zone is always readable, on any artwork.
+  const scrimBase = sceneIsLight ? '252, 254, 253' : '12, 15, 20';
+  const scrim: [string, string, string] = [
+    `rgba(${scrimBase}, 0)`,
+    `rgba(${scrimBase}, ${(scrimAlpha * 0.35).toFixed(3)})`,
+    `rgba(${scrimBase}, ${scrimAlpha.toFixed(3)})`,
+  ];
+
   if (textColorStyle === 'minimal-monochrome') {
     const ctaFill = sceneIsLight ? '#0c0f14' : '#fcfefd';
     return {
       ctaFill,
       ctaText: sceneIsLight ? '#fcfefd' : '#0c0f14',
       ctaStroke: sceneIsLight ? withAlpha('#fcfefd', 0.08) : withAlpha('#0c0f14', 0.12),
-      chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.78) : withAlpha('#0c0f14', 0.68),
+      chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.94) : withAlpha('#0c0f14', 0.92),
       chipText: sceneIsLight ? '#16181d' : '#f5f5f5',
       chipStroke: sceneIsLight ? withAlpha('#0c0f14', 0.12) : withAlpha('#fcfefd', 0.16),
       glow: sceneIsLight ? withAlpha('#0c0f14', 0.10) : withAlpha('#fcfefd', 0.14),
-      scrim: sceneIsLight
-        ? ['rgba(252, 254, 253, 0)', 'rgba(252, 254, 253, 0.05)', 'rgba(252, 254, 253, 0.22)']
-        : ['rgba(12, 15, 20, 0)', 'rgba(12, 15, 20, 0.08)', 'rgba(12, 15, 20, 0.30)'],
+      scrim,
     };
   }
 
@@ -218,13 +224,11 @@ const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: b
       ctaFill: accent,
       ctaText: getContrastText(accent),
       ctaStroke: withAlpha('#fcfefd', sceneIsLight ? 0.12 : 0.18),
-      chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.84) : withAlpha('#1b1d22', 0.72),
+      chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.95) : withAlpha('#1b1d22', 0.92),
       chipText: sceneIsLight ? '#2b2113' : '#f6ead9',
       chipStroke: withAlpha(accent, sceneIsLight ? 0.30 : 0.42),
       glow: withAlpha(accent, sceneIsLight ? 0.18 : 0.28),
-      scrim: sceneIsLight
-        ? ['rgba(255, 250, 245, 0)', 'rgba(255, 250, 245, 0.08)', 'rgba(255, 250, 245, 0.24)']
-        : ['rgba(19, 13, 7, 0)', 'rgba(19, 13, 7, 0.12)', 'rgba(19, 13, 7, 0.34)'],
+      scrim,
     };
   }
 
@@ -233,13 +237,11 @@ const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: b
     ctaFill,
     ctaText: sceneIsLight ? '#fcfefd' : '#0c0f14',
     ctaStroke: sceneIsLight ? withAlpha('#fcfefd', 0.08) : withAlpha('#0c0f14', 0.10),
-    chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.80) : withAlpha('#0c0f14', 0.68),
+    chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.94) : withAlpha('#0c0f14', 0.92),
     chipText: sceneIsLight ? '#11141a' : '#f2f2f2',
     chipStroke: sceneIsLight ? withAlpha('#0c0f14', 0.10) : withAlpha('#fcfefd', 0.14),
     glow: sceneIsLight ? withAlpha('#0c0f14', 0.12) : withAlpha('#ffffff', 0.16),
-    scrim: sceneIsLight
-      ? ['rgba(252, 254, 253, 0)', 'rgba(252, 254, 253, 0.06)', 'rgba(252, 254, 253, 0.20)']
-      : ['rgba(12, 15, 20, 0)', 'rgba(12, 15, 20, 0.10)', 'rgba(12, 15, 20, 0.28)'],
+    scrim,
   };
 };
 
@@ -300,7 +302,9 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
     ? chipRows.length * chipHeight + (chipRows.length - 1) * chipGap
     : 0;
 
-  ctx.font = `700 ${ctaFontSize}px ${FONT_STACK}`;
+  // Slightly tracked-out CTA reads like a real button, not a sticker
+  (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0.5px';
+  ctx.font = `800 ${ctaFontSize}px ${FONT_STACK}`;
   const ctaWidth = ctaText
     ? Math.min(canvas.width * presence.ctaMaxWidthRatio, Math.ceil(ctx.measureText(ctaText).width + ctaPaddingX * 2))
     : 0;
@@ -309,7 +313,7 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
   const groupTop = canvas.height - bottomMargin - totalHeight;
   const sceneBrightness = sampleSceneBrightness(ctx, canvas.width, canvas.height);
   const sceneIsLight = sceneBrightness > 162;
-  const palette = resolvePalette(spec.textColorStyle, sceneIsLight, spec.brandAccent);
+  const palette = resolvePalette(spec.textColorStyle, sceneIsLight, presence.scrimAlpha, spec.brandAccent);
 
   const scrim = ctx.createLinearGradient(0, Math.max(0, groupTop - bottomMargin), 0, canvas.height);
   scrim.addColorStop(0, palette.scrim[0]);
@@ -361,11 +365,12 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
     ctx.stroke();
     ctx.restore();
 
-    ctx.font = `700 ${ctaFontSize}px ${FONT_STACK}`;
+    ctx.font = `800 ${ctaFontSize}px ${FONT_STACK}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = palette.ctaText;
     ctx.fillText(ctaText, ctaX + ctaWidth / 2, ctaY + ctaHeight / 2 + 1);
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px';
   }
 
   return canvasToBlob(canvas, 'image/png');

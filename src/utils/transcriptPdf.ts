@@ -5,6 +5,8 @@ interface TranscriptPdfOptions {
   content: string;
   videoUrl?: string | null;
   language: string;
+  // 'transcript' = video transcript sheet · 'answer' = any chat answer shared as PDF
+  kind?: 'transcript' | 'answer';
 }
 
 // Escape user/model text before placing it into the HTML shell
@@ -43,8 +45,13 @@ function transcriptBodyToHtml(content: string, isArabic: boolean): string {
  * Renders a styled HTML sheet off-screen (html2canvas handles Arabic/RTL perfectly),
  * then slices it into A4 pages with jsPDF.
  */
-export async function downloadTranscriptPdf({ content, videoUrl, language }: TranscriptPdfOptions): Promise<void> {
+export async function downloadTranscriptPdf({ content, videoUrl, language, kind = 'transcript' }: TranscriptPdfOptions): Promise<void> {
   const isArabic = language === 'ar';
+  const isTranscript = kind === 'transcript';
+  const subtitle = isTranscript
+    ? (isArabic ? 'تفريغ فيديو' : 'Video Transcript')
+    : (isArabic ? 'إجابة من وقتي' : 'Wakti Answer');
+  const filePrefix = isTranscript ? 'wakti-transcript' : 'wakti-answer';
   const today = new Date().toLocaleDateString(isArabic ? 'ar-QA' : 'en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const shell = document.createElement('div');
@@ -54,7 +61,7 @@ export async function downloadTranscriptPdf({ content, videoUrl, language }: Tra
       <div style="background:linear-gradient(135deg,#060541 0%,#2a2670 60%,#060541 100%);padding:24px 32px;display:flex;align-items:center;justify-content:space-between;direction:ltr;">
         <div>
           <div style="color:#f2f2f2;font-size:22px;font-weight:800;letter-spacing:0.5px;">WAKTI AI</div>
-          <div style="color:#e9ceb0;font-size:12px;margin-top:2px;">${isArabic ? 'تفريغ فيديو' : 'Video Transcript'}</div>
+          <div style="color:#e9ceb0;font-size:12px;margin-top:2px;">${subtitle}</div>
         </div>
         <div style="color:#858384;font-size:11px;text-align:right;">
           <div>${today}</div>
@@ -94,7 +101,7 @@ export async function downloadTranscriptPdf({ content, videoUrl, language }: Tra
       heightLeft -= pageHeight - margin * 2;
     }
 
-    pdf.save(`wakti-transcript-${new Date().toISOString().slice(0, 10)}.pdf`);
+    pdf.save(`${filePrefix}-${new Date().toISOString().slice(0, 10)}.pdf`);
   } finally {
     document.body.removeChild(shell);
   }

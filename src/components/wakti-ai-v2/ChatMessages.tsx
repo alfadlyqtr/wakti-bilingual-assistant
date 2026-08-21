@@ -2536,14 +2536,20 @@ export function ChatMessages({
                                 <span className="hidden sm:inline">{language === 'ar' ? 'إعادة المحاولة' : 'Retry'}</span>
                               </button>
                             )}
-                            {/* Transcript PDF export - transcript responses only */}
-                            {message.role === 'assistant' && metadata?.transcript && (
+                            {/* Branded PDF export / share - any successful assistant answer */}
+                            {message.role === 'assistant' && !metadata?.error && !metadata?.loading && message.content?.trim() && (
                               <button
                                 onClick={async () => {
+                                  const isTranscript = !!metadata?.transcript;
                                   const toastId = toast.loading(language === 'ar' ? 'جاري تجهيز ملف PDF...' : 'Preparing PDF...');
                                   try {
                                     const { downloadTranscriptPdf } = await import('@/utils/transcriptPdf');
-                                    await downloadTranscriptPdf({ content: message.content, videoUrl: metadata?.videoUrl || null, language });
+                                    await downloadTranscriptPdf({
+                                      content: message.content,
+                                      videoUrl: metadata?.videoUrl || null,
+                                      language,
+                                      kind: isTranscript ? 'transcript' : 'answer',
+                                    });
                                     toast.dismiss(toastId);
                                     toast.success(language === 'ar' ? 'تم تحميل الملف' : 'PDF downloaded');
                                   } catch {
@@ -2552,7 +2558,7 @@ export function ChatMessages({
                                   }
                                 }}
                                 className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors active:scale-95"
-                                title={language === 'ar' ? 'تحميل التفريغ كملف PDF' : 'Download transcript as PDF'}
+                                title={language === 'ar' ? 'تحميل كملف PDF بعلامة وقتي' : 'Download as branded Wakti PDF'}
                               >
                                 <FileDown className="h-3.5 w-3.5" />
                                 <span className="hidden sm:inline">{language === 'ar' ? 'PDF' : 'PDF'}</span>

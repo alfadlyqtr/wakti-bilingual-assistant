@@ -81,6 +81,47 @@ function extractTextSample(html: string, maxChars = 3000): string {
     .slice(0, maxChars);
 }
 
+function extractStylesheetUrls(html: string, baseUrl: string): string[] {
+  const urls: string[] = [];
+  const patterns = [
+    /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/gi,
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']stylesheet["']/gi,
+  ];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(html)) !== null) {
+      try {
+        urls.push(new URL(match[1], baseUrl).toString());
+      } catch {
+        // skip bad URL
+      }
+    }
+  }
+  return [...new Set(urls)];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const light = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sat * Math.min(light, 1 - light);
+  const f = (n: number) => light - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = (v: number) => Math.round(255 * v).toString(16).padStart(2, "0");
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+
+// Design tokens in CSS custom properties are the highest-signal brand colors:
+// e.g. --primary: 243 84% 14%  (HSL triplet, common in Tailwind/shadcn sites)
+function extractHslVarColors(css: string): string[] {
+  const found: string[] = [];
+  const regex = /--([a-z0-9-]*(?:primary|brand|accent|main|secondary|foreground|muted)[a-z0-9-]*)\s*:\s*(\d{1,3}(?:\.\d+)?)[\s,]+(\d{1,3}(?:\.\d+)?)%[\s,]+(\d{1,3}(?:\.\d+)?)%/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(css)) !== null) {
+    found.push(hslToHex(parseFloat(match[2]), parseFloat(match[3]), parseFloat(match[4])));
+  }
+  return [...new Set(found)];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -143,6 +184,30 @@ serve(async (req) => {
     const logoUrl = extractLogoUrl(html, targetUrl);
     const textSample = extractTextSample(html);
 
+    // Modern app sites serve an empty HTML shell — the real brand colors live in
+    // the linked stylesheets. Fetch up to 2 of them and mine their colors.
+    let cssText = "";
+    const cssUrls = extractStylesheetUrls(html, targetUrl).slice(0, 2);
+    for (const cssUrl of cssUrls) {
+      try {
+        const cssResp = await fetch(cssUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; WaktiBrandScan/1.0)" },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (cssResp.ok) cssText += (await cssResp.text()).slice(0, 400_000) + "\n";
+      } catch {
+        // stylesheet unreachable — keep going with what we have
+      }
+    }
+    const hslVarColors = cssText ? extractHslVarColors(cssText) : [];
+    const cssHexColors = cssText ? extractHexColors(cssText) : [];
+    const colorCandidates = [...new Set([
+      ...(themeColor ? [themeColor] : []),
+      ...hslVarColors,
+      ...cssHexColors,
+      ...hexColors,
+    ])];
+
     const fallbackName = siteName || title.split(/[|\-–—]/)[0]?.trim() || new URL(targetUrl).hostname.replace(/^www\./, "");
 
     if (!GEMINI_API_KEY) {
@@ -150,8 +215,8 @@ serve(async (req) => {
         ok: true,
         dna: {
           name: fallbackName,
-          primary_color: themeColor || hexColors[0] || null,
-          accent_color: hexColors[1] || null,
+          primary_color: themeColor || colorCandidates[0] || null,
+          accent_color: colorCandidates[1] || null,
           tone: null,
           logo_url: logoUrl,
         },
@@ -168,16 +233,16 @@ serve(async (req) => {
       `Site name: ${siteName}`,
       `Description: ${description}`,
       `Theme color: ${themeColor || "none"}`,
-      `Most used hex colors on the page: ${hexColors.join(", ") || "none"}`,
-      `Visible text sample: ${textSample}`,
+      `Brand color candidates found in the site's design files (most likely brand colors first): ${colorCandidates.join(", ") || "none"}`,
+      `Visible text sample: ${textSample || "none (app-driven site)"}`,
       "",
       "Return JSON with exactly these keys:",
       '- "name": short brand/business name (max 4 words)',
-      '- "primary_color": the single most representative brand color as a hex code (prefer the theme color or the dominant non-neutral hex)',
+      '- "primary_color": the single most representative brand color as a hex code (prefer the theme color or the strongest candidate)',
       '- "accent_color": a secondary brand color as a hex code',
       `- "tone": exactly one of: ${TONE_OPTIONS.map((tone) => `"${tone}"`).join(", ")}`,
       "",
-      "If you are unsure about colors, pick the closest from the listed hex colors. Never invent a hex that is not plausible for the brand.",
+      "If you are unsure about colors, pick the closest from the listed candidates. Never invent a hex that is not plausible for the brand.",
     ].join("\n");
 
     const geminiResp = await fetch(
@@ -194,8 +259,8 @@ serve(async (req) => {
 
     let dna = {
       name: fallbackName,
-      primary_color: themeColor || hexColors[0] || null as string | null,
-      accent_color: hexColors[1] || null as string | null,
+      primary_color: (themeColor || colorCandidates[0] || null) as string | null,
+      accent_color: (colorCandidates[1] || null) as string | null,
       tone: null as string | null,
       logo_url: logoUrl,
     };

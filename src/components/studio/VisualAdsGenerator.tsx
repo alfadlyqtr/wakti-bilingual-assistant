@@ -9,6 +9,7 @@ import {
   type BrandKit,
   fetchBrandKits,
   createBrandKit,
+  updateBrandKit,
   deleteBrandKit,
   uploadBrandKitLogo,
   extractBrandColors,
@@ -491,6 +492,19 @@ export default function VisualAdsGenerator({
   const kitLogoInputRef = useRef<HTMLInputElement>(null);
   const [kitScanUrl, setKitScanUrl] = useState('');
   const [kitScanning, setKitScanning] = useState(false);
+  const [editingKitId, setEditingKitId] = useState<string | null>(null);
+
+  // Open the dialog pre-filled with an existing kit so it can be edited
+  const openEditKit = useCallback((kit: BrandKit) => {
+    setEditingKitId(kit.id);
+    setKitDraftName(kit.name);
+    setKitDraftLogo(kit.logo_url);
+    setKitDraftPrimary(kit.primary_color);
+    setKitDraftAccent(kit.accent_color);
+    setKitDraftTone(brandToneChips.find((chip) => chip.prompt === kit.tone)?.id || '');
+    setKitScanUrl('');
+    setBrandKitDialogOpen(true);
+  }, []);
 
   // "Paste your website" — AI reads the site and pre-fills the kit for review.
   const handleScanWebsite = useCallback(async () => {
@@ -582,24 +596,54 @@ export default function VisualAdsGenerator({
     try {
       const logoUrl = kitDraftLogo ? await uploadBrandKitLogo(user.id, kitDraftLogo) : null;
       const tonePrompt = brandToneChips.find((chip) => chip.id === kitDraftTone)?.prompt || null;
-      const kit = await createBrandKit(user.id, {
+      const draft = {
         name,
         logo_url: logoUrl,
         primary_color: kitDraftPrimary,
         accent_color: kitDraftAccent,
         tone: tonePrompt,
-      });
-      setBrandKits(prev => [kit, ...prev]);
+      };
+
+      if (editingKitId) {
+        const oldKit = brandKits.find((kit) => kit.id === editingKitId) || null;
+        const kit = await updateBrandKit(user.id, editingKitId, draft);
+        setBrandKits(prev => prev.map((item) => (item.id === kit.id ? kit : item)));
+        // If this kit is currently applied, refresh its colors/tone and swap a changed logo
+        setState(prev => prev.brandKit.kitId === kit.id
+          ? {
+              ...prev,
+              brandKit: {
+                kitId: kit.id,
+                name: kit.name,
+                primaryColor: kit.primary_color,
+                accentColor: kit.accent_color,
+                tone: kit.tone,
+              },
+            }
+          : prev);
+        if (oldKit?.logo_url && kit.logo_url && oldKit.logo_url !== kit.logo_url
+          && uploadedImages.some((asset) => asset.image === oldKit.logo_url)) {
+          const swapped = uploadedImages.map((asset) =>
+            asset.image === oldKit.logo_url ? { ...asset, image: kit.logo_url as string } : asset);
+          setUploadedImages(swapped);
+          setState(prev => ({ ...prev, assets: swapped }));
+        }
+        toast.success(language === 'ar' ? 'تم تحديث الهوية' : 'Brand kit updated');
+      } else {
+        const kit = await createBrandKit(user.id, draft);
+        setBrandKits(prev => [kit, ...prev]);
+        applyBrandKit(kit);
+        toast.success(language === 'ar' ? 'تم حفظ هوية العلامة' : 'Brand kit saved');
+      }
       setBrandKitDialogOpen(false);
+      setEditingKitId(null);
       resetKitDraft();
-      applyBrandKit(kit);
-      toast.success(language === 'ar' ? 'تم حفظ هوية العلامة' : 'Brand kit saved');
     } catch {
       toast.error(language === 'ar' ? 'تعذر حفظ هوية العلامة' : 'Could not save the brand kit');
     } finally {
       setBrandKitSaving(false);
     }
-  }, [user?.id, kitDraftName, kitDraftLogo, kitDraftTone, kitDraftPrimary, kitDraftAccent, language, resetKitDraft, applyBrandKit]);
+  }, [user?.id, kitDraftName, kitDraftLogo, kitDraftTone, kitDraftPrimary, kitDraftAccent, editingKitId, brandKits, uploadedImages, language, resetKitDraft, applyBrandKit]);
 
   const handleDeleteBrandKit = useCallback(async (kitId: string) => {
     if (!user?.id) return;
@@ -616,10 +660,6 @@ export default function VisualAdsGenerator({
   }, [user?.id, language]);
 
   const normalizeWordLimitedValue = useCallback((value: string) => value.replace(/\s+/g, ' ').trim(), []);
-  const hasMoreThanThreeWords = useCallback((value: string) => {
-    const normalized = normalizeWordLimitedValue(value);
-    return normalized.length > 0 && normalized.split(' ').length > 3;
-  }, [normalizeWordLimitedValue]);
 
   useEffect(() => {
     if (!initialState) return;
@@ -629,14 +669,6 @@ export default function VisualAdsGenerator({
     setOpenBriefSection(1);
     setVisibleSlotCount(Math.min(MAX_ASSET_IMAGES, Math.max(INITIAL_VISIBLE_SLOTS, initialState.assets.length || 0)));
   }, [INITIAL_VISIBLE_SLOTS, MAX_ASSET_IMAGES, initialState]);
-  const hasMoreThanFiveWords = useCallback((value: string) => {
-    const normalized = normalizeWordLimitedValue(value);
-    return normalized.length > 0 && normalized.split(' ').length > 5;
-  }, [normalizeWordLimitedValue]);
-  const hasMoreThanFourWords = useCallback((value: string) => {
-    const normalized = normalizeWordLimitedValue(value);
-    return normalized.length > 0 && normalized.split(' ').length > 4;
-  }, [normalizeWordLimitedValue]);
   const getCustomSelectionLabel = useCallback((value?: string) => {
     const normalized = normalizeWordLimitedValue(value || '');
     return normalized || (language === 'ar' ? 'مخصص' : 'Custom');
@@ -846,27 +878,23 @@ export default function VisualAdsGenerator({
     customStyle: false,
   });
   const handleCustomCreativeSoulChange = useCallback((field: 'customMainMessage' | 'customCta' | 'customStyle', value: string) => {
-    const usesFiveWordLimit = field === 'customMainMessage' || field === 'customCta';
-    const exceedsWordLimit = usesFiveWordLimit ? hasMoreThanFiveWords(value) : hasMoreThanThreeWords(value);
-    if (exceedsWordLimit) {
+    const maxChars = field === 'customStyle' ? 24 : 30;
+    const exceedsLimit = normalizeWordLimitedValue(value).length > maxChars;
+    if (exceedsLimit) {
       if (!customFieldToastShownRef.current[field]) {
-        toast.error(
-          usesFiveWordLimit
-            ? (language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى' : 'Use 1 to 5 words maximum')
-            : (language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى' : 'Use 1 to 3 words maximum')
-        );
+        toast.error(language === 'ar' ? `بحد أقصى ${maxChars} حرفاً` : `Up to ${maxChars} characters`);
         customFieldToastShownRef.current[field] = true;
       }
       return;
     }
     customFieldToastShownRef.current[field] = false;
     updateCreativeSoul({ [field]: value } as Partial<VisualAdsState['creativeSoul']>);
-  }, [hasMoreThanFiveWords, hasMoreThanThreeWords, language, updateCreativeSoul]);
+  }, [language, updateCreativeSoul, normalizeWordLimitedValue]);
   const addFeatureChip = useCallback(() => {
     const normalized = normalizeWordLimitedValue(featureChipDraft);
     if (!normalized) return;
-    if (hasMoreThanFourWords(normalized)) {
-      toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٤ كلمات كحد أقصى لكل ميزة' : 'Use 1 to 4 words maximum per feature');
+    if (normalized.length > 40) {
+      toast.error(language === 'ar' ? 'بحد أقصى ٤٠ حرفاً لكل نقطة' : 'Up to 40 characters per point');
       return;
     }
     if (state.creativeSoul.featureChips.includes(normalized)) {
@@ -879,7 +907,7 @@ export default function VisualAdsGenerator({
     }
     updateCreativeSoul({ featureChips: [...state.creativeSoul.featureChips, normalized] });
     setFeatureChipDraft('');
-  }, [MAX_FEATURE_CHIPS, featureChipDraft, hasMoreThanFourWords, language, normalizeWordLimitedValue, state.creativeSoul.featureChips, updateCreativeSoul]);
+  }, [MAX_FEATURE_CHIPS, featureChipDraft, language, normalizeWordLimitedValue, state.creativeSoul.featureChips, updateCreativeSoul]);
   const removeFeatureChip = useCallback((chipToRemove: string) => {
     updateCreativeSoul({ featureChips: state.creativeSoul.featureChips.filter((chip) => chip !== chipToRemove) });
   }, [state.creativeSoul.featureChips, updateCreativeSoul]);
@@ -1360,20 +1388,20 @@ export default function VisualAdsGenerator({
   const addEditChip = useCallback(() => {
     const normalized = normalizeWordLimitedValue(editChipDraft);
     if (!normalized) return;
-    if (hasMoreThanFourWords(normalized)) {
-      toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٤ كلمات كحد أقصى لكل ميزة' : 'Use 1 to 4 words maximum per feature');
+    if (normalized.length > 40) {
+      toast.error(language === 'ar' ? 'بحد أقصى ٤٠ حرفاً لكل نقطة' : 'Up to 40 characters per point');
       return;
     }
     if (editChips.includes(normalized) || editChips.length >= MAX_FEATURE_CHIPS) return;
     setEditChips(prev => [...prev, normalized]);
     setEditChipDraft('');
-  }, [editChipDraft, editChips, hasMoreThanFourWords, language, normalizeWordLimitedValue, MAX_FEATURE_CHIPS]);
+  }, [editChipDraft, editChips, language, normalizeWordLimitedValue, MAX_FEATURE_CHIPS]);
 
   const applyTextEdit = useCallback(async () => {
     if (!onEditText) return;
     const cta = normalizeWordLimitedValue(editCta);
-    if (cta && hasMoreThanFiveWords(cta)) {
-      toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى' : 'Use 1 to 5 words maximum');
+    if (cta.length > 30) {
+      toast.error(language === 'ar' ? 'بحد أقصى ٣٠ حرفاً' : 'Up to 30 characters');
       return;
     }
     setEditApplying(true);
@@ -1399,7 +1427,7 @@ export default function VisualAdsGenerator({
     } finally {
       setEditApplying(false);
     }
-  }, [onEditText, editCta, editChips, editPresence, editColorStyle, language, normalizeWordLimitedValue, hasMoreThanFiveWords, updateCreativeSoul]);
+  }, [onEditText, editCta, editChips, editPresence, editColorStyle, language, normalizeWordLimitedValue, updateCreativeSoul]);
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 md:px-6">
@@ -1445,7 +1473,7 @@ export default function VisualAdsGenerator({
                     </select>
                     <button
                       type="button"
-                      onClick={() => setBrandKitDialogOpen(true)}
+                      onClick={() => { setEditingKitId(null); resetKitDraft(); setBrandKitDialogOpen(true); }}
                       className="rounded-lg bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2 text-xs font-semibold text-[#060541] shadow-[0_4px_14px_rgba(251,146,60,0.28)] transition-all active:scale-95"
                     >
                       {language === 'ar' ? '+ هوية جديدة' : '+ New kit'}
@@ -1464,6 +1492,16 @@ export default function VisualAdsGenerator({
                           <span className="text-[10px] font-medium text-foreground/80">{language === 'ar' ? 'ألوان علامتك' : 'Your colors'}</span>
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const kit = brandKits.find((item) => item.id === state.brandKit.kitId);
+                          if (kit) openEditKit(kit);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium text-foreground/70 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                      >
+                        {language === 'ar' ? 'تعديل الهوية' : 'Edit kit'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteBrandKit(state.brandKit.kitId!)}
@@ -1740,10 +1778,12 @@ export default function VisualAdsGenerator({
                 <div className="bg-white dark:bg-[#0c0f14] rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-[#606062]/20 dark:border-white/10">
                   <div className="flex items-center justify-between p-4 border-b border-[#606062]/15 dark:border-white/10">
                     <h2 className="text-base font-bold text-foreground">
-                      {language === 'ar' ? 'هوية علامة جديدة' : 'New Brand Kit'}
+                      {editingKitId
+                        ? (language === 'ar' ? 'تعديل هوية العلامة' : 'Edit Brand Kit')
+                        : (language === 'ar' ? 'هوية علامة جديدة' : 'New Brand Kit')}
                     </h2>
                     <button
-                      onClick={() => { setBrandKitDialogOpen(false); resetKitDraft(); }}
+                      onClick={() => { setBrandKitDialogOpen(false); setEditingKitId(null); resetKitDraft(); }}
                       aria-label="Close"
                       className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
                       type="button"
@@ -1814,30 +1854,28 @@ export default function VisualAdsGenerator({
                             <Plus className="h-6 w-6 text-[#858384]" />
                           )}
                         </button>
-                        {(kitDraftPrimary || kitDraftAccent) && (
-                          <div className="flex items-center gap-2">
-                            <label className="flex flex-col items-center gap-1">
-                              <input
-                                type="color"
-                                value={kitDraftPrimary || '#060541'}
-                                onChange={(e) => setKitDraftPrimary(e.target.value)}
-                                className="w-8 h-8 rounded-full border border-black/10 cursor-pointer bg-transparent p-0"
-                                aria-label={language === 'ar' ? 'اللون الأساسي' : 'Primary color'}
-                              />
-                              <span className="text-[9px] text-[#858384]">{language === 'ar' ? 'أساسي' : 'Primary'}</span>
-                            </label>
-                            <label className="flex flex-col items-center gap-1">
-                              <input
-                                type="color"
-                                value={kitDraftAccent || '#e9ceb0'}
-                                onChange={(e) => setKitDraftAccent(e.target.value)}
-                                className="w-8 h-8 rounded-full border border-black/10 cursor-pointer bg-transparent p-0"
-                                aria-label={language === 'ar' ? 'لون مميز' : 'Accent color'}
-                              />
-                              <span className="text-[9px] text-[#858384]">{language === 'ar' ? 'مميز' : 'Accent'}</span>
-                            </label>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <label className="flex flex-col items-center gap-1">
+                            <input
+                              type="color"
+                              value={kitDraftPrimary || '#060541'}
+                              onChange={(e) => setKitDraftPrimary(e.target.value)}
+                              className="w-8 h-8 rounded-full border border-black/10 cursor-pointer bg-transparent p-0"
+                              aria-label={language === 'ar' ? 'اللون الأساسي' : 'Primary color'}
+                            />
+                            <span className="text-[9px] text-[#858384]">{language === 'ar' ? 'أساسي' : 'Primary'}</span>
+                          </label>
+                          <label className="flex flex-col items-center gap-1">
+                            <input
+                              type="color"
+                              value={kitDraftAccent || '#e9ceb0'}
+                              onChange={(e) => setKitDraftAccent(e.target.value)}
+                              className="w-8 h-8 rounded-full border border-black/10 cursor-pointer bg-transparent p-0"
+                              aria-label={language === 'ar' ? 'لون مميز' : 'Accent color'}
+                            />
+                            <span className="text-[9px] text-[#858384]">{language === 'ar' ? 'مميز' : 'Accent'}</span>
+                          </label>
+                        </div>
                       </div>
                       <input
                         type="file"
@@ -1876,7 +1914,9 @@ export default function VisualAdsGenerator({
                     >
                       {brandKitSaving
                         ? (language === 'ar' ? 'جارِ الحفظ...' : 'Saving...')
-                        : (language === 'ar' ? 'حفظ الهوية' : 'Save Brand Kit')}
+                        : editingKitId
+                          ? (language === 'ar' ? 'حفظ التعديلات' : 'Save changes')
+                          : (language === 'ar' ? 'حفظ الهوية' : 'Save Brand Kit')}
                     </button>
                   </div>
                 </div>
@@ -2198,7 +2238,7 @@ export default function VisualAdsGenerator({
                                 )}
                               </div>
                               <p className="text-[10px] text-[#858384]">
-                                {language === 'ar' ? `كل نقطة من كلمة إلى ٤ كلمات. ${state.creativeSoul.featureChips.length}/${MAX_FEATURE_CHIPS}` : `Each point is 1 to 4 words. ${state.creativeSoul.featureChips.length}/${MAX_FEATURE_CHIPS}`}
+                                {language === 'ar' ? `كل نقطة بحد أقصى ٤٠ حرفاً. ${state.creativeSoul.featureChips.length}/${MAX_FEATURE_CHIPS}` : `Up to 40 characters each. ${state.creativeSoul.featureChips.length}/${MAX_FEATURE_CHIPS}`}
                               </p>
                             </div>
                           )}
@@ -2212,7 +2252,7 @@ export default function VisualAdsGenerator({
                                 className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
                               />
                               <p className="text-[11px] text-[#858384]">
-                                {language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى.' : 'Write 1 to 5 words maximum.'}
+                                {language === 'ar' ? 'بحد أقصى ٣٠ حرفاً.' : 'Up to 30 characters.'}
                               </p>
                             </div>
                           )}
@@ -2263,7 +2303,7 @@ export default function VisualAdsGenerator({
                                 className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
                               />
                               <p className="text-[11px] text-[#858384]">
-                                {language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى.' : 'Write 1 to 5 words maximum.'}
+                                {language === 'ar' ? 'بحد أقصى ٣٠ حرفاً.' : 'Up to 30 characters.'}
                               </p>
                             </div>
                           )}
@@ -2335,7 +2375,7 @@ export default function VisualAdsGenerator({
                                 className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
                               />
                               <p className="text-[11px] text-[#858384]">
-                                {language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى.' : 'Write 1 to 3 words maximum.'}
+                                {language === 'ar' ? 'بحد أقصى ٢٤ حرفاً.' : 'Up to 24 characters.'}
                               </p>
                             </div>
                           )}
@@ -2588,7 +2628,7 @@ export default function VisualAdsGenerator({
                   placeholder={language === 'ar' ? 'مثال: حمّل الآن' : 'e.g. Download now'}
                   className="w-full rounded-xl bg-white/70 dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-orange-400/60"
                 />
-                <p className="text-[10px] text-[#858384]">{language === 'ar' ? 'من كلمة إلى ٥ كلمات — اتركه فارغاً لإخفائه' : '1 to 5 words — leave empty to hide it'}</p>
+                <p className="text-[10px] text-[#858384]">{language === 'ar' ? 'بحد أقصى ٣٠ حرفاً — اتركه فارغاً لإخفائه' : 'Up to 30 characters — leave empty to hide it'}</p>
               </div>
 
               <div className="space-y-1.5">

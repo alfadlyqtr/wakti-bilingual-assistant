@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square, Volume2 } from 'lucide-react';
+import { Send, Loader2, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square, Volume2, Globe, FlaskConical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1196,41 +1196,43 @@ export function ChatInput({
                   <div className="flex items-center relative z-[81] pointer-events-auto">
                     {activeTrigger === 'search' ? (
                       <div className="relative flex items-center gap-1">
-                        {/* Web Button */}
+                        {/* Web Button — icon-only to keep the bar uncrowded */}
                         <button
                           onPointerUp={() => setSearchSubmode('web')}
-                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-xs font-medium leading-none border align-middle transition-colors ${
+                          title={language === 'ar' ? 'الويب' : 'Web'}
+                          className={`inline-flex items-center justify-center w-7 h-7 rounded-full border align-middle transition-colors ${
                             searchSubmode === 'web'
                               ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-600/50'
                               : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-green-50 hover:text-green-600'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'web' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                          <span className="text-xs">{language === 'ar' ? 'الويب' : 'Web'}</span>
+                          <Globe className="h-3.5 w-3.5" />
                         </button>
-                        {/* YouTube Button */}
+                        {/* YouTube Button — logo only */}
                         <button
                           onPointerUp={() => setSearchSubmode('youtube')}
-                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-xs font-medium leading-none border align-middle transition-colors ${
+                          title="YouTube"
+                          className={`inline-flex items-center justify-center w-7 h-7 rounded-full border align-middle transition-colors ${
                             searchSubmode === 'youtube'
                               ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-600/50'
                               : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-red-50 hover:text-red-600'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'youtube' ? 'bg-red-500' : 'bg-gray-400'}`}></span>
-                          <span className="text-xs">YouTube</span>
+                          <svg className="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24">
+                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                          </svg>
                         </button>
-                        {/* Research Button */}
+                        {/* Research Button — icon-only */}
                         <button
                           onPointerUp={() => setSearchSubmode('research')}
-                          className={`inline-flex items-center gap-1 px-2 py-1 h-7 rounded-full text-xs font-medium leading-none border align-middle transition-colors ${
+                          title={language === 'ar' ? 'ريسيرش' : 'Research'}
+                          className={`inline-flex items-center justify-center w-7 h-7 rounded-full border align-middle transition-colors ${
                             searchSubmode === 'research'
                               ? 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600/50'
                               : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-violet-50 hover:text-violet-600'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${searchSubmode === 'research' ? 'bg-violet-500' : 'bg-gray-400'}`}></span>
-                          <span className="text-xs">{language === 'ar' ? 'ريسيرش' : 'Research'}</span>
+                          <FlaskConical className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     ) : (activeTrigger === 'chat' || activeTrigger === 'vision' || activeTrigger === 'search') ? (
