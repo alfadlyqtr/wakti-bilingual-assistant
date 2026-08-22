@@ -6,6 +6,7 @@ type VisualAdsAspectRatio = VisualAdsState['campaignDNA']['platform'];
 
 export type VisualAdsPosterTextSpec = {
   aspectRatio: VisualAdsAspectRatio | null;
+  headline?: string | null;
   ctaText: string | null;
   featureChips: string[];
   textPresence: VisualAdsTextPresence;
@@ -30,14 +31,17 @@ type PresenceProfile = {
 };
 
 type OverlayPalette = {
+  accent: string;
   ctaFill: string;
   ctaText: string;
   ctaStroke: string;
   chipFill: string;
   chipText: string;
   chipStroke: string;
+  headlineText: string;
   glow: string;
   scrim: [string, string, string];
+  topScrim: [string, string];
 };
 
 type RowLayout = {
@@ -125,12 +129,6 @@ const withAlpha = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-const getContrastText = (hex: string) => {
-  const { r, g, b } = hexToRgb(hex);
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 160 ? '#0c0f14' : '#fcfefd';
-};
-
 const loadImageElement = async (url: string): Promise<HTMLImageElement> => {
   let fetchedObjectUrl: string | null = null;
   try {
@@ -196,52 +194,39 @@ const sampleSceneBrightness = (ctx: CanvasRenderingContext2D, width: number, hei
 };
 
 const resolvePalette = (textColorStyle: VisualAdsTextColorStyle, sceneIsLight: boolean, scrimAlpha: number, brandAccent?: string | null): OverlayPalette => {
-  // Scrim: a strong bottom fade so the text zone is always readable, on any artwork.
+  // Scrims: strong fades behind the text zones so text reads on any artwork.
   const scrimBase = sceneIsLight ? '252, 254, 253' : '12, 15, 20';
   const scrim: [string, string, string] = [
     `rgba(${scrimBase}, 0)`,
     `rgba(${scrimBase}, ${(scrimAlpha * 0.35).toFixed(3)})`,
     `rgba(${scrimBase}, ${scrimAlpha.toFixed(3)})`,
   ];
+  const topScrim: [string, string] = [
+    `rgba(${scrimBase}, ${(scrimAlpha * 0.85).toFixed(3)})`,
+    `rgba(${scrimBase}, 0)`,
+  ];
 
-  if (textColorStyle === 'minimal-monochrome') {
-    const ctaFill = sceneIsLight ? '#0c0f14' : '#fcfefd';
-    return {
-      ctaFill,
-      ctaText: sceneIsLight ? '#fcfefd' : '#0c0f14',
-      ctaStroke: sceneIsLight ? withAlpha('#fcfefd', 0.08) : withAlpha('#0c0f14', 0.12),
-      chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.94) : withAlpha('#0c0f14', 0.92),
-      chipText: sceneIsLight ? '#16181d' : '#f5f5f5',
-      chipStroke: sceneIsLight ? withAlpha('#0c0f14', 0.12) : withAlpha('#fcfefd', 0.16),
-      glow: sceneIsLight ? withAlpha('#0c0f14', 0.10) : withAlpha('#fcfefd', 0.14),
-      scrim,
-    };
-  }
+  // The signature look: glassy dark pills with a glowing accent outline.
+  // Brand accent wins; soft gold is the house default (premium ad feel);
+  // monochrome mode stays strictly neutral.
+  const accent = textColorStyle === 'minimal-monochrome'
+    ? (sceneIsLight ? '#181d24' : '#f3f5f7')
+    : (brandAccent || '#f0c25a');
+  const glassFill = sceneIsLight ? 'rgba(252, 254, 253, 0.68)' : 'rgba(10, 12, 16, 0.58)';
+  const chipText = sceneIsLight ? '#11141a' : '#f2f2f2';
 
-  if (textColorStyle === 'brand-accent') {
-    const accent = brandAccent || (sceneIsLight ? '#b76f1f' : '#d88a2c');
-    return {
-      ctaFill: accent,
-      ctaText: getContrastText(accent),
-      ctaStroke: withAlpha('#fcfefd', sceneIsLight ? 0.12 : 0.18),
-      chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.95) : withAlpha('#1b1d22', 0.92),
-      chipText: sceneIsLight ? '#2b2113' : '#f6ead9',
-      chipStroke: withAlpha(accent, sceneIsLight ? 0.30 : 0.42),
-      glow: withAlpha(accent, sceneIsLight ? 0.18 : 0.28),
-      scrim,
-    };
-  }
-
-  const ctaFill = sceneIsLight ? '#181d24' : '#f3f5f7';
   return {
-    ctaFill,
-    ctaText: sceneIsLight ? '#fcfefd' : '#0c0f14',
-    ctaStroke: sceneIsLight ? withAlpha('#fcfefd', 0.08) : withAlpha('#0c0f14', 0.10),
-    chipFill: sceneIsLight ? withAlpha('#fcfefd', 0.94) : withAlpha('#0c0f14', 0.92),
-    chipText: sceneIsLight ? '#11141a' : '#f2f2f2',
-    chipStroke: sceneIsLight ? withAlpha('#0c0f14', 0.10) : withAlpha('#fcfefd', 0.14),
-    glow: sceneIsLight ? withAlpha('#0c0f14', 0.12) : withAlpha('#ffffff', 0.16),
+    accent,
+    ctaFill: sceneIsLight ? 'rgba(252, 254, 253, 0.72)' : 'rgba(10, 12, 16, 0.62)',
+    ctaText: sceneIsLight ? '#0c0f14' : '#fcfefd',
+    ctaStroke: accent,
+    chipFill: glassFill,
+    chipText,
+    chipStroke: withAlpha(accent, sceneIsLight ? 0.45 : 0.55),
+    headlineText: sceneIsLight ? '#0c0f14' : '#fcfefd',
+    glow: withAlpha(accent, sceneIsLight ? 0.35 : 0.55),
     scrim,
+    topScrim,
   };
 };
 
@@ -252,10 +237,11 @@ const buildChipRows = (
   fontSize: number,
   paddingX: number,
   gap: number,
+  dotExtra = 0,
 ) => {
   ctx.font = `600 ${fontSize}px ${FONT_STACK}`;
   return texts.reduce<RowLayout[]>((rows, text) => {
-    const width = Math.ceil(ctx.measureText(text).width + paddingX * 2);
+    const width = Math.ceil(ctx.measureText(text).width + paddingX * 2 + dotExtra);
     const lastRow = rows[rows.length - 1];
     if (!lastRow || lastRow.width + gap + width > maxWidth) {
       rows.push({ width, items: [{ text, width }] });
@@ -270,6 +256,7 @@ const buildChipRows = (
 export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualAdsPosterTextSpec): Promise<Blob> {
   const featureChips = spec.featureChips.map((chip) => chip.trim()).filter(Boolean).slice(0, 4);
   const ctaText = (spec.ctaText || '').trim();
+  const headline = (spec.headline || '').trim();
 
   const image = await loadImageElement(baseImageUrl);
   const canvas = document.createElement('canvas');
@@ -280,7 +267,7 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
 
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  if (!featureChips.length && !ctaText) {
+  if (!featureChips.length && !ctaText && !headline) {
     return canvasToBlob(canvas, 'image/png');
   }
 
@@ -297,7 +284,9 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
   const ctaHeight = Math.round(ctaFontSize + ctaPaddingY * 2);
   const sectionGap = clamp(baseSize * presence.sectionGapRatio, 12, 28);
   const bottomMargin = clamp(baseSize * presence.bottomMarginRatio, 26, canvas.height * 0.12);
-  const chipRows = buildChipRows(ctx, featureChips, canvas.width * 0.82, chipFontSize, chipPaddingX, chipGap);
+  const chipDotRadius = chipFontSize * 0.24;
+  const chipDotExtra = chipDotRadius * 2 + chipFontSize * 0.45;
+  const chipRows = buildChipRows(ctx, featureChips, canvas.width * 0.82, chipFontSize, chipPaddingX, chipGap, chipDotExtra);
   const chipsBlockHeight = chipRows.length
     ? chipRows.length * chipHeight + (chipRows.length - 1) * chipGap
     : 0;
@@ -314,6 +303,58 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
   const sceneBrightness = sampleSceneBrightness(ctx, canvas.width, canvas.height);
   const sceneIsLight = sceneBrightness > 162;
   const palette = resolvePalette(spec.textColorStyle, sceneIsLight, presence.scrimAlpha, spec.brandAccent);
+
+  // ── Headline (top zone): big, bold, glowing ──
+  if (headline) {
+    const topMargin = clamp(baseSize * 0.055, 18, canvas.height * 0.1);
+    const maxHeadlineWidth = canvas.width * 0.88;
+    let headlineFontSize = clamp(baseSize * 0.078, 30, 96);
+    const wrapHeadline = (size: number): string[] => {
+      ctx.font = `800 ${size}px ${FONT_STACK}`;
+      const words = headline.split(/\s+/).filter(Boolean);
+      const lines: string[] = [];
+      let currentLine = '';
+      for (const word of words) {
+        const candidate = currentLine ? `${currentLine} ${word}` : word;
+        if (ctx.measureText(candidate).width <= maxHeadlineWidth) {
+          currentLine = candidate;
+        } else {
+          if (currentLine) lines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+      return lines;
+    };
+    let headlineLines = wrapHeadline(headlineFontSize);
+    while (headlineLines.length > 2 && headlineFontSize > baseSize * 0.04) {
+      headlineFontSize *= 0.9;
+      headlineLines = wrapHeadline(headlineFontSize);
+    }
+    const lineHeight = headlineFontSize * 1.18;
+    const blockBottom = topMargin + headlineLines.length * lineHeight;
+
+    const topGradient = ctx.createLinearGradient(0, 0, 0, blockBottom + baseSize * 0.05);
+    topGradient.addColorStop(0, palette.topScrim[0]);
+    topGradient.addColorStop(1, palette.topScrim[1]);
+    ctx.fillStyle = topGradient;
+    ctx.fillRect(0, 0, canvas.width, blockBottom + baseSize * 0.05);
+
+    ctx.font = `800 ${headlineFontSize}px ${FONT_STACK}`;
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0.5px';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    headlineLines.forEach((line, index) => {
+      const y = topMargin + lineHeight * index + lineHeight / 2;
+      ctx.save();
+      ctx.shadowColor = palette.glow;
+      ctx.shadowBlur = baseSize * 0.028;
+      ctx.fillStyle = palette.headlineText;
+      ctx.fillText(line, canvas.width / 2, y);
+      ctx.restore();
+    });
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px';
+  }
 
   const scrim = ctx.createLinearGradient(0, Math.max(0, groupTop - bottomMargin), 0, canvas.height);
   scrim.addColorStop(0, palette.scrim[0]);
@@ -336,13 +377,19 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
         roundedRect(ctx, currentX, currentY, item.width, chipHeight, chipHeight / 2);
         ctx.fillStyle = palette.chipFill;
         ctx.fill();
-        ctx.lineWidth = 1.25;
+        ctx.lineWidth = Math.max(1.5, baseSize * 0.0025);
         ctx.strokeStyle = palette.chipStroke;
         ctx.stroke();
         ctx.restore();
 
+        // Accent dot — the little "icon" that makes it read as a designed callout
+        ctx.fillStyle = palette.accent;
+        ctx.beginPath();
+        ctx.arc(currentX + chipPaddingX * 0.95, currentY + chipHeight / 2, chipDotRadius, 0, Math.PI * 2);
+        ctx.fill();
+
         ctx.fillStyle = palette.chipText;
-        ctx.fillText(item.text, currentX + item.width / 2, currentY + chipHeight / 2 + 1);
+        ctx.fillText(item.text, currentX + item.width / 2 + chipDotExtra / 2, currentY + chipHeight / 2 + 1);
         currentX += item.width + chipGap;
       }
       currentY += chipHeight + chipGap;
@@ -354,16 +401,19 @@ export async function composeVisualAdsPoster(baseImageUrl: string, spec: VisualA
     const ctaY = canvas.height - bottomMargin - ctaHeight;
     const ctaRadius = ctaHeight / 2;
 
+    // Glow pass (fill only) — then a crisp accent outline on top
     ctx.save();
     ctx.shadowColor = palette.glow;
-    ctx.shadowBlur = baseSize * presence.shadowBlurRatio;
+    ctx.shadowBlur = baseSize * presence.shadowBlurRatio * 1.5;
     roundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, ctaRadius);
     ctx.fillStyle = palette.ctaFill;
     ctx.fill();
-    ctx.lineWidth = 1.5;
+    ctx.restore();
+
+    roundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, ctaRadius);
+    ctx.lineWidth = Math.max(2, baseSize * 0.0038);
     ctx.strokeStyle = palette.ctaStroke;
     ctx.stroke();
-    ctx.restore();
 
     ctx.font = `800 ${ctaFontSize}px ${FONT_STACK}`;
     ctx.textAlign = 'center';

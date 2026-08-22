@@ -252,6 +252,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   // captured/forgotten in Talk (by design) — forget/capture happens in Chat.
   const helpfulMemoryBlockRef = useRef<string>('');
   const audioActuallyEndedAtRef = useRef(0);
+  // Photo sharing across reconnects: the picker/camera suspends the WebView on iOS,
+  // which can kill WebRTC. The photo waits here and auto-injects on reconnect.
+  const pendingImageInjectRef = useRef<string | null>(null);
+  const injectTalkImageRef = useRef<(dataUrl: string) => void>(() => {});
 
   const onUserMessageRef = useRef(onUserMessage);
   const onAssistantMessageRef = useRef(onAssistantMessage);
@@ -1445,6 +1449,11 @@ ${memoryContext ? memoryContext : ''}`
           setIsConnectionReady(true);
           setStatus('ready');
           startMicLevelAnimation();
+          if (pendingImageInjectRef.current) {
+            const pendingImage = pendingImageInjectRef.current;
+            pendingImageInjectRef.current = null;
+            setTimeout(() => { injectTalkImageRef.current?.(pendingImage); }, 400);
+          }
           if (pendingAutoStartAfterConnectRef.current) {
             pendingAutoStartAfterConnectRef.current = false;
             setTimeout(() => {
@@ -1808,6 +1817,11 @@ ${memoryContext ? memoryContext : ''}`
           setIsConnectionReady(true);
           setStatus('ready');
           startMicLevelAnimation();
+          if (pendingImageInjectRef.current) {
+            const pendingImage = pendingImageInjectRef.current;
+            pendingImageInjectRef.current = null;
+            setTimeout(() => { injectTalkImageRef.current?.(pendingImage); }, 400);
+          }
           if (pendingAutoStartAfterConnectRef.current) {
             pendingAutoStartAfterConnectRef.current = false;
             setTimeout(() => {
@@ -2184,8 +2198,29 @@ ${memoryContext ? memoryContext : ''}`
     reader.readAsDataURL(file);
   }), []);
 
-  // Share an image into the live voice conversation (Realtime API input_image).
-  // Wakti sees it immediately, reacts briefly, then the user asks about it by voice.
+  // Inject a shared image into the live realtime conversation
+  const injectTalkImage = useCallback((dataUrl: string) => {
+    if (!dcRef.current || dcRef.current.readyState !== 'open') return;
+    sendRealtimeClientEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: language === 'ar'
+            ? 'شاركني المستخدم هذه الصورة للتو. علّق عليها بجملة قصيرة ودودة ثم اسأله ماذا يريد أن يعرف عنها.'
+            : 'The user just shared this image with you. Acknowledge it in one short friendly sentence, then ask what they want to know about it.' },
+          { type: 'input_image', image_url: dataUrl },
+        ],
+      },
+    }, 'image-share');
+    sendResponseCreate();
+  }, [language, sendRealtimeClientEvent, sendResponseCreate]);
+  injectTalkImageRef.current = injectTalkImage;
+
+  // Share an image into the live voice conversation. If the connection died while
+  // the picker/camera was open (iOS suspends the WebView and kills WebRTC), stash
+  // the photo and reconnect — it auto-injects the moment we're back.
   const handleTalkImageSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -2193,26 +2228,21 @@ ${memoryContext ? memoryContext : ''}`
     try {
       const dataUrl = await readImageDownscaled(file);
       setAttachedImage(dataUrl);
-      if (dcRef.current && dcRef.current.readyState === 'open' && isConnectionReady) {
-        sendRealtimeClientEvent({
-          type: 'conversation.item.create',
-          item: {
-            type: 'message',
-            role: 'user',
-            content: [
-              { type: 'input_text', text: language === 'ar'
-                ? 'شاركني المستخدم هذه الصورة للتو. علّق عليها بجملة قصيرة ودودة ثم اسأله ماذا يريد أن يعرف عنها.'
-                : 'The user just shared this image with you. Acknowledge it in one short friendly sentence, then ask what they want to know about it.' },
-              { type: 'input_image', image_url: dataUrl },
-            ],
-          },
-        }, 'image-share');
-        sendResponseCreate();
+      const channelOpen = dcRef.current && dcRef.current.readyState === 'open' && isConnectionReady;
+      if (channelOpen) {
+        injectTalkImage(dataUrl);
+      } else {
+        pendingImageInjectRef.current = dataUrl;
+        setError(null);
+        setDebugHint(t('Reconnecting to share your photo...', 'نرجع نتصل لمشاركة صورتك...'));
+        setStatus('connecting');
+        setIsConnectionReady(false);
+        initializeConnection();
       }
     } catch {
       setError(t('Could not read that image. Try another one.', 'تعذرت قراءة الصورة. جرّب صورة أخرى.'));
     }
-  }, [isConnectionReady, language, readImageDownscaled, sendRealtimeClientEvent, sendResponseCreate, t]);
+  }, [isConnectionReady, readImageDownscaled, injectTalkImage, initializeConnection, t]);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {

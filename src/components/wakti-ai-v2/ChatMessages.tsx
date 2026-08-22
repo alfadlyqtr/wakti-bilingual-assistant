@@ -2116,6 +2116,8 @@ export function ChatMessages({
         const ytResults = (message as any)?.metadata?.youtubeResults;
         const ytErr = (message as any)?.metadata?.youtubeError;
         const ytLoading = (message as any)?.metadata?.youtubeLoading;
+        const isResearch = (message as any)?.metadata?.researchMode;
+        if (isResearch) return 'border-amber-400'; // Amber for Research mode
         return (yt || ytResults || ytErr || ytLoading) ? 'border-red-400' : 'border-green-400';
       }
       case 'image':

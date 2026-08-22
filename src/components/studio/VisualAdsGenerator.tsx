@@ -74,6 +74,7 @@ interface VisualAdsGeneratorProps {
   resultUrls?: string[];
   onSelectResult?: (index: number) => void;
   onEditText?: (edit: {
+    headline: string | null;
     ctaText: string | null;
     featureChips: string[];
     textPresence: VisualAdsState['creativeSoul']['textPresence'];
@@ -585,66 +586,6 @@ export default function VisualAdsGenerator({
     e.target.value = '';
   }, []);
 
-  const handleSaveBrandKit = useCallback(async () => {
-    if (!user?.id) return;
-    const name = kitDraftName.replace(/\s+/g, ' ').trim();
-    if (!name) {
-      toast.error(language === 'ar' ? 'اكتب اسم الهوية أولاً' : 'Give your brand kit a name first');
-      return;
-    }
-    setBrandKitSaving(true);
-    try {
-      const logoUrl = kitDraftLogo ? await uploadBrandKitLogo(user.id, kitDraftLogo) : null;
-      const tonePrompt = brandToneChips.find((chip) => chip.id === kitDraftTone)?.prompt || null;
-      const draft = {
-        name,
-        logo_url: logoUrl,
-        primary_color: kitDraftPrimary,
-        accent_color: kitDraftAccent,
-        tone: tonePrompt,
-      };
-
-      if (editingKitId) {
-        const oldKit = brandKits.find((kit) => kit.id === editingKitId) || null;
-        const kit = await updateBrandKit(user.id, editingKitId, draft);
-        setBrandKits(prev => prev.map((item) => (item.id === kit.id ? kit : item)));
-        // If this kit is currently applied, refresh its colors/tone and swap a changed logo
-        setState(prev => prev.brandKit.kitId === kit.id
-          ? {
-              ...prev,
-              brandKit: {
-                kitId: kit.id,
-                name: kit.name,
-                primaryColor: kit.primary_color,
-                accentColor: kit.accent_color,
-                tone: kit.tone,
-              },
-            }
-          : prev);
-        if (oldKit?.logo_url && kit.logo_url && oldKit.logo_url !== kit.logo_url
-          && uploadedImages.some((asset) => asset.image === oldKit.logo_url)) {
-          const swapped = uploadedImages.map((asset) =>
-            asset.image === oldKit.logo_url ? { ...asset, image: kit.logo_url as string } : asset);
-          setUploadedImages(swapped);
-          setState(prev => ({ ...prev, assets: swapped }));
-        }
-        toast.success(language === 'ar' ? 'تم تحديث الهوية' : 'Brand kit updated');
-      } else {
-        const kit = await createBrandKit(user.id, draft);
-        setBrandKits(prev => [kit, ...prev]);
-        applyBrandKit(kit);
-        toast.success(language === 'ar' ? 'تم حفظ هوية العلامة' : 'Brand kit saved');
-      }
-      setBrandKitDialogOpen(false);
-      setEditingKitId(null);
-      resetKitDraft();
-    } catch {
-      toast.error(language === 'ar' ? 'تعذر حفظ هوية العلامة' : 'Could not save the brand kit');
-    } finally {
-      setBrandKitSaving(false);
-    }
-  }, [user?.id, kitDraftName, kitDraftLogo, kitDraftTone, kitDraftPrimary, kitDraftAccent, editingKitId, brandKits, uploadedImages, language, resetKitDraft, applyBrandKit]);
-
   const handleDeleteBrandKit = useCallback(async (kitId: string) => {
     if (!user?.id) return;
     try {
@@ -986,6 +927,66 @@ export default function VisualAdsGenerator({
     }));
     setCompletedSteps(prev => new Set([...prev, 1]));
   }, [brandKits, applyBrandKit, uploadedImages, MAX_ASSET_IMAGES, language]);
+
+  const handleSaveBrandKit = useCallback(async () => {
+    if (!user?.id) return;
+    const name = kitDraftName.replace(/\s+/g, ' ').trim();
+    if (!name) {
+      toast.error(language === 'ar' ? 'اكتب اسم الهوية أولاً' : 'Give your brand kit a name first');
+      return;
+    }
+    setBrandKitSaving(true);
+    try {
+      const logoUrl = kitDraftLogo ? await uploadBrandKitLogo(user.id, kitDraftLogo) : null;
+      const tonePrompt = brandToneChips.find((chip) => chip.id === kitDraftTone)?.prompt || null;
+      const draft = {
+        name,
+        logo_url: logoUrl,
+        primary_color: kitDraftPrimary,
+        accent_color: kitDraftAccent,
+        tone: tonePrompt,
+      };
+
+      if (editingKitId) {
+        const oldKit = brandKits.find((kit) => kit.id === editingKitId) || null;
+        const kit = await updateBrandKit(user.id, editingKitId, draft);
+        setBrandKits(prev => prev.map((item) => (item.id === kit.id ? kit : item)));
+        // If this kit is currently applied, refresh its colors/tone and swap a changed logo
+        setState(prev => prev.brandKit.kitId === kit.id
+          ? {
+              ...prev,
+              brandKit: {
+                kitId: kit.id,
+                name: kit.name,
+                primaryColor: kit.primary_color,
+                accentColor: kit.accent_color,
+                tone: kit.tone,
+              },
+            }
+          : prev);
+        if (oldKit?.logo_url && kit.logo_url && oldKit.logo_url !== kit.logo_url
+          && uploadedImages.some((asset) => asset.image === oldKit.logo_url)) {
+          const swapped = uploadedImages.map((asset) =>
+            asset.image === oldKit.logo_url ? { ...asset, image: kit.logo_url as string } : asset);
+          setUploadedImages(swapped);
+          setState(prev => ({ ...prev, assets: swapped }));
+        }
+        toast.success(language === 'ar' ? 'تم تحديث الهوية' : 'Brand kit updated');
+      } else {
+        const kit = await createBrandKit(user.id, draft);
+        setBrandKits(prev => [kit, ...prev]);
+        applyBrandKit(kit);
+        toast.success(language === 'ar' ? 'تم حفظ هوية العلامة' : 'Brand kit saved');
+      }
+      setBrandKitDialogOpen(false);
+      setEditingKitId(null);
+      resetKitDraft();
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر حفظ هوية العلامة' : 'Could not save the brand kit');
+    } finally {
+      setBrandKitSaving(false);
+    }
+  }, [user?.id, kitDraftName, kitDraftLogo, kitDraftTone, kitDraftPrimary, kitDraftAccent, editingKitId, brandKits, uploadedImages, language, resetKitDraft, applyBrandKit]);
 
   useEffect(() => {
     setVisibleSlotCount((prev) => {
@@ -1367,6 +1368,7 @@ export default function VisualAdsGenerator({
   // ─── Edit poster text after generation (no regeneration needed) ───
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [editApplying, setEditApplying] = useState(false);
+  const [editHeadline, setEditHeadline] = useState('');
   const [editCta, setEditCta] = useState('');
   const [editChips, setEditChips] = useState<string[]>([]);
   const [editChipDraft, setEditChipDraft] = useState('');
@@ -1374,6 +1376,13 @@ export default function VisualAdsGenerator({
   const [editColorStyle, setEditColorStyle] = useState<VisualAdsState['creativeSoul']['textColorStyle']>('auto-contrast');
 
   const openEditPanel = useCallback(() => {
+    const topicChip = state.creativeSoul.mainMessage && state.creativeSoul.mainMessage !== 'custom'
+      ? getTopicChipById(state.creativeSoul.mainMessage)
+      : null;
+    const currentHeadline = state.creativeSoul.mainMessage === 'custom'
+      ? (state.creativeSoul.customMainMessage || '')
+      : (topicChip ? getLocalizedChipLabel(topicChip, language).replace(/^[^0-9A-Za-z\u0600-\u06FF]+\s*/, '') : '');
+    setEditHeadline(currentHeadline);
     const currentCta = state.creativeSoul.cta === 'custom'
       ? (state.creativeSoul.customCta || '')
       : getLocalizedChipLabel(getCtaChipById(state.creativeSoul.cta), language);
@@ -1399,6 +1408,11 @@ export default function VisualAdsGenerator({
 
   const applyTextEdit = useCallback(async () => {
     if (!onEditText) return;
+    const headline = normalizeWordLimitedValue(editHeadline);
+    if (headline.length > 30) {
+      toast.error(language === 'ar' ? 'العنوان بحد أقصى ٣٠ حرفاً' : 'Headline is up to 30 characters');
+      return;
+    }
     const cta = normalizeWordLimitedValue(editCta);
     if (cta.length > 30) {
       toast.error(language === 'ar' ? 'بحد أقصى ٣٠ حرفاً' : 'Up to 30 characters');
@@ -1407,6 +1421,7 @@ export default function VisualAdsGenerator({
     setEditApplying(true);
     try {
       await onEditText({
+        headline: headline || null,
         ctaText: cta || null,
         featureChips: editChips,
         textPresence: editPresence,
@@ -1414,6 +1429,9 @@ export default function VisualAdsGenerator({
       });
       // Keep the wizard state in sync so "Try Again" reuses the edited text
       updateCreativeSoul({
+        mainMessage: headline ? 'custom' : '',
+        customMainMessage: headline,
+        mainMessageVariant: '',
         cta: cta ? 'custom' : '',
         customCta: cta,
         featureChips: editChips,
@@ -1427,7 +1445,7 @@ export default function VisualAdsGenerator({
     } finally {
       setEditApplying(false);
     }
-  }, [onEditText, editCta, editChips, editPresence, editColorStyle, language, normalizeWordLimitedValue, updateCreativeSoul]);
+  }, [onEditText, editHeadline, editCta, editChips, editPresence, editColorStyle, language, normalizeWordLimitedValue, updateCreativeSoul]);
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 md:px-6">
@@ -2618,6 +2636,18 @@ export default function VisualAdsGenerator({
               <p className="text-xs font-semibold text-foreground">
                 {language === 'ar' ? 'عدّل نص البوستر' : 'Edit the poster text'}
               </p>
+
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'العنوان الرئيسي' : 'Headline'}</p>
+                <input
+                  type="text"
+                  value={editHeadline}
+                  onChange={(e) => setEditHeadline(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: إطلاق جديد' : 'e.g. New Launch'}
+                  className="w-full rounded-xl bg-white/70 dark:bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-orange-400/60"
+                />
+                <p className="text-[10px] text-[#858384]">{language === 'ar' ? 'يظهر بخط كبير أعلى البوستر — اتركه فارغاً لإخفائه' : 'Shown large at the top of the poster — leave empty to hide it'}</p>
+              </div>
 
               <div className="space-y-1.5">
                 <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'الدعوة لاتخاذ إجراء' : 'Call to action'}</p>

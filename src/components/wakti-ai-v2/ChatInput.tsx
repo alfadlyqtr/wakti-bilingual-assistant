@@ -724,6 +724,9 @@ export function ChatInput({
     if (activeTrigger === 'search' && searchSubmode === 'youtube') {
       return 'border-red-300 ring-2 ring-red-200/70 shadow-red-100/10';
     }
+    if (activeTrigger === 'search' && searchSubmode === 'research') {
+      return 'border-amber-300 ring-2 ring-amber-200/70 shadow-amber-100/10';
+    }
     if (activeTrigger === 'chat' && chatSubmode === 'study') {
       return 'border-purple-300 ring-2 ring-purple-200/70 shadow-purple-100/15';
     }
@@ -733,6 +736,7 @@ export function ChatInput({
   // Send button color by mode
   const sendBtnColors = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') return 'bg-red-600 hover:bg-red-700 text-white';
+    if (activeTrigger === 'search' && searchSubmode === 'research') return 'bg-amber-500 hover:bg-amber-600 text-white';
     if (activeTrigger === 'chat' && chatSubmode === 'study') return 'bg-purple-500 hover:bg-purple-600 text-white';
     switch (activeTrigger) {
       case 'chat':
@@ -752,6 +756,9 @@ export function ChatInput({
   const textareaHighlightClass = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') {
       return 'border-red-300 shadow-[inset_0_2px_12px_0_rgba(248,113,113,0.10)]';
+    }
+    if (activeTrigger === 'search' && searchSubmode === 'research') {
+      return 'border-amber-300 shadow-[inset_0_2px_12px_0_rgba(251,191,36,0.10)]';
     }
     if (activeTrigger === 'chat' && chatSubmode === 'study') {
       return 'border-purple-300 shadow-[inset_0_2px_12px_0_rgba(147,51,234,0.10)]';
@@ -1222,14 +1229,14 @@ export function ChatInput({
                             <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                           </svg>
                         </button>
-                        {/* Research Button — icon-only */}
+                        {/* Research Button — icon-only, amber */}
                         <button
                           onPointerUp={() => setSearchSubmode('research')}
                           title={language === 'ar' ? 'ريسيرش' : 'Research'}
                           className={`inline-flex items-center justify-center w-7 h-7 rounded-full border align-middle transition-colors ${
                             searchSubmode === 'research'
-                              ? 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600/50'
-                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-violet-50 hover:text-violet-600'
+                              ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600/50'
+                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700/50 hover:bg-amber-50 hover:text-amber-600'
                           }`}
                         >
                           <FlaskConical className="h-3.5 w-3.5" />

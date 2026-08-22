@@ -216,6 +216,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [visualAdsRawArtworks, setVisualAdsRawArtworks] = useState<string[]>([]);
   const [visualAdsOverlaySpec, setVisualAdsOverlaySpec] = useState<{
     aspectRatio: VisualAdsState['campaignDNA']['platform'];
+    headline: string | null;
     ctaText: string | null;
     featureChips: string[];
     textPresence: VisualAdsState['creativeSoul']['textPresence'];
@@ -2278,10 +2279,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const validImages = sentAssets.map((item) => item.preparedImage);
 
               // The AI generates clean text-free artwork; exact poster text
-              // (CTA + key points) is drawn on top by the poster composer so it
-              // is always sharp, correctly spelled, and correctly placed.
+              // (headline + CTA + key points) is drawn on top by the poster composer
+              // so it is always sharp, correctly spelled, and correctly placed.
+              const resolvedHeadline = visualState.creativeSoul.mainMessage === 'custom'
+                ? (customTopic || null)
+                : (selectedTopicChip
+                    ? (language === 'ar' ? selectedTopicChip.labelAr : selectedTopicChip.labelEn).replace(/^[^0-9A-Za-z\u0600-\u06FF]+\s*/, '')
+                    : null);
               const overlayTextSpec = {
                 aspectRatio: visualState.campaignDNA.platform,
+                headline: resolvedHeadline,
                 ctaText: resolvedCallToAction,
                 featureChips: canUseFeatureChips ? featureChips : [],
                 textPresence: visualState.creativeSoul.textPresence,
@@ -2298,7 +2305,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 setVisualAdsRawArtworks(rawUrls);
                 setVisualAdsOverlaySpec(overlayTextSpec);
 
-                const hasOverlayText = Boolean(overlayTextSpec.ctaText) || overlayTextSpec.featureChips.length > 0;
+                const hasOverlayText = Boolean(overlayTextSpec.ctaText) || overlayTextSpec.featureChips.length > 0 || Boolean(overlayTextSpec.headline);
                 const composedUrls: string[] = [];
                 for (const rawUrl of rawUrls) {
                   if (!hasOverlayText) {

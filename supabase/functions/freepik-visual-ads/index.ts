@@ -774,7 +774,7 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   if (hasScreenshot || hasAnyLogo || hasProduct) {
     lines.push("Text that already exists inside a protected uploaded screenshot, logo, or product package must remain exactly as it appears in that asset. Do not erase, rewrite, or hallucinate it.");
   }
-  lines.push("Keep the lower area of the composition visually calm and uncluttered — a separate text overlay will be placed there after generation.");
+  lines.push("Keep the top area and the lower area of the composition visually calm and uncluttered — a headline overlay will be placed near the top and a text overlay near the bottom after generation.");
 
   lines.push("");
   lines.push("Style & Mood:");
